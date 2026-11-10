@@ -1,5 +1,23 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from '@/lib/site';
 import { Sparkles, Play, Zap, ShieldCheck, Layers, ArrowRight } from 'lucide-react';
+
+export const metadata: Metadata = {
+  alternates: { canonical: '/' },
+};
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: SITE_NAME,
+  url: SITE_URL,
+  description: SITE_DESCRIPTION,
+  applicationCategory: 'MultimediaApplication',
+  operatingSystem: 'Web',
+  inLanguage: 'id-ID',
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'IDR' },
+};
 
 /**
  * Landing Page (/) MotionKu
@@ -9,6 +27,10 @@ import { Sparkles, Play, Zap, ShieldCheck, Layers, ArrowRight } from 'lucide-rea
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       {/* Navbar */}
       <header className="border-b border-white/10 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">

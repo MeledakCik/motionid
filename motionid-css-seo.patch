@@ -1,0 +1,401 @@
+From 59269ec0be60789a4fc82cfc2eb978fdbac3fad2 Mon Sep 17 00:00:00 2001
+From: claude <c@c>
+Date: Tue, 10 Nov 2026 07:39:31 +0000
+Subject: [PATCH] Fix missing PostCSS config (Tailwind not compiled) and add
+ SEO
+
+---
+ app/admin/layout.tsx     | 10 +++++++++
+ app/create/layout.tsx    | 10 +++++++++
+ app/dashboard/layout.tsx | 10 +++++++++
+ app/editor/layout.tsx    | 10 +++++++++
+ app/icon.tsx             | 28 ++++++++++++++++++++++++
+ app/layout.tsx           | 47 ++++++++++++++++++++++++++++++++++++----
+ app/login/layout.tsx     | 10 +++++++++
+ app/manifest.ts          | 15 +++++++++++++
+ app/opengraph-image.tsx  | 33 ++++++++++++++++++++++++++++
+ app/page.tsx             | 22 +++++++++++++++++++
+ app/robots.ts            | 14 ++++++++++++
+ app/sitemap.ts           | 13 +++++++++++
+ lib/site.ts              |  8 +++++++
+ next.config.mjs          |  7 ++++++
+ postcss.config.js        |  6 +++++
+ 15 files changed, 239 insertions(+), 4 deletions(-)
+ create mode 100644 app/admin/layout.tsx
+ create mode 100644 app/create/layout.tsx
+ create mode 100644 app/dashboard/layout.tsx
+ create mode 100644 app/editor/layout.tsx
+ create mode 100644 app/icon.tsx
+ create mode 100644 app/login/layout.tsx
+ create mode 100644 app/manifest.ts
+ create mode 100644 app/opengraph-image.tsx
+ create mode 100644 app/robots.ts
+ create mode 100644 app/sitemap.ts
+ create mode 100644 lib/site.ts
+ create mode 100644 next.config.mjs
+ create mode 100644 postcss.config.js
+
+diff --git a/app/admin/layout.tsx b/app/admin/layout.tsx
+new file mode 100644
+index 0000000..ea36567
+--- /dev/null
++++ b/app/admin/layout.tsx
+@@ -0,0 +1,10 @@
++import type { Metadata } from 'next';
++
++export const metadata: Metadata = {
++  title: 'Training Smart Engine',
++  robots: { index: false, follow: false },
++};
++
++export default function Layout({ children }: { children: React.ReactNode }) {
++  return children;
++}
+diff --git a/app/create/layout.tsx b/app/create/layout.tsx
+new file mode 100644
+index 0000000..f35a374
+--- /dev/null
++++ b/app/create/layout.tsx
+@@ -0,0 +1,10 @@
++import type { Metadata } from 'next';
++
++export const metadata: Metadata = {
++  title: 'Buat Video',
++  robots: { index: false, follow: false },
++};
++
++export default function Layout({ children }: { children: React.ReactNode }) {
++  return children;
++}
+diff --git a/app/dashboard/layout.tsx b/app/dashboard/layout.tsx
+new file mode 100644
+index 0000000..908500d
+--- /dev/null
++++ b/app/dashboard/layout.tsx
+@@ -0,0 +1,10 @@
++import type { Metadata } from 'next';
++
++export const metadata: Metadata = {
++  title: 'Dashboard',
++  robots: { index: false, follow: false },
++};
++
++export default function Layout({ children }: { children: React.ReactNode }) {
++  return children;
++}
+diff --git a/app/editor/layout.tsx b/app/editor/layout.tsx
+new file mode 100644
+index 0000000..5fb71f8
+--- /dev/null
++++ b/app/editor/layout.tsx
+@@ -0,0 +1,10 @@
++import type { Metadata } from 'next';
++
++export const metadata: Metadata = {
++  title: 'Editor',
++  robots: { index: false, follow: false },
++};
++
++export default function Layout({ children }: { children: React.ReactNode }) {
++  return children;
++}
+diff --git a/app/icon.tsx b/app/icon.tsx
+new file mode 100644
+index 0000000..a5d122e
+--- /dev/null
++++ b/app/icon.tsx
+@@ -0,0 +1,28 @@
++import { ImageResponse } from 'next/og';
++
++export const size = { width: 64, height: 64 };
++export const contentType = 'image/png';
++
++export default function Icon() {
++  return new ImageResponse(
++    (
++      <div
++        style={{
++          width: '100%',
++          height: '100%',
++          display: 'flex',
++          alignItems: 'center',
++          justifyContent: 'center',
++          background: 'linear-gradient(135deg, #7c3aed, #06b6d4)',
++          color: 'white',
++          fontSize: 40,
++          fontWeight: 900,
++          borderRadius: 14,
++        }}
++      >
++        M
++      </div>
++    ),
++    size
++  );
++}
+diff --git a/app/layout.tsx b/app/layout.tsx
+index dba965f..4c1df7a 100644
+--- a/app/layout.tsx
++++ b/app/layout.tsx
+@@ -1,4 +1,4 @@
+-import type { Metadata } from 'next';
++import type { Metadata, Viewport } from 'next';
+ import {
+   Poppins,
+   Montserrat,
+@@ -8,6 +8,7 @@ import {
+   Anton,
+ } from 'next/font/google';
+ import './globals.css';
++import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from '@/lib/site';
+ 
+ const poppins = Poppins({
+   subsets: ['latin'],
+@@ -46,9 +47,47 @@ const anton = Anton({
+ });
+ 
+ export const metadata: Metadata = {
+-  title: 'MotionKu — AI Motion Graphic Generator Tanpa API Key',
+-  description:
+-    'Ketik Topik, Jadi Video TikTok, Reels & Shorts otomatis dengan Smart Template Engine & Rule-Based Generator tanpa biaya API AI.',
++  metadataBase: new URL(SITE_URL),
++  title: {
++    default: SITE_TITLE,
++    template: `%s · ${SITE_NAME}`,
++  },
++  description: SITE_DESCRIPTION,
++  applicationName: SITE_NAME,
++  keywords: [
++    'video TikTok otomatis',
++    'generator video pendek',
++    'motion graphic',
++    'video Reels',
++    'YouTube Shorts',
++    'video promo UMKM',
++    'quotes video',
++    'caption dan hashtag TikTok',
++    'tanpa API key',
++  ],
++  authors: [{ name: SITE_NAME }],
++  creator: SITE_NAME,
++  robots: { index: true, follow: true },
++  openGraph: {
++    type: 'website',
++    locale: 'id_ID',
++    url: SITE_URL,
++    siteName: SITE_NAME,
++    title: SITE_TITLE,
++    description: SITE_DESCRIPTION,
++  },
++  twitter: {
++    card: 'summary_large_image',
++    title: SITE_TITLE,
++    description: SITE_DESCRIPTION,
++  },
++};
++
++export const viewport: Viewport = {
++  width: 'device-width',
++  initialScale: 1,
++  themeColor: '#020617',
++  colorScheme: 'dark',
+ };
+ 
+ export default function RootLayout({
+diff --git a/app/login/layout.tsx b/app/login/layout.tsx
+new file mode 100644
+index 0000000..a476c84
+--- /dev/null
++++ b/app/login/layout.tsx
+@@ -0,0 +1,10 @@
++import type { Metadata } from 'next';
++
++export const metadata: Metadata = {
++  title: 'Masuk',
++  robots: { index: false, follow: false },
++};
++
++export default function Layout({ children }: { children: React.ReactNode }) {
++  return children;
++}
+diff --git a/app/manifest.ts b/app/manifest.ts
+new file mode 100644
+index 0000000..74f92be
+--- /dev/null
++++ b/app/manifest.ts
+@@ -0,0 +1,15 @@
++import type { MetadataRoute } from 'next';
++import { SITE_DESCRIPTION, SITE_NAME } from '@/lib/site';
++
++export default function manifest(): MetadataRoute.Manifest {
++  return {
++    name: `${SITE_NAME} — Generator Video TikTok & Reels`,
++    short_name: SITE_NAME,
++    description: SITE_DESCRIPTION,
++    start_url: '/',
++    display: 'standalone',
++    background_color: '#020617',
++    theme_color: '#020617',
++    lang: 'id',
++  };
++}
+diff --git a/app/opengraph-image.tsx b/app/opengraph-image.tsx
+new file mode 100644
+index 0000000..11b3a68
+--- /dev/null
++++ b/app/opengraph-image.tsx
+@@ -0,0 +1,33 @@
++import { ImageResponse } from 'next/og';
++
++export const alt = 'MotionKu — Generator Video TikTok & Reels Otomatis';
++export const size = { width: 1200, height: 630 };
++export const contentType = 'image/png';
++
++export default function OgImage() {
++  return new ImageResponse(
++    (
++      <div
++        style={{
++          width: '100%',
++          height: '100%',
++          display: 'flex',
++          flexDirection: 'column',
++          justifyContent: 'center',
++          padding: 80,
++          background: 'linear-gradient(135deg, #020617 0%, #1e1b4b 55%, #0e7490 100%)',
++          color: 'white',
++        }}
++      >
++        <div style={{ fontSize: 34, color: '#67e8f9', fontWeight: 700 }}>MotionKu</div>
++        <div style={{ fontSize: 84, fontWeight: 800, lineHeight: 1.05, marginTop: 24 }}>
++          Ketik Topik, Jadi Video TikTok
++        </div>
++        <div style={{ fontSize: 34, color: '#cbd5e1', marginTop: 32 }}>
++          9 template motion graphic · caption & hashtag otomatis · gratis tanpa API key
++        </div>
++      </div>
++    ),
++    size
++  );
++}
+diff --git a/app/page.tsx b/app/page.tsx
+index 7ad1444..266d4f9 100644
+--- a/app/page.tsx
++++ b/app/page.tsx
+@@ -1,6 +1,24 @@
++import type { Metadata } from 'next';
+ import Link from 'next/link';
++import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from '@/lib/site';
+ import { Sparkles, Play, Zap, ShieldCheck, Layers, ArrowRight } from 'lucide-react';
+ 
++export const metadata: Metadata = {
++  alternates: { canonical: '/' },
++};
++
++const jsonLd = {
++  '@context': 'https://schema.org',
++  '@type': 'WebApplication',
++  name: SITE_NAME,
++  url: SITE_URL,
++  description: SITE_DESCRIPTION,
++  applicationCategory: 'MultimediaApplication',
++  operatingSystem: 'Web',
++  inLanguage: 'id-ID',
++  offers: { '@type': 'Offer', price: '0', priceCurrency: 'IDR' },
++};
++
+ /**
+  * Landing Page (/) MotionKu
+  * Hero: "Ketik Topik, Jadi Video TikTok", 3 contoh video template,
+@@ -9,6 +27,10 @@ import { Sparkles, Play, Zap, ShieldCheck, Layers, ArrowRight } from 'lucide-rea
+ export default function LandingPage() {
+   return (
+     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
++      <script
++        type="application/ld+json"
++        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
++      />
+       {/* Navbar */}
+       <header className="border-b border-white/10 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40">
+         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+diff --git a/app/robots.ts b/app/robots.ts
+new file mode 100644
+index 0000000..0ae6655
+--- /dev/null
++++ b/app/robots.ts
+@@ -0,0 +1,14 @@
++import type { MetadataRoute } from 'next';
++import { SITE_URL } from '@/lib/site';
++
++export default function robots(): MetadataRoute.Robots {
++  return {
++    rules: {
++      userAgent: '*',
++      allow: '/',
++      disallow: ['/admin', '/dashboard', '/create', '/editor', '/login', '/auth'],
++    },
++    sitemap: `${SITE_URL}/sitemap.xml`,
++    host: SITE_URL,
++  };
++}
+diff --git a/app/sitemap.ts b/app/sitemap.ts
+new file mode 100644
+index 0000000..a775803
+--- /dev/null
++++ b/app/sitemap.ts
+@@ -0,0 +1,13 @@
++import type { MetadataRoute } from 'next';
++import { SITE_URL } from '@/lib/site';
++
++export default function sitemap(): MetadataRoute.Sitemap {
++  return [
++    {
++      url: SITE_URL,
++      lastModified: new Date(),
++      changeFrequency: 'weekly',
++      priority: 1,
++    },
++  ];
++}
+diff --git a/lib/site.ts b/lib/site.ts
+new file mode 100644
+index 0000000..4650e25
+--- /dev/null
++++ b/lib/site.ts
+@@ -0,0 +1,8 @@
++export const SITE_URL = (
++  process.env.NEXT_PUBLIC_SITE_URL || 'https://motionid.vercel.app'
++).replace(/\/$/, '');
++
++export const SITE_NAME = 'MotionKu';
++export const SITE_TITLE = 'MotionKu — Generator Video TikTok & Reels Otomatis, Gratis';
++export const SITE_DESCRIPTION =
++  'Ketik topik, jadi video motion graphic untuk TikTok, Reels & Shorts lengkap dengan hook, 4 scene animasi, CTA, caption dan hashtag. 9 template, tanpa API key, gratis.';
+diff --git a/next.config.mjs b/next.config.mjs
+new file mode 100644
+index 0000000..0cb42fd
+--- /dev/null
++++ b/next.config.mjs
+@@ -0,0 +1,7 @@
++/** @type {import('next').NextConfig} */
++const nextConfig = {
++  reactStrictMode: true,
++  poweredByHeader: false,
++};
++
++export default nextConfig;
+diff --git a/postcss.config.js b/postcss.config.js
+new file mode 100644
+index 0000000..12a703d
+--- /dev/null
++++ b/postcss.config.js
+@@ -0,0 +1,6 @@
++module.exports = {
++  plugins: {
++    tailwindcss: {},
++    autoprefixer: {},
++  },
++};
+-- 
+2.43.0
+
