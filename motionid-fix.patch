@@ -1,0 +1,1378 @@
+From 6360082edea572d8835afc70a5a9a2fb9588e727 Mon Sep 17 00:00:00 2001
+From: claude <c@c>
+Date: Tue, 10 Nov 2026 07:34:00 +0000
+Subject: [PATCH] Fix training (admin page, loader, dedupe) and clean up editor
+ UI
+
+---
+ app/admin/page.tsx       | 454 +++++++++++++++++++++++++++++++++
+ app/create/page.tsx      |  10 +-
+ app/editor/[id]/page.tsx | 527 +++++++++++++++++++++------------------
+ lib/smart-engine.ts      |  46 +++-
+ lib/supabase/server.ts   |   2 +-
+ lib/training.ts          | 131 ++++++++++
+ lib/video-exporter.ts    |   2 +-
+ 7 files changed, 921 insertions(+), 251 deletions(-)
+ create mode 100644 app/admin/page.tsx
+ create mode 100644 lib/training.ts
+
+diff --git a/app/admin/page.tsx b/app/admin/page.tsx
+new file mode 100644
+index 0000000..8b6c344
+--- /dev/null
++++ b/app/admin/page.tsx
+@@ -0,0 +1,454 @@
++'use client';
++
++import React, { useCallback, useEffect, useMemo, useState } from 'react';
++import Link from 'next/link';
++import { ArrowLeft, ImagePlus, Loader2, Plus, Trash2 } from 'lucide-react';
++import { createClient } from '@/lib/supabase/client';
++import { interpolateTemplate, parseTopic } from '@/lib/smart-engine';
++import {
++  applyTrainingRow,
++  fetchTrainingRows,
++  TrainingCategory,
++  TrainingRow,
++  TrainingType,
++} from '@/lib/training';
++
++const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'kakangkasyaf@gmail.com';
++
++const TABS: { id: TrainingType; label: string; hint: string }[] = [
++  { id: 'hook', label: 'Hook', hint: 'Kalimat pembuka scene 1' },
++  { id: 'scene2', label: 'Scene 2', hint: 'Isi / solusi' },
++  { id: 'scene3', label: 'Scene 3', hint: 'Bukti / harga' },
++  { id: 'cta', label: 'CTA', hint: 'Ajakan di scene terakhir' },
++  { id: 'image_asset', label: 'Gambar', hint: 'Referensi background' },
++  { id: 'keyword_rule', label: 'Kata Kunci', hint: 'Topik → hashtag' },
++];
++
++const CATEGORIES: { id: TrainingCategory; label: string }[] = [
++  { id: 'all', label: 'Semua' },
++  { id: 'promo', label: 'Promo' },
++  { id: 'quote', label: 'Quote' },
++  { id: 'edukasi', label: 'Edukasi' },
++];
++
++const PLACEHOLDERS = ['{produk}', '{harga}', '{harga_coret}', '{toko}', '{topik}', '{emosi}'];
++
++const SAMPLE_META = parseTopic('promo kopi susu gula aren 18rb', {
++  customStoreName: 'Kopi Senja',
++});
++
++export default function AdminTrainingPage() {
++  const [email, setEmail] = useState<string | null>(null);
++  const [rows, setRows] = useState<TrainingRow[]>([]);
++  const [loading, setLoading] = useState(true);
++  const [error, setError] = useState<string | null>(null);
++  const [notice, setNotice] = useState<string | null>(null);
++
++  const [tab, setTab] = useState<TrainingType>('hook');
++  const [category, setCategory] = useState<TrainingCategory>('all');
++  const [text, setText] = useState('');
++  const [subtext, setSubtext] = useState('');
++  const [emoji, setEmoji] = useState('✨');
++  const [imageUrl, setImageUrl] = useState('');
++  const [saving, setSaving] = useState(false);
++  const [uploading, setUploading] = useState(false);
++
++  const isAdmin = email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
++
++  const reload = useCallback(async () => {
++    setLoading(true);
++    setError(null);
++    try {
++      const data = await fetchTrainingRows();
++      setRows(data);
++    } catch (e) {
++      setError(e instanceof Error ? e.message : 'Gagal memuat data training.');
++    } finally {
++      setLoading(false);
++    }
++  }, []);
++
++  useEffect(() => {
++    createClient()
++      .auth.getUser()
++      .then(({ data }) => setEmail(data.user?.email ?? ''));
++    reload();
++  }, [reload]);
++
++  useEffect(() => {
++    if (!notice) return;
++    const t = setTimeout(() => setNotice(null), 2500);
++    return () => clearTimeout(t);
++  }, [notice]);
++
++  const counts = useMemo(() => {
++    const c: Record<string, number> = {};
++    rows.forEach((r) => (c[r.type] = (c[r.type] || 0) + 1));
++    return c;
++  }, [rows]);
++
++  const visibleRows = rows.filter((r) => r.type === tab);
++  const activeTab = TABS.find((t) => t.id === tab)!;
++
++  const needsSubtext = tab === 'scene2' || tab === 'scene3' || tab === 'keyword_rule';
++  const needsEmoji = tab === 'scene2' || tab === 'scene3';
++  const needsImage = tab === 'image_asset';
++  const hideCategory = tab === 'cta' || tab === 'keyword_rule';
++
++  const textLabel =
++    tab === 'image_asset'
++      ? 'Judul gambar'
++      : tab === 'keyword_rule'
++      ? 'Kata kunci (pisahkan koma)'
++      : 'Kalimat';
++  const subtextLabel = tab === 'keyword_rule' ? 'Hashtag (pisahkan koma)' : 'Subtext';
++
++  const preview =
++    text.trim() && ['hook', 'scene2', 'scene3', 'cta'].includes(tab)
++      ? interpolateTemplate(text, SAMPLE_META)
++      : '';
++
++  const canSave =
++    text.trim().length > 0 &&
++    (!needsImage || imageUrl.trim().length > 0) &&
++    (tab !== 'keyword_rule' || subtext.trim().length > 0);
++
++  const resetForm = () => {
++    setText('');
++    setSubtext('');
++    setImageUrl('');
++    setEmoji('✨');
++  };
++
++  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
++    const file = e.target.files?.[0];
++    if (!file) return;
++    setUploading(true);
++    setError(null);
++    try {
++      const supabase = createClient();
++      const path = `admin-assets/${Date.now()}-${file.name.replace(/[^\w.-]/g, '_')}`;
++      const { error: upErr } = await supabase.storage
++        .from('project-backgrounds')
++        .upload(path, file, { upsert: true });
++      if (upErr) throw new Error(upErr.message);
++      const { data } = supabase.storage.from('project-backgrounds').getPublicUrl(path);
++      setImageUrl(data.publicUrl);
++      if (!text.trim()) setText(file.name.replace(/\.[^.]+$/, ''));
++    } catch (err) {
++      setError(err instanceof Error ? err.message : 'Upload gagal.');
++    } finally {
++      setUploading(false);
++      e.target.value = '';
++    }
++  };
++
++  const handleSave = async () => {
++    if (!canSave || saving) return;
++    setSaving(true);
++    setError(null);
++    try {
++      const supabase = createClient();
++      const { data, error: insErr } = await supabase
++        .from('ai_training_data')
++        .insert({
++          type: tab,
++          category: hideCategory ? 'all' : category,
++          content_text: text.trim(),
++          subtext: needsSubtext ? subtext.trim() : '',
++          emoji: needsEmoji ? emoji || '✨' : '✨',
++          image_url: needsImage ? imageUrl.trim() : '',
++          created_by_email: email || ADMIN_EMAIL,
++        })
++        .select('*')
++        .single();
++      if (insErr) throw new Error(insErr.message);
++      const row = data as TrainingRow;
++      applyTrainingRow(row);
++      setRows((prev) => [row, ...prev]);
++      resetForm();
++      setNotice('Tersimpan & langsung aktif di engine');
++    } catch (err) {
++      setError(err instanceof Error ? err.message : 'Gagal menyimpan.');
++    } finally {
++      setSaving(false);
++    }
++  };
++
++  const handleDelete = async (id: string) => {
++    setError(null);
++    const { error: delErr } = await createClient()
++      .from('ai_training_data')
++      .delete()
++      .eq('id', id);
++    if (delErr) {
++      setError(delErr.message);
++      return;
++    }
++    setRows((prev) => prev.filter((r) => r.id !== id));
++    setNotice('Dihapus (berlaku penuh setelah halaman dimuat ulang)');
++  };
++
++  if (email !== null && !isAdmin) {
++    return (
++      <div className="min-h-screen flex items-center justify-center p-6 text-center">
++        <div className="space-y-3">
++          <p className="text-sm text-slate-300">Halaman ini khusus admin.</p>
++          <Link href="/dashboard" className="text-sm font-semibold text-cyan-400 hover:underline">
++            Kembali ke dashboard
++          </Link>
++        </div>
++      </div>
++    );
++  }
++
++  const inputCls =
++    'w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-sm placeholder:text-slate-600 focus:outline-none focus:border-violet-500';
++  const labelCls = 'text-xs font-semibold text-slate-400 block mb-1.5';
++
++  return (
++    <div className="min-h-screen bg-slate-950 text-slate-100">
++      <header className="border-b border-white/10 bg-slate-900/60">
++        <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
++          <div className="flex items-center gap-3">
++            <Link
++              href="/dashboard"
++              className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300"
++              aria-label="Kembali"
++            >
++              <ArrowLeft className="w-4 h-4" />
++            </Link>
++            <h1 className="text-sm font-bold">Training Smart Engine</h1>
++          </div>
++          <span className="text-xs text-slate-500 hidden sm:block">{email}</span>
++        </div>
++      </header>
++
++      <main className="max-w-5xl mx-auto px-6 py-8 space-y-6">
++        {/* Tab */}
++        <nav className="flex flex-wrap gap-1.5">
++          {TABS.map((t) => (
++            <button
++              key={t.id}
++              type="button"
++              onClick={() => {
++                setTab(t.id);
++                resetForm();
++              }}
++              className={`px-3.5 py-2 rounded-xl text-xs font-semibold border transition ${
++                tab === t.id
++                  ? 'bg-violet-600/20 border-violet-500 text-white'
++                  : 'bg-slate-900 border-white/10 text-slate-400 hover:text-white'
++              }`}
++            >
++              {t.label}
++              <span className="ml-1.5 text-[10px] opacity-60">{counts[t.id] || 0}</span>
++            </button>
++          ))}
++        </nav>
++
++        {(error || notice) && (
++          <div
++            className={`px-4 py-2.5 rounded-xl text-xs border ${
++              error
++                ? 'bg-rose-950/60 border-rose-500/30 text-rose-200'
++                : 'bg-emerald-950/60 border-emerald-500/30 text-emerald-200'
++            }`}
++          >
++            {error || notice}
++          </div>
++        )}
++
++        <div className="grid lg:grid-cols-5 gap-6">
++          {/* Form */}
++          <section className="lg:col-span-2 bg-slate-900 border border-white/10 rounded-2xl p-5 space-y-4 h-fit">
++            <div>
++              <h2 className="text-sm font-bold">Tambah {activeTab.label}</h2>
++              <p className="text-xs text-slate-500">{activeTab.hint}</p>
++            </div>
++
++            {!hideCategory && (
++              <div>
++                <span className={labelCls}>Kategori</span>
++                <div className="grid grid-cols-4 gap-1.5">
++                  {CATEGORIES.map((c) => (
++                    <button
++                      key={c.id}
++                      type="button"
++                      onClick={() => setCategory(c.id)}
++                      className={`py-1.5 rounded-lg text-[11px] font-semibold border ${
++                        category === c.id
++                          ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200'
++                          : 'bg-slate-950 border-white/10 text-slate-400'
++                      }`}
++                    >
++                      {c.label}
++                    </button>
++                  ))}
++                </div>
++              </div>
++            )}
++
++            <div>
++              <label className={labelCls}>{textLabel}</label>
++              <textarea
++                rows={tab === 'image_asset' || tab === 'keyword_rule' ? 2 : 3}
++                value={text}
++                onChange={(e) => setText(e.target.value)}
++                className={inputCls}
++                placeholder={tab === 'keyword_rule' ? 'kopi, latte, espresso' : ''}
++              />
++              {['hook', 'scene2', 'scene3', 'cta'].includes(tab) && (
++                <div className="flex flex-wrap gap-1 mt-2">
++                  {PLACEHOLDERS.map((ph) => (
++                    <button
++                      key={ph}
++                      type="button"
++                      onClick={() => setText((v) => `${v}${ph}`)}
++                      className="px-2 py-0.5 rounded-md bg-white/5 hover:bg-white/10 text-[10px] font-mono text-slate-400"
++                    >
++                      {ph}
++                    </button>
++                  ))}
++                </div>
++              )}
++            </div>
++
++            {needsSubtext && (
++              <div>
++                <label className={labelCls}>{subtextLabel}</label>
++                <input
++                  value={subtext}
++                  onChange={(e) => setSubtext(e.target.value)}
++                  className={inputCls}
++                  placeholder={tab === 'keyword_rule' ? '#kopi, #kulinerbandung' : ''}
++                />
++              </div>
++            )}
++
++            {needsEmoji && (
++              <div>
++                <label className={labelCls}>Emoji</label>
++                <input
++                  value={emoji}
++                  onChange={(e) => setEmoji(e.target.value)}
++                  className={`${inputCls} w-20 text-center`}
++                  maxLength={4}
++                />
++              </div>
++            )}
++
++            {needsImage && (
++              <div className="space-y-2">
++                <label className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-dashed border-cyan-400/40 bg-cyan-500/10 text-xs font-semibold text-cyan-200 cursor-pointer hover:bg-cyan-500/15">
++                  {uploading ? (
++                    <Loader2 className="w-4 h-4 animate-spin" />
++                  ) : (
++                    <ImagePlus className="w-4 h-4" />
++                  )}
++                  <span>Upload gambar</span>
++                  <input type="file" accept="image/*" onChange={handleUpload} className="hidden" />
++                </label>
++                <input
++                  value={imageUrl}
++                  onChange={(e) => setImageUrl(e.target.value)}
++                  className={inputCls}
++                  placeholder="atau tempel URL gambar"
++                />
++                {imageUrl && (
++                  // eslint-disable-next-line @next/next/no-img-element
++                  <img src={imageUrl} alt="Preview" className="w-full h-32 object-cover rounded-xl" />
++                )}
++              </div>
++            )}
++
++            {preview && (
++              <div className="rounded-xl bg-slate-950 border border-white/5 p-3">
++                <span className="text-[10px] uppercase font-bold text-slate-500 block mb-1">
++                  Contoh hasil
++                </span>
++                <p className="text-xs text-slate-200">
++                  {tab !== 'cta' && tab !== 'hook' ? `${emoji} ` : ''}
++                  {preview}
++                </p>
++                {subtext.trim() && (
++                  <p className="text-[11px] text-slate-500 mt-1">
++                    {interpolateTemplate(subtext, SAMPLE_META)}
++                  </p>
++                )}
++              </div>
++            )}
++
++            <button
++              type="button"
++              onClick={handleSave}
++              disabled={!canSave || saving}
++              className="w-full py-3 rounded-xl bg-gradient-to-r from-violet-600 to-cyan-500 text-sm font-bold text-white flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
++            >
++              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
++              <span>Simpan</span>
++            </button>
++          </section>
++
++          {/* Daftar */}
++          <section className="lg:col-span-3 space-y-2">
++            <div className="flex items-center justify-between px-1">
++              <h2 className="text-sm font-bold">
++                {activeTab.label} yang sudah dilatih
++              </h2>
++              <span className="text-xs text-slate-500">{visibleRows.length} item</span>
++            </div>
++
++            {loading ? (
++              <div className="py-16 text-center text-slate-500">
++                <Loader2 className="w-5 h-5 animate-spin mx-auto" />
++              </div>
++            ) : visibleRows.length === 0 ? (
++              <div className="py-16 text-center text-xs text-slate-500 border border-dashed border-white/10 rounded-2xl">
++                Belum ada data. Tambahkan lewat form di samping.
++              </div>
++            ) : (
++              <ul className="space-y-2">
++                {visibleRows.map((r) => (
++                  <li
++                    key={r.id}
++                    className="group flex gap-3 items-start p-3.5 rounded-2xl bg-slate-900 border border-white/10"
++                  >
++                    {r.type === 'image_asset' && r.image_url && (
++                      // eslint-disable-next-line @next/next/no-img-element
++                      <img
++                        src={r.image_url}
++                        alt={r.content_text}
++                        className="w-14 h-14 rounded-lg object-cover shrink-0"
++                      />
++                    )}
++                    <div className="min-w-0 flex-1">
++                      <p className="text-sm text-slate-100 break-words">
++                        {(r.type === 'scene2' || r.type === 'scene3') && `${r.emoji} `}
++                        {r.content_text}
++                      </p>
++                      {r.subtext && (
++                        <p className="text-xs text-slate-500 mt-0.5 break-words">{r.subtext}</p>
++                      )}
++                      <span className="inline-block mt-1.5 px-1.5 py-0.5 rounded bg-white/5 text-[10px] text-slate-400">
++                        {r.category}
++                      </span>
++                    </div>
++                    <button
++                      type="button"
++                      onClick={() => handleDelete(r.id)}
++                      aria-label="Hapus"
++                      className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
++                    >
++                      <Trash2 className="w-4 h-4" />
++                    </button>
++                  </li>
++                ))}
++              </ul>
++            )}
++          </section>
++        </div>
++      </main>
++    </div>
++  );
++}
+diff --git a/app/create/page.tsx b/app/create/page.tsx
+index d5065ee..414a152 100644
+--- a/app/create/page.tsx
++++ b/app/create/page.tsx
+@@ -1,6 +1,6 @@
+ 'use client';
+ 
+-import React, { useState } from 'react';
++import React, { useEffect, useState } from 'react';
+ import { useRouter } from 'next/navigation';
+ import {
+   CategoryType,
+@@ -9,6 +9,7 @@ import {
+ } from '@/lib/smart-engine';
+ import { TemplateId, useEditorStore } from '@/store/useEditorStore';
+ import { createClient } from '@/lib/supabase/client';
++import { loadTrainingIntoEngine } from '@/lib/training';
+ import { Sparkles, ArrowRight, CheckCircle2, Loader2 } from 'lucide-react';
+ 
+ /**
+@@ -32,6 +33,11 @@ export default function CreatePage() {
+   const [isSimulating, setIsSimulating] = useState(false);
+   const [result, setResult] = useState<GeneratedScriptResult | null>(null);
+ 
++  // Suntik data hasil training admin ke Smart Engine sebelum generate
++  useEffect(() => {
++    loadTrainingIntoEngine();
++  }, []);
++
+   const handleCategoryChange = (cat: CategoryType) => {
+     setCategory(cat);
+     if (cat === 'promo') {
+@@ -225,7 +231,7 @@ export default function CreatePage() {
+             {isSimulating ? (
+               <>
+                 <Loader2 className="w-4 h-4 animate-spin" />
+-                <span>Smart Engine menyusun Hook & 4 Scene (800ms)...</span>
++                <span>Menyusun script...</span>
+               </>
+             ) : (
+               <>
+diff --git a/app/editor/[id]/page.tsx b/app/editor/[id]/page.tsx
+index 5aaffa7..997dc05 100644
+--- a/app/editor/[id]/page.tsx
++++ b/app/editor/[id]/page.tsx
+@@ -18,6 +18,7 @@ import TemplateRenderer from '@/components/templates/TemplateRenderer';
+ import { GRADIENT_PRESETS } from '@/components/templates/types';
+ import { exportProjectToVideo } from '@/lib/video-exporter';
+ import { createClient } from '@/lib/supabase/client';
++import { loadTrainingIntoEngine } from '@/lib/training';
+ import {
+   Play,
+   Pause,
+@@ -102,6 +103,21 @@ export default function EditorPage({ params }: { params: { id: string } }) {
+   const [exportError, setExportError] = useState<string | null>(null);
+   const [exportedVideoUrl, setExportedVideoUrl] = useState<string | null>(null);
+   const [copiedCaption, setCopiedCaption] = useState(false);
++  const [panel, setPanel] = useState<'teks' | 'gambar' | 'gaya' | 'musik'>('teks');
++  const [isAdmin, setIsAdmin] = useState(false);
++
++  useEffect(() => {
++    loadTrainingIntoEngine();
++    const adminEmail = (
++      process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'kakangkasyaf@gmail.com'
++    ).toLowerCase();
++    createClient()
++      .auth.getUser()
++      .then(({ data }) =>
++        setIsAdmin((data.user?.email || '').toLowerCase() === adminEmail)
++      )
++      .catch(() => setIsAdmin(false));
++  }, []);
+ 
+   const activeScene = script.scenes[activeSceneIndex] || script.scenes[0];
+   const totalDuration = script.scenes.reduce((acc, s) => acc + s.duration, 0);
+@@ -284,28 +300,35 @@ export default function EditorPage({ params }: { params: { id: string } }) {
+           <div>
+             <h1 className="text-sm font-bold line-clamp-1">{title}</h1>
+             <div className="flex items-center gap-2 text-[11px] text-slate-400">
+-              <span>Kategori: {category.toUpperCase()}</span>
++              <span className="capitalize">{category}</span>
+               <span>•</span>
+-              <span className="flex items-center gap-1 text-emerald-400">
++              <span
++                className={`flex items-center gap-1 ${
++                  saveStatus === 'saved' ? 'text-emerald-400' : 'text-slate-400'
++                }`}
++              >
+                 <Save className="w-3 h-3" />
+                 {saveStatus === 'saving'
+-                  ? 'Menyimpan ke tabel projects Supabase...'
++                  ? 'Menyimpan...'
+                   : saveStatus === 'unsaved'
+-                  ? 'Menunggu auto-save (debounce 2s)...'
+-                  : 'Tersimpan di Supabase'}
++                  ? 'Belum tersimpan'
++                  : 'Tersimpan'}
+               </span>
+             </div>
+           </div>
+         </div>
+ 
+         <div className="flex items-center gap-2.5">
+-          <Link
+-            href="/admin"
+-            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-xs font-bold text-amber-300 hover:bg-amber-500/25 transition"
+-          >
+-            <Brain className="w-3.5 h-3.5" />
+-            <span>Admin Training</span>
+-          </Link>
++          {isAdmin && (
++            <Link
++              href="/admin"
++              title="Training Smart Engine"
++              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-slate-300 transition"
++            >
++              <Brain className="w-3.5 h-3.5" />
++              <span>Training</span>
++            </Link>
++          )}
+ 
+           <button
+             type="button"
+@@ -313,7 +336,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
+             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-cyan-300 transition"
+           >
+             <Shuffle className="w-3.5 h-3.5" />
+-            <span>Acak Lagi / Generate Ulang</span>
++            <span>Acak Ulang</span>
+           </button>
+ 
+           <button
+@@ -371,7 +394,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
+ 
+           <div className="space-y-2.5">
+             <span className="text-xs font-bold uppercase tracking-wider text-slate-400 block">
+-              Pilih Template (9 Variasi)
++              Template
+             </span>
+             <div className="grid grid-cols-1 gap-1.5">
+               {TEMPLATE_LIST.map((tpl) => (
+@@ -499,235 +522,265 @@ export default function EditorPage({ params }: { params: { id: string } }) {
+           </div>
+         </main>
+ 
+-        {/* KOLOM KANAN: Panel Edit Lengkap + Galeri Multi-Gambar User */}
+-        <aside className="col-span-4 border-l border-white/10 bg-slate-900/50 p-4 overflow-y-auto space-y-5">
+-          {/* Edit Teks Scene Aktif */}
+-          <div className="space-y-2 bg-slate-950/70 p-4 rounded-2xl border border-white/10">
+-            <label className="text-xs font-bold uppercase text-violet-300 block">
+-              Edit Teks Scene {activeScene.sceneNumber} ({activeScene.role})
+-            </label>
+-            <textarea
+-              rows={3}
+-              value={activeScene.text}
+-              onChange={(e) => updateScene(activeSceneIndex, { text: e.target.value })}
+-              className="w-full p-3 rounded-xl bg-slate-900 border border-white/10 text-xs focus:outline-none focus:border-violet-500"
+-            />
+-            <input
+-              type="text"
+-              value={activeScene.subtext}
+-              onChange={(e) => updateScene(activeSceneIndex, { subtext: e.target.value })}
+-              placeholder="Subtext / Subtitle tambahan..."
+-              className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-xs"
+-            />
++        {/* KOLOM KANAN: Panel Edit (Tab) */}
++        <aside className="col-span-4 border-l border-white/10 bg-slate-900/50 flex flex-col overflow-hidden">
++          <div className="grid grid-cols-4 gap-1 p-3 border-b border-white/10 shrink-0">
++            {(
++              [
++                { id: 'teks', label: 'Teks' },
++                { id: 'gambar', label: 'Gambar' },
++                { id: 'gaya', label: 'Gaya' },
++                { id: 'musik', label: 'Musik' },
++              ] as const
++            ).map((t) => (
++              <button
++                key={t.id}
++                type="button"
++                onClick={() => setPanel(t.id)}
++                className={`py-2 rounded-lg text-xs font-semibold transition ${
++                  panel === t.id
++                    ? 'bg-violet-600 text-white'
++                    : 'text-slate-400 hover:text-white hover:bg-white/5'
++                }`}
++              >
++                {t.label}
++              </button>
++            ))}
+           </div>
+ 
+-          {/* Galeri Gambar User untuk Video Motion Graphic (Multi-Image Upload) */}
+-          <div className="space-y-3 bg-slate-950/70 p-4 rounded-2xl border border-cyan-500/30">
+-            <div className="flex items-center justify-between">
+-              <label className="text-[11px] font-bold uppercase text-cyan-300 block">
+-                📸 Galeri Gambar Anda (Slideshow per Scene)
+-              </label>
+-              <span className="text-[10px] text-slate-400">
+-                {style.userImages.length} Gambar
+-              </span>
+-            </div>
+-
+-            <label className="flex items-center justify-center gap-2 w-full py-2.5 px-3 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-dashed border-cyan-400/50 text-xs font-bold text-cyan-200 cursor-pointer transition">
+-              <Upload className="w-4 h-4 text-cyan-300" />
+-              <span>Masukkan Gambar-Gambar Anda (Bisa Pilih Banyak)</span>
+-              <input
+-                type="file"
+-                accept="image/*"
+-                multiple
+-                onChange={handleMultiImageUpload}
+-                className="hidden"
+-              />
+-            </label>
++          <div className="flex-1 overflow-y-auto p-4 space-y-5">
++            {panel === 'teks' && (
++              <>
++                <section className="space-y-2">
++                  <label className="text-xs font-semibold text-slate-400 block">
++                    Scene {activeScene.sceneNumber} · {activeScene.role}
++                  </label>
++                  <textarea
++                    rows={3}
++                    value={activeScene.text}
++                    onChange={(e) => updateScene(activeSceneIndex, { text: e.target.value })}
++                    className="w-full p-3 rounded-xl bg-slate-950 border border-white/10 text-sm focus:outline-none focus:border-violet-500"
++                  />
++                  <input
++                    type="text"
++                    value={activeScene.subtext}
++                    onChange={(e) => updateScene(activeSceneIndex, { subtext: e.target.value })}
++                    placeholder="Subtext (opsional)"
++                    className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-sm focus:outline-none focus:border-violet-500"
++                  />
++                </section>
+ 
+-            {style.userImages.length > 0 && (
+-              <div className="grid grid-cols-4 gap-2 pt-1">
+-                {style.userImages.map((imgUrl, idx) => (
+-                  <div
+-                    key={idx}
+-                    className="relative group rounded-xl overflow-hidden border border-white/20 h-16 bg-slate-900"
+-                  >
+-                    <img
+-                      src={imgUrl}
+-                      alt={`User asset ${idx + 1}`}
+-                      onClick={() => {
+-                        updateScene(activeSceneIndex, { imageUrl: imgUrl });
+-                        updateStyle({ backgroundType: 'upload', backgroundImageUrl: imgUrl });
+-                      }}
+-                      className="w-full h-full object-cover cursor-pointer"
+-                    />
+-                    <button
+-                      type="button"
+-                      onClick={() => removeUserImage(idx)}
+-                      className="absolute top-1 right-1 p-1 rounded bg-black/70 text-rose-400 opacity-0 group-hover:opacity-100 transition"
++                <section className="grid grid-cols-2 gap-4">
++                  <div>
++                    <label className="text-xs font-semibold text-slate-400 block mb-1.5">
++                      Animasi
++                    </label>
++                    <select
++                      value={activeScene.animation}
++                      onChange={(e) =>
++                        updateScene(activeSceneIndex, {
++                          animation: e.target.value as AnimationType,
++                        })
++                      }
++                      className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-sm"
+                     >
+-                      <Trash2 className="w-3 h-3" />
+-                    </button>
+-                    <span className="absolute bottom-0 inset-x-0 bg-black/70 text-[9px] text-center py-0.5">
+-                      Scene {(idx % script.scenes.length) + 1}
+-                    </span>
++                      {ANIMATION_OPTIONS.map((anim) => (
++                        <option key={anim.id} value={anim.id}>
++                          {anim.label}
++                        </option>
++                      ))}
++                    </select>
+                   </div>
+-                ))}
+-              </div>
++                  <div>
++                    <label className="text-xs font-semibold text-slate-400 block mb-1.5">
++                      Durasi
++                    </label>
++                    <div className="grid grid-cols-4 gap-1">
++                      {[2, 3, 4, 5].map((sec) => (
++                        <button
++                          key={sec}
++                          type="button"
++                          onClick={() => updateScene(activeSceneIndex, { duration: sec })}
++                          className={`py-2.5 rounded-lg text-xs font-bold border ${
++                            activeScene.duration === sec
++                              ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300'
++                              : 'bg-slate-950 border-white/10 text-slate-400'
++                          }`}
++                        >
++                          {sec}s
++                        </button>
++                      ))}
++                    </div>
++                  </div>
++                </section>
++              </>
+             )}
+ 
+-            {/* Pilihan Gambar Preset Picsum.photos */}
+-            <div className="pt-2 border-t border-white/10">
+-              <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1.5">
+-                Atau Pilih Background Picsum.photos:
+-              </span>
+-              <div className="grid grid-cols-2 gap-1.5">
+-                {CUSTOM_IMAGE_ASSETS.slice(0, 4).map((asset) => (
+-                  <button
+-                    key={asset.id}
+-                    type="button"
+-                    onClick={() => {
+-                      updateScene(activeSceneIndex, { imageUrl: asset.url });
+-                      updateStyle({
+-                        backgroundType: 'picsum',
+-                        backgroundImageUrl: asset.url,
+-                      });
+-                    }}
+-                    className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-white/10 text-[10px] text-left truncate"
+-                  >
+-                    🖼️ {asset.title}
+-                  </button>
+-                ))}
+-              </div>
+-            </div>
+-          </div>
+-
+-          {/* Pilih Animasi Masuk & Durasi per Scene */}
+-          <div className="grid grid-cols-2 gap-3 bg-slate-950/70 p-4 rounded-2xl border border-white/10">
+-            <div>
+-              <label className="text-[11px] font-bold uppercase text-slate-400 block mb-1.5">
+-                Animasi Masuk
+-              </label>
+-              <select
+-                value={activeScene.animation}
+-                onChange={(e) =>
+-                  updateScene(activeSceneIndex, {
+-                    animation: e.target.value as AnimationType,
+-                  })
+-                }
+-                className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-xs"
+-              >
+-                {ANIMATION_OPTIONS.map((anim) => (
+-                  <option key={anim.id} value={anim.id}>
+-                    {anim.label}
+-                  </option>
+-                ))}
+-              </select>
+-            </div>
+-
+-            <div>
+-              <label className="text-[11px] font-bold uppercase text-slate-400 block mb-1.5">
+-                Durasi Scene
+-              </label>
+-              <div className="grid grid-cols-4 gap-1">
+-                {[2, 3, 4, 5].map((sec) => (
+-                  <button
+-                    key={sec}
+-                    type="button"
+-                    onClick={() => updateScene(activeSceneIndex, { duration: sec })}
+-                    className={`py-2 rounded-lg text-xs font-bold border ${
+-                      activeScene.duration === sec
+-                        ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300'
+-                        : 'bg-slate-900 border-white/10 text-slate-400'
+-                    }`}
+-                  >
+-                    {sec}s
+-                  </button>
+-                ))}
+-              </div>
+-            </div>
+-          </div>
+-
+-          {/* Pilih Font (6 Google Fonts) */}
+-          <div className="space-y-2 bg-slate-950/70 p-4 rounded-2xl border border-white/10">
+-            <label className="text-[11px] font-bold uppercase text-slate-400 block">
+-              Pilih Tipografi (6 Google Fonts)
+-            </label>
+-            <div className="grid grid-cols-2 gap-2">
+-              {FONT_OPTIONS.map((fontName) => (
+-                <button
+-                  key={fontName}
+-                  type="button"
+-                  onClick={() => updateStyle({ font: fontName })}
+-                  style={{ fontFamily: fontName }}
+-                  className={`px-3 py-2 rounded-xl border text-xs text-left truncate ${
+-                    style.font === fontName
+-                      ? 'bg-violet-600/20 border-violet-500 text-white'
+-                      : 'bg-slate-900 border-white/10 text-slate-300'
+-                  }`}
+-                >
+-                  {fontName}
+-                </button>
+-              ))}
+-            </div>
+-          </div>
++            {panel === 'gambar' && (
++              <>
++                <section className="space-y-3">
++                  <div className="flex items-center justify-between">
++                    <label className="text-xs font-semibold text-slate-400">
++                      Gambar Anda
++                    </label>
++                    <span className="text-[11px] text-slate-500">
++                      {style.userImages.length} gambar
++                    </span>
++                  </div>
+ 
+-          {/* Pilih Palet Warna (8 Preset + Custom Color Picker) */}
+-          <div className="space-y-3 bg-slate-950/70 p-4 rounded-2xl border border-white/10">
+-            <label className="text-[11px] font-bold uppercase text-slate-400 block">
+-              Palet Warna (8 Preset + Custom Picker)
+-            </label>
+-            <div className="grid grid-cols-2 gap-2">
+-              {COLOR_PALETTES.map((pal) => (
+-                <button
+-                  key={pal.id}
+-                  type="button"
+-                  onClick={() => updateColors(pal)}
+-                  className={`p-2 rounded-xl border text-left flex items-center gap-2 ${
+-                    style.colors.id === pal.id
+-                      ? 'border-cyan-400 bg-cyan-500/10'
+-                      : 'border-white/10 bg-slate-900'
+-                  }`}
+-                >
+-                  <span
+-                    className="w-5 h-5 rounded-full shrink-0 border border-white/20"
+-                    style={{
+-                      background: `linear-gradient(135deg, ${pal.bgPrimary}, ${pal.accentColor})`,
+-                    }}
+-                  />
+-                  <span className="text-[11px] font-medium truncate">{pal.name}</span>
+-                </button>
+-              ))}
+-            </div>
+-          </div>
++                  <label className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/15 border border-dashed border-cyan-400/40 text-xs font-semibold text-cyan-200 cursor-pointer transition">
++                    <Upload className="w-4 h-4" />
++                    <span>Upload gambar (bisa banyak)</span>
++                    <input
++                      type="file"
++                      accept="image/*"
++                      multiple
++                      onChange={handleMultiImageUpload}
++                      className="hidden"
++                    />
++                  </label>
++
++                  {style.userImages.length > 0 && (
++                    <div className="grid grid-cols-4 gap-2">
++                      {style.userImages.map((imgUrl, idx) => (
++                        <div
++                          key={idx}
++                          className="relative group rounded-xl overflow-hidden border border-white/15 h-16 bg-slate-950"
++                        >
++                          {/* eslint-disable-next-line @next/next/no-img-element */}
++                          <img
++                            src={imgUrl}
++                            alt={`Gambar ${idx + 1}`}
++                            onClick={() => {
++                              updateScene(activeSceneIndex, { imageUrl: imgUrl });
++                              updateStyle({ backgroundType: 'upload', backgroundImageUrl: imgUrl });
++                            }}
++                            className="w-full h-full object-cover cursor-pointer"
++                          />
++                          <button
++                            type="button"
++                            onClick={() => removeUserImage(idx)}
++                            aria-label="Hapus gambar"
++                            className="absolute top-1 right-1 p-1 rounded bg-black/70 text-rose-400 opacity-0 group-hover:opacity-100 transition"
++                          >
++                            <Trash2 className="w-3 h-3" />
++                          </button>
++                        </div>
++                      ))}
++                    </div>
++                  )}
++                  <p className="text-[11px] text-slate-500">
++                    Klik gambar untuk memakainya di scene yang sedang aktif.
++                  </p>
++                </section>
++
++                <section className="space-y-2 pt-4 border-t border-white/10">
++                  <label className="text-xs font-semibold text-slate-400 block">
++                    Background siap pakai
++                  </label>
++                  <div className="grid grid-cols-2 gap-1.5">
++                    {CUSTOM_IMAGE_ASSETS.slice(0, 6).map((asset) => (
++                      <button
++                        key={asset.id}
++                        type="button"
++                        onClick={() => {
++                          updateScene(activeSceneIndex, { imageUrl: asset.url });
++                          updateStyle({
++                            backgroundType: 'picsum',
++                            backgroundImageUrl: asset.url,
++                          });
++                        }}
++                        className="px-3 py-2 rounded-lg bg-slate-950 hover:bg-slate-800 border border-white/10 text-xs text-left truncate text-slate-300"
++                      >
++                        {asset.title}
++                      </button>
++                    ))}
++                  </div>
++                </section>
++              </>
++            )}
+ 
+-          {/* Pilih Musik Latar (5 Track CDN & Lokal) */}
+-          <div className="space-y-2 bg-slate-950/70 p-4 rounded-2xl border border-white/10">
+-            <label className="text-[11px] font-bold uppercase text-slate-400 flex items-center gap-1.5">
+-              <Music className="w-3.5 h-3.5 text-cyan-400" />
+-              <span>Pilih Musik Latar (5 MP3 CDN &amp; Lokal)</span>
+-            </label>
+-            <div className="space-y-1.5">
+-              {MUSIC_TRACKS.map((track) => (
+-                <button
+-                  key={track.id}
+-                  type="button"
+-                  onClick={() => updateStyle({ music: track })}
+-                  className={`w-full p-2.5 rounded-xl border text-left flex items-center justify-between text-xs ${
+-                    style.music.id === track.id
+-                      ? 'bg-emerald-500/15 border-emerald-400 text-emerald-200'
+-                      : 'bg-slate-900 border-white/5 text-slate-300'
+-                  }`}
+-                >
+-                  <div>
+-                    <div className="font-bold">{track.title}</div>
+-                    <div className="text-[10px] opacity-70">{track.description}</div>
++            {panel === 'gaya' && (
++              <>
++                <section className="space-y-2">
++                  <label className="text-xs font-semibold text-slate-400 block">Font</label>
++                  <div className="grid grid-cols-2 gap-2">
++                    {FONT_OPTIONS.map((fontName) => (
++                      <button
++                        key={fontName}
++                        type="button"
++                        onClick={() => updateStyle({ font: fontName })}
++                        style={{ fontFamily: fontName }}
++                        className={`px-3 py-2.5 rounded-xl border text-sm text-left truncate ${
++                          style.font === fontName
++                            ? 'bg-violet-600/20 border-violet-500 text-white'
++                            : 'bg-slate-950 border-white/10 text-slate-300'
++                        }`}
++                      >
++                        {fontName}
++                      </button>
++                    ))}
+                   </div>
+-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-black/30">
+-                    {track.bpm} BPM
+-                  </span>
+-                </button>
+-              ))}
+-            </div>
++                </section>
++
++                <section className="space-y-2">
++                  <label className="text-xs font-semibold text-slate-400 block">Warna</label>
++                  <div className="grid grid-cols-2 gap-2">
++                    {COLOR_PALETTES.map((pal) => (
++                      <button
++                        key={pal.id}
++                        type="button"
++                        onClick={() => updateColors(pal)}
++                        className={`p-2.5 rounded-xl border text-left flex items-center gap-2 ${
++                          style.colors.id === pal.id
++                            ? 'border-cyan-400 bg-cyan-500/10'
++                            : 'border-white/10 bg-slate-950'
++                        }`}
++                      >
++                        <span
++                          className="w-5 h-5 rounded-full shrink-0 border border-white/20"
++                          style={{
++                            background: `linear-gradient(135deg, ${pal.bgPrimary}, ${pal.accentColor})`,
++                          }}
++                        />
++                        <span className="text-xs truncate">{pal.name}</span>
++                      </button>
++                    ))}
++                  </div>
++                </section>
++              </>
++            )}
++
++            {panel === 'musik' && (
++              <section className="space-y-2">
++                <label className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
++                  <Music className="w-3.5 h-3.5 text-cyan-400" />
++                  <span>Musik latar</span>
++                </label>
++                <div className="space-y-1.5">
++                  {MUSIC_TRACKS.map((track) => (
++                    <button
++                      key={track.id}
++                      type="button"
++                      onClick={() => updateStyle({ music: track })}
++                      className={`w-full p-3 rounded-xl border text-left flex items-center justify-between gap-3 ${
++                        style.music.id === track.id
++                          ? 'bg-emerald-500/15 border-emerald-400 text-emerald-100'
++                          : 'bg-slate-950 border-white/10 text-slate-300'
++                      }`}
++                    >
++                      <div className="min-w-0">
++                        <div className="text-sm font-semibold truncate">{track.title}</div>
++                        <div className="text-[11px] opacity-60 truncate">{track.description}</div>
++                      </div>
++                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-black/30 shrink-0">
++                        {track.bpm} BPM
++                      </span>
++                    </button>
++                  ))}
++                </div>
++              </section>
++            )}
+           </div>
+         </aside>
+       </div>
+@@ -738,9 +791,9 @@ export default function EditorPage({ params }: { params: { id: string } }) {
+           <div className="w-full max-w-lg rounded-3xl bg-slate-900 border border-white/15 p-6 space-y-5 shadow-2xl">
+             <div className="flex items-center justify-between">
+               <div>
+-                <h3 className="font-bold text-lg">Export Video MP4 &amp; Caption TikTok</h3>
++                <h3 className="font-bold text-lg">Export Video</h3>
+                 <p className="text-[11px] text-slate-400">
+-                  Dirender di browser dengan HTML5 Canvas + MediaRecorder + AudioContext
++                  Video dirender langsung di browser Anda.
+                 </p>
+               </div>
+               <button
+@@ -756,7 +809,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
+               <div className="p-4 rounded-2xl bg-rose-950/80 border border-rose-500/40 text-xs text-rose-200 space-y-1.5">
+                 <div className="flex items-center gap-2 font-bold text-rose-300">
+                   <AlertTriangle className="w-4 h-4" />
+-                  <span>Perekaman Video Tidak Didukung</span>
++                  <span>Export gagal</span>
+                 </div>
+                 <p>{exportError}</p>
+               </div>
+@@ -811,7 +864,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
+             <div className="p-4 rounded-2xl bg-slate-950 border border-white/10 space-y-2">
+               <div className="flex items-center justify-between">
+                 <span className="text-[11px] font-bold uppercase text-amber-400">
+-                  Caption + Hashtag Otomatis
++                  Caption & Hashtag
+                 </span>
+                 <button
+                   type="button"
+diff --git a/lib/smart-engine.ts b/lib/smart-engine.ts
+index 9d430f6..deff21f 100644
+--- a/lib/smart-engine.ts
++++ b/lib/smart-engine.ts
+@@ -785,9 +785,17 @@ export const BANK_CTA: string[] = [
+ // 7. FUNGSI ADMIN TRAINING (UNTUK kakangkasyaf@gmail.com)
+ // Menambahkan Hook, Scene, CTA, dan Gambar Asset baru secara live ke Smart Engine
+ // ============================================================================
++function addUnique<T>(list: T[], item: T, getKey: (x: T) => string) {
++  const key = getKey(item).toLowerCase();
++  if (list.some((x) => getKey(x).toLowerCase() === key)) return false;
++  list.unshift(item);
++  return true;
++}
++
+ export function addCustomHookToEngine(category: CategoryType, hookText: string) {
+-  if (!hookText.trim()) return;
+-  BANK_HOOK[category].unshift(hookText.trim());
++  const text = hookText.trim();
++  if (!text) return false;
++  return addUnique(BANK_HOOK[category], text, (x) => x);
+ }
+ 
+ export function addCustomSceneToEngine(
+@@ -795,18 +803,38 @@ export function addCustomSceneToEngine(
+   slot: 'scene2' | 'scene3',
+   entry: SceneTemplateEntry
+ ) {
+-  if (!entry.text.trim()) return;
+-  BANK_SCENES[category][slot].unshift(entry);
++  if (!entry.text.trim()) return false;
++  return addUnique(BANK_SCENES[category][slot], entry, (x) => x.text);
+ }
+ 
+ export function addCustomCtaToEngine(ctaText: string) {
+-  if (!ctaText.trim()) return;
+-  BANK_CTA.unshift(ctaText.trim());
++  const text = ctaText.trim();
++  if (!text) return false;
++  return addUnique(BANK_CTA, text, (x) => x);
+ }
+ 
+ export function addCustomImageAssetToEngine(asset: CustomImageAsset) {
+-  if (!asset.url.trim()) return;
+-  CUSTOM_IMAGE_ASSETS.unshift(asset);
++  if (!asset.url.trim()) return false;
++  return addUnique(CUSTOM_IMAGE_ASSETS, asset, (x) => x.url);
++}
++
++/** Aturan kata kunci: kata kunci topik -> hashtag tambahan di caption. */
++export function addKeywordRuleToEngine(keywords: string[], hashtags: string[]) {
++  const tags = hashtags
++    .map((h) => h.trim())
++    .filter(Boolean)
++    .map((h) => (h.startsWith('#') ? h : `#${h}`));
++  if (tags.length === 0) return false;
++  let added = false;
++  for (const raw of keywords) {
++    const kw = raw.trim().toLowerCase();
++    if (!kw) continue;
++    const current = TOPIC_HASHTAG_MAP[kw] || [];
++    const merged = Array.from(new Set([...tags, ...current]));
++    if (merged.length !== current.length) added = true;
++    TOPIC_HASHTAG_MAP[kw] = merged;
++  }
++  return added;
+ }
+ 
+ // ============================================================================
+@@ -1262,8 +1290,6 @@ export function generateScript(
+     extractedMeta: meta,
+   };
+ 
+-  console.log('[MotionKu SmartEngine] generateScript JSON:', JSON.stringify(result, null, 2));
+-
+   return result;
+ }
+ 
+diff --git a/lib/supabase/server.ts b/lib/supabase/server.ts
+index a992738..3999998 100644
+--- a/lib/supabase/server.ts
++++ b/lib/supabase/server.ts
+@@ -15,7 +15,7 @@ export function createServerSupabase() {
+         getAll() {
+           return cookieStore.getAll();
+         },
+-        setAll(cookiesToSet) {
++        setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
+           try {
+             cookiesToSet.forEach(({ name, value, options }) =>
+               cookieStore.set(name, value, options)
+diff --git a/lib/training.ts b/lib/training.ts
+new file mode 100644
+index 0000000..35aad7e
+--- /dev/null
++++ b/lib/training.ts
+@@ -0,0 +1,131 @@
++import { createClient } from '@/lib/supabase/client';
++import {
++  addCustomCtaToEngine,
++  addCustomHookToEngine,
++  addCustomImageAssetToEngine,
++  addCustomSceneToEngine,
++  addKeywordRuleToEngine,
++  CategoryType,
++} from '@/lib/smart-engine';
++
++export type TrainingType =
++  | 'hook'
++  | 'scene2'
++  | 'scene3'
++  | 'cta'
++  | 'image_asset'
++  | 'keyword_rule';
++
++export type TrainingCategory = CategoryType | 'all';
++
++export interface TrainingRow {
++  id: string;
++  type: TrainingType;
++  category: TrainingCategory;
++  content_text: string;
++  subtext: string | null;
++  emoji: string | null;
++  image_url: string | null;
++  metadata_json: Record<string, unknown> | null;
++  created_by_email: string;
++  created_at: string;
++}
++
++const ALL_CATEGORIES: CategoryType[] = ['promo', 'quote', 'edukasi'];
++
++// id baris yang sudah diterapkan, supaya tidak dobel saat halaman dibuka ulang
++const appliedIds = new Set<string>();
++let inflight: Promise<number> | null = null;
++
++function categoriesOf(cat: TrainingCategory): CategoryType[] {
++  return cat === 'all' ? ALL_CATEGORIES : [cat];
++}
++
++function splitList(text: string): string[] {
++  return text
++    .split(/[,\n]/)
++    .map((x) => x.trim())
++    .filter(Boolean);
++}
++
++/** Terapkan satu baris training ke Smart Engine (idempotent). */
++export function applyTrainingRow(row: TrainingRow): boolean {
++  if (appliedIds.has(row.id)) return false;
++  appliedIds.add(row.id);
++
++  const cats = categoriesOf(row.category);
++
++  switch (row.type) {
++    case 'hook':
++      cats.forEach((c) => addCustomHookToEngine(c, row.content_text));
++      return true;
++    case 'scene2':
++    case 'scene3':
++      cats.forEach((c) =>
++        addCustomSceneToEngine(c, row.type as 'scene2' | 'scene3', {
++          text: row.content_text,
++          subtext: row.subtext || '',
++          emoji: row.emoji || '✨',
++        })
++      );
++      return true;
++    case 'cta':
++      addCustomCtaToEngine(row.content_text);
++      return true;
++    case 'image_asset':
++      if (!row.image_url) return false;
++      addCustomImageAssetToEngine({
++        id: `trained-${row.id}`,
++        title: row.content_text || 'Gambar Training',
++        category: cats[0],
++        url: row.image_url,
++      });
++      return true;
++    case 'keyword_rule':
++      return addKeywordRuleToEngine(
++        splitList(row.content_text),
++        splitList(row.subtext || '')
++      );
++    default:
++      return false;
++  }
++}
++
++export async function fetchTrainingRows(): Promise<TrainingRow[]> {
++  const supabase = createClient();
++  const { data, error } = await supabase
++    .from('ai_training_data')
++    .select('*')
++    .order('created_at', { ascending: false });
++  if (error) throw new Error(error.message);
++  return (data || []) as TrainingRow[];
++}
++
++/**
++ * Muat seluruh data training dari Supabase lalu suntikkan ke engine.
++ * Aman dipanggil berkali-kali; gagal diam-diam jika Supabase belum siap.
++ */
++export function loadTrainingIntoEngine(): Promise<number> {
++  if (inflight) return inflight;
++  inflight = (async () => {
++    try {
++      const rows = await fetchTrainingRows();
++      // urut lama -> baru agar yang terbaru berada paling depan (unshift)
++      let count = 0;
++      [...rows].reverse().forEach((r) => {
++        if (applyTrainingRow(r)) count++;
++      });
++      return count;
++    } catch {
++      return 0;
++    } finally {
++      inflight = null;
++    }
++  })();
++  return inflight;
++}
++
++/** Dipakai admin setelah menghapus baris: engine dimuat ulang saat reload halaman. */
++export function forgetTrainingRow(id: string) {
++  appliedIds.delete(id);
++}
+diff --git a/lib/video-exporter.ts b/lib/video-exporter.ts
+index f885c86..f181263 100644
+--- a/lib/video-exporter.ts
++++ b/lib/video-exporter.ts
+@@ -235,7 +235,7 @@ export async function exportProjectToVideo(
+         ctx.fillStyle = style.solidColor || style.colors.bgPrimary;
+         ctx.fillRect(0, 0, canvas.width, canvas.height);
+       } else if (
+-        (style.backgroundType === 'upload' || style.backgroundType === 'unsplash') &&
++        (style.backgroundType === 'upload' || style.backgroundType === 'picsum') &&
+         loadedImg
+       ) {
+         ctx.drawImage(loadedImg, 0, 0, canvas.width, canvas.height);
+-- 
+2.43.0
+

@@ -785,9 +785,17 @@ export const BANK_CTA: string[] = [
 // 7. FUNGSI ADMIN TRAINING (UNTUK kakangkasyaf@gmail.com)
 // Menambahkan Hook, Scene, CTA, dan Gambar Asset baru secara live ke Smart Engine
 // ============================================================================
+function addUnique<T>(list: T[], item: T, getKey: (x: T) => string) {
+  const key = getKey(item).toLowerCase();
+  if (list.some((x) => getKey(x).toLowerCase() === key)) return false;
+  list.unshift(item);
+  return true;
+}
+
 export function addCustomHookToEngine(category: CategoryType, hookText: string) {
-  if (!hookText.trim()) return;
-  BANK_HOOK[category].unshift(hookText.trim());
+  const text = hookText.trim();
+  if (!text) return false;
+  return addUnique(BANK_HOOK[category], text, (x) => x);
 }
 
 export function addCustomSceneToEngine(
@@ -795,18 +803,38 @@ export function addCustomSceneToEngine(
   slot: 'scene2' | 'scene3',
   entry: SceneTemplateEntry
 ) {
-  if (!entry.text.trim()) return;
-  BANK_SCENES[category][slot].unshift(entry);
+  if (!entry.text.trim()) return false;
+  return addUnique(BANK_SCENES[category][slot], entry, (x) => x.text);
 }
 
 export function addCustomCtaToEngine(ctaText: string) {
-  if (!ctaText.trim()) return;
-  BANK_CTA.unshift(ctaText.trim());
+  const text = ctaText.trim();
+  if (!text) return false;
+  return addUnique(BANK_CTA, text, (x) => x);
 }
 
 export function addCustomImageAssetToEngine(asset: CustomImageAsset) {
-  if (!asset.url.trim()) return;
-  CUSTOM_IMAGE_ASSETS.unshift(asset);
+  if (!asset.url.trim()) return false;
+  return addUnique(CUSTOM_IMAGE_ASSETS, asset, (x) => x.url);
+}
+
+/** Aturan kata kunci: kata kunci topik -> hashtag tambahan di caption. */
+export function addKeywordRuleToEngine(keywords: string[], hashtags: string[]) {
+  const tags = hashtags
+    .map((h) => h.trim())
+    .filter(Boolean)
+    .map((h) => (h.startsWith('#') ? h : `#${h}`));
+  if (tags.length === 0) return false;
+  let added = false;
+  for (const raw of keywords) {
+    const kw = raw.trim().toLowerCase();
+    if (!kw) continue;
+    const current = TOPIC_HASHTAG_MAP[kw] || [];
+    const merged = Array.from(new Set([...tags, ...current]));
+    if (merged.length !== current.length) added = true;
+    TOPIC_HASHTAG_MAP[kw] = merged;
+  }
+  return added;
 }
 
 // ============================================================================
@@ -1261,8 +1289,6 @@ export function generateScript(
     suggestedStyle,
     extractedMeta: meta,
   };
-
-  console.log('[MotionKu SmartEngine] generateScript JSON:', JSON.stringify(result, null, 2));
 
   return result;
 }

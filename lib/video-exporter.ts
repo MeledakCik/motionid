@@ -235,7 +235,7 @@ export async function exportProjectToVideo(
         ctx.fillStyle = style.solidColor || style.colors.bgPrimary;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
       } else if (
-        (style.backgroundType === 'upload' || style.backgroundType === 'unsplash') &&
+        (style.backgroundType === 'upload' || style.backgroundType === 'picsum') &&
         loadedImg
       ) {
         ctx.drawImage(loadedImg, 0, 0, canvas.width, canvas.height);

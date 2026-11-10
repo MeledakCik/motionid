@@ -18,6 +18,7 @@ import TemplateRenderer from '@/components/templates/TemplateRenderer';
 import { GRADIENT_PRESETS } from '@/components/templates/types';
 import { exportProjectToVideo } from '@/lib/video-exporter';
 import { createClient } from '@/lib/supabase/client';
+import { loadTrainingIntoEngine } from '@/lib/training';
 import {
   Play,
   Pause,
@@ -102,6 +103,21 @@ export default function EditorPage({ params }: { params: { id: string } }) {
   const [exportError, setExportError] = useState<string | null>(null);
   const [exportedVideoUrl, setExportedVideoUrl] = useState<string | null>(null);
   const [copiedCaption, setCopiedCaption] = useState(false);
+  const [panel, setPanel] = useState<'teks' | 'gambar' | 'gaya' | 'musik'>('teks');
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    loadTrainingIntoEngine();
+    const adminEmail = (
+      process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'kakangkasyaf@gmail.com'
+    ).toLowerCase();
+    createClient()
+      .auth.getUser()
+      .then(({ data }) =>
+        setIsAdmin((data.user?.email || '').toLowerCase() === adminEmail)
+      )
+      .catch(() => setIsAdmin(false));
+  }, []);
 
   const activeScene = script.scenes[activeSceneIndex] || script.scenes[0];
   const totalDuration = script.scenes.reduce((acc, s) => acc + s.duration, 0);
@@ -284,28 +300,35 @@ export default function EditorPage({ params }: { params: { id: string } }) {
           <div>
             <h1 className="text-sm font-bold line-clamp-1">{title}</h1>
             <div className="flex items-center gap-2 text-[11px] text-slate-400">
-              <span>Kategori: {category.toUpperCase()}</span>
+              <span className="capitalize">{category}</span>
               <span>•</span>
-              <span className="flex items-center gap-1 text-emerald-400">
+              <span
+                className={`flex items-center gap-1 ${
+                  saveStatus === 'saved' ? 'text-emerald-400' : 'text-slate-400'
+                }`}
+              >
                 <Save className="w-3 h-3" />
                 {saveStatus === 'saving'
-                  ? 'Menyimpan ke tabel projects Supabase...'
+                  ? 'Menyimpan...'
                   : saveStatus === 'unsaved'
-                  ? 'Menunggu auto-save (debounce 2s)...'
-                  : 'Tersimpan di Supabase'}
+                  ? 'Belum tersimpan'
+                  : 'Tersimpan'}
               </span>
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-2.5">
-          <Link
-            href="/admin"
-            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-xs font-bold text-amber-300 hover:bg-amber-500/25 transition"
-          >
-            <Brain className="w-3.5 h-3.5" />
-            <span>Admin Training</span>
-          </Link>
+          {isAdmin && (
+            <Link
+              href="/admin"
+              title="Training Smart Engine"
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-slate-300 transition"
+            >
+              <Brain className="w-3.5 h-3.5" />
+              <span>Training</span>
+            </Link>
+          )}
 
           <button
             type="button"
@@ -313,7 +336,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-cyan-300 transition"
           >
             <Shuffle className="w-3.5 h-3.5" />
-            <span>Acak Lagi / Generate Ulang</span>
+            <span>Acak Ulang</span>
           </button>
 
           <button
@@ -371,7 +394,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
 
           <div className="space-y-2.5">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-400 block">
-              Pilih Template (9 Variasi)
+              Template
             </span>
             <div className="grid grid-cols-1 gap-1.5">
               {TEMPLATE_LIST.map((tpl) => (
@@ -499,235 +522,265 @@ export default function EditorPage({ params }: { params: { id: string } }) {
           </div>
         </main>
 
-        {/* KOLOM KANAN: Panel Edit Lengkap + Galeri Multi-Gambar User */}
-        <aside className="col-span-4 border-l border-white/10 bg-slate-900/50 p-4 overflow-y-auto space-y-5">
-          {/* Edit Teks Scene Aktif */}
-          <div className="space-y-2 bg-slate-950/70 p-4 rounded-2xl border border-white/10">
-            <label className="text-xs font-bold uppercase text-violet-300 block">
-              Edit Teks Scene {activeScene.sceneNumber} ({activeScene.role})
-            </label>
-            <textarea
-              rows={3}
-              value={activeScene.text}
-              onChange={(e) => updateScene(activeSceneIndex, { text: e.target.value })}
-              className="w-full p-3 rounded-xl bg-slate-900 border border-white/10 text-xs focus:outline-none focus:border-violet-500"
-            />
-            <input
-              type="text"
-              value={activeScene.subtext}
-              onChange={(e) => updateScene(activeSceneIndex, { subtext: e.target.value })}
-              placeholder="Subtext / Subtitle tambahan..."
-              className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-xs"
-            />
+        {/* KOLOM KANAN: Panel Edit (Tab) */}
+        <aside className="col-span-4 border-l border-white/10 bg-slate-900/50 flex flex-col overflow-hidden">
+          <div className="grid grid-cols-4 gap-1 p-3 border-b border-white/10 shrink-0">
+            {(
+              [
+                { id: 'teks', label: 'Teks' },
+                { id: 'gambar', label: 'Gambar' },
+                { id: 'gaya', label: 'Gaya' },
+                { id: 'musik', label: 'Musik' },
+              ] as const
+            ).map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setPanel(t.id)}
+                className={`py-2 rounded-lg text-xs font-semibold transition ${
+                  panel === t.id
+                    ? 'bg-violet-600 text-white'
+                    : 'text-slate-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
 
-          {/* Galeri Gambar User untuk Video Motion Graphic (Multi-Image Upload) */}
-          <div className="space-y-3 bg-slate-950/70 p-4 rounded-2xl border border-cyan-500/30">
-            <div className="flex items-center justify-between">
-              <label className="text-[11px] font-bold uppercase text-cyan-300 block">
-                📸 Galeri Gambar Anda (Slideshow per Scene)
-              </label>
-              <span className="text-[10px] text-slate-400">
-                {style.userImages.length} Gambar
-              </span>
-            </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-5">
+            {panel === 'teks' && (
+              <>
+                <section className="space-y-2">
+                  <label className="text-xs font-semibold text-slate-400 block">
+                    Scene {activeScene.sceneNumber} · {activeScene.role}
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={activeScene.text}
+                    onChange={(e) => updateScene(activeSceneIndex, { text: e.target.value })}
+                    className="w-full p-3 rounded-xl bg-slate-950 border border-white/10 text-sm focus:outline-none focus:border-violet-500"
+                  />
+                  <input
+                    type="text"
+                    value={activeScene.subtext}
+                    onChange={(e) => updateScene(activeSceneIndex, { subtext: e.target.value })}
+                    placeholder="Subtext (opsional)"
+                    className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-sm focus:outline-none focus:border-violet-500"
+                  />
+                </section>
 
-            <label className="flex items-center justify-center gap-2 w-full py-2.5 px-3 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-dashed border-cyan-400/50 text-xs font-bold text-cyan-200 cursor-pointer transition">
-              <Upload className="w-4 h-4 text-cyan-300" />
-              <span>Masukkan Gambar-Gambar Anda (Bisa Pilih Banyak)</span>
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={handleMultiImageUpload}
-                className="hidden"
-              />
-            </label>
-
-            {style.userImages.length > 0 && (
-              <div className="grid grid-cols-4 gap-2 pt-1">
-                {style.userImages.map((imgUrl, idx) => (
-                  <div
-                    key={idx}
-                    className="relative group rounded-xl overflow-hidden border border-white/20 h-16 bg-slate-900"
-                  >
-                    <img
-                      src={imgUrl}
-                      alt={`User asset ${idx + 1}`}
-                      onClick={() => {
-                        updateScene(activeSceneIndex, { imageUrl: imgUrl });
-                        updateStyle({ backgroundType: 'upload', backgroundImageUrl: imgUrl });
-                      }}
-                      className="w-full h-full object-cover cursor-pointer"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeUserImage(idx)}
-                      className="absolute top-1 right-1 p-1 rounded bg-black/70 text-rose-400 opacity-0 group-hover:opacity-100 transition"
+                <section className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-400 block mb-1.5">
+                      Animasi
+                    </label>
+                    <select
+                      value={activeScene.animation}
+                      onChange={(e) =>
+                        updateScene(activeSceneIndex, {
+                          animation: e.target.value as AnimationType,
+                        })
+                      }
+                      className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-sm"
                     >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                    <span className="absolute bottom-0 inset-x-0 bg-black/70 text-[9px] text-center py-0.5">
-                      Scene {(idx % script.scenes.length) + 1}
-                    </span>
+                      {ANIMATION_OPTIONS.map((anim) => (
+                        <option key={anim.id} value={anim.id}>
+                          {anim.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                ))}
-              </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-400 block mb-1.5">
+                      Durasi
+                    </label>
+                    <div className="grid grid-cols-4 gap-1">
+                      {[2, 3, 4, 5].map((sec) => (
+                        <button
+                          key={sec}
+                          type="button"
+                          onClick={() => updateScene(activeSceneIndex, { duration: sec })}
+                          className={`py-2.5 rounded-lg text-xs font-bold border ${
+                            activeScene.duration === sec
+                              ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300'
+                              : 'bg-slate-950 border-white/10 text-slate-400'
+                          }`}
+                        >
+                          {sec}s
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </section>
+              </>
             )}
 
-            {/* Pilihan Gambar Preset Picsum.photos */}
-            <div className="pt-2 border-t border-white/10">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1.5">
-                Atau Pilih Background Picsum.photos:
-              </span>
-              <div className="grid grid-cols-2 gap-1.5">
-                {CUSTOM_IMAGE_ASSETS.slice(0, 4).map((asset) => (
-                  <button
-                    key={asset.id}
-                    type="button"
-                    onClick={() => {
-                      updateScene(activeSceneIndex, { imageUrl: asset.url });
-                      updateStyle({
-                        backgroundType: 'picsum',
-                        backgroundImageUrl: asset.url,
-                      });
-                    }}
-                    className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-white/10 text-[10px] text-left truncate"
-                  >
-                    🖼️ {asset.title}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Pilih Animasi Masuk & Durasi per Scene */}
-          <div className="grid grid-cols-2 gap-3 bg-slate-950/70 p-4 rounded-2xl border border-white/10">
-            <div>
-              <label className="text-[11px] font-bold uppercase text-slate-400 block mb-1.5">
-                Animasi Masuk
-              </label>
-              <select
-                value={activeScene.animation}
-                onChange={(e) =>
-                  updateScene(activeSceneIndex, {
-                    animation: e.target.value as AnimationType,
-                  })
-                }
-                className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-xs"
-              >
-                {ANIMATION_OPTIONS.map((anim) => (
-                  <option key={anim.id} value={anim.id}>
-                    {anim.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-[11px] font-bold uppercase text-slate-400 block mb-1.5">
-                Durasi Scene
-              </label>
-              <div className="grid grid-cols-4 gap-1">
-                {[2, 3, 4, 5].map((sec) => (
-                  <button
-                    key={sec}
-                    type="button"
-                    onClick={() => updateScene(activeSceneIndex, { duration: sec })}
-                    className={`py-2 rounded-lg text-xs font-bold border ${
-                      activeScene.duration === sec
-                        ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300'
-                        : 'bg-slate-900 border-white/10 text-slate-400'
-                    }`}
-                  >
-                    {sec}s
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Pilih Font (6 Google Fonts) */}
-          <div className="space-y-2 bg-slate-950/70 p-4 rounded-2xl border border-white/10">
-            <label className="text-[11px] font-bold uppercase text-slate-400 block">
-              Pilih Tipografi (6 Google Fonts)
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              {FONT_OPTIONS.map((fontName) => (
-                <button
-                  key={fontName}
-                  type="button"
-                  onClick={() => updateStyle({ font: fontName })}
-                  style={{ fontFamily: fontName }}
-                  className={`px-3 py-2 rounded-xl border text-xs text-left truncate ${
-                    style.font === fontName
-                      ? 'bg-violet-600/20 border-violet-500 text-white'
-                      : 'bg-slate-900 border-white/10 text-slate-300'
-                  }`}
-                >
-                  {fontName}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Pilih Palet Warna (8 Preset + Custom Color Picker) */}
-          <div className="space-y-3 bg-slate-950/70 p-4 rounded-2xl border border-white/10">
-            <label className="text-[11px] font-bold uppercase text-slate-400 block">
-              Palet Warna (8 Preset + Custom Picker)
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              {COLOR_PALETTES.map((pal) => (
-                <button
-                  key={pal.id}
-                  type="button"
-                  onClick={() => updateColors(pal)}
-                  className={`p-2 rounded-xl border text-left flex items-center gap-2 ${
-                    style.colors.id === pal.id
-                      ? 'border-cyan-400 bg-cyan-500/10'
-                      : 'border-white/10 bg-slate-900'
-                  }`}
-                >
-                  <span
-                    className="w-5 h-5 rounded-full shrink-0 border border-white/20"
-                    style={{
-                      background: `linear-gradient(135deg, ${pal.bgPrimary}, ${pal.accentColor})`,
-                    }}
-                  />
-                  <span className="text-[11px] font-medium truncate">{pal.name}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Pilih Musik Latar (5 Track CDN & Lokal) */}
-          <div className="space-y-2 bg-slate-950/70 p-4 rounded-2xl border border-white/10">
-            <label className="text-[11px] font-bold uppercase text-slate-400 flex items-center gap-1.5">
-              <Music className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Pilih Musik Latar (5 MP3 CDN &amp; Lokal)</span>
-            </label>
-            <div className="space-y-1.5">
-              {MUSIC_TRACKS.map((track) => (
-                <button
-                  key={track.id}
-                  type="button"
-                  onClick={() => updateStyle({ music: track })}
-                  className={`w-full p-2.5 rounded-xl border text-left flex items-center justify-between text-xs ${
-                    style.music.id === track.id
-                      ? 'bg-emerald-500/15 border-emerald-400 text-emerald-200'
-                      : 'bg-slate-900 border-white/5 text-slate-300'
-                  }`}
-                >
-                  <div>
-                    <div className="font-bold">{track.title}</div>
-                    <div className="text-[10px] opacity-70">{track.description}</div>
+            {panel === 'gambar' && (
+              <>
+                <section className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-400">
+                      Gambar Anda
+                    </label>
+                    <span className="text-[11px] text-slate-500">
+                      {style.userImages.length} gambar
+                    </span>
                   </div>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-black/30">
-                    {track.bpm} BPM
-                  </span>
-                </button>
-              ))}
-            </div>
+
+                  <label className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/15 border border-dashed border-cyan-400/40 text-xs font-semibold text-cyan-200 cursor-pointer transition">
+                    <Upload className="w-4 h-4" />
+                    <span>Upload gambar (bisa banyak)</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleMultiImageUpload}
+                      className="hidden"
+                    />
+                  </label>
+
+                  {style.userImages.length > 0 && (
+                    <div className="grid grid-cols-4 gap-2">
+                      {style.userImages.map((imgUrl, idx) => (
+                        <div
+                          key={idx}
+                          className="relative group rounded-xl overflow-hidden border border-white/15 h-16 bg-slate-950"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={imgUrl}
+                            alt={`Gambar ${idx + 1}`}
+                            onClick={() => {
+                              updateScene(activeSceneIndex, { imageUrl: imgUrl });
+                              updateStyle({ backgroundType: 'upload', backgroundImageUrl: imgUrl });
+                            }}
+                            className="w-full h-full object-cover cursor-pointer"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeUserImage(idx)}
+                            aria-label="Hapus gambar"
+                            className="absolute top-1 right-1 p-1 rounded bg-black/70 text-rose-400 opacity-0 group-hover:opacity-100 transition"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-[11px] text-slate-500">
+                    Klik gambar untuk memakainya di scene yang sedang aktif.
+                  </p>
+                </section>
+
+                <section className="space-y-2 pt-4 border-t border-white/10">
+                  <label className="text-xs font-semibold text-slate-400 block">
+                    Background siap pakai
+                  </label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {CUSTOM_IMAGE_ASSETS.slice(0, 6).map((asset) => (
+                      <button
+                        key={asset.id}
+                        type="button"
+                        onClick={() => {
+                          updateScene(activeSceneIndex, { imageUrl: asset.url });
+                          updateStyle({
+                            backgroundType: 'picsum',
+                            backgroundImageUrl: asset.url,
+                          });
+                        }}
+                        className="px-3 py-2 rounded-lg bg-slate-950 hover:bg-slate-800 border border-white/10 text-xs text-left truncate text-slate-300"
+                      >
+                        {asset.title}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              </>
+            )}
+
+            {panel === 'gaya' && (
+              <>
+                <section className="space-y-2">
+                  <label className="text-xs font-semibold text-slate-400 block">Font</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {FONT_OPTIONS.map((fontName) => (
+                      <button
+                        key={fontName}
+                        type="button"
+                        onClick={() => updateStyle({ font: fontName })}
+                        style={{ fontFamily: fontName }}
+                        className={`px-3 py-2.5 rounded-xl border text-sm text-left truncate ${
+                          style.font === fontName
+                            ? 'bg-violet-600/20 border-violet-500 text-white'
+                            : 'bg-slate-950 border-white/10 text-slate-300'
+                        }`}
+                      >
+                        {fontName}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="space-y-2">
+                  <label className="text-xs font-semibold text-slate-400 block">Warna</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {COLOR_PALETTES.map((pal) => (
+                      <button
+                        key={pal.id}
+                        type="button"
+                        onClick={() => updateColors(pal)}
+                        className={`p-2.5 rounded-xl border text-left flex items-center gap-2 ${
+                          style.colors.id === pal.id
+                            ? 'border-cyan-400 bg-cyan-500/10'
+                            : 'border-white/10 bg-slate-950'
+                        }`}
+                      >
+                        <span
+                          className="w-5 h-5 rounded-full shrink-0 border border-white/20"
+                          style={{
+                            background: `linear-gradient(135deg, ${pal.bgPrimary}, ${pal.accentColor})`,
+                          }}
+                        />
+                        <span className="text-xs truncate">{pal.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              </>
+            )}
+
+            {panel === 'musik' && (
+              <section className="space-y-2">
+                <label className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
+                  <Music className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Musik latar</span>
+                </label>
+                <div className="space-y-1.5">
+                  {MUSIC_TRACKS.map((track) => (
+                    <button
+                      key={track.id}
+                      type="button"
+                      onClick={() => updateStyle({ music: track })}
+                      className={`w-full p-3 rounded-xl border text-left flex items-center justify-between gap-3 ${
+                        style.music.id === track.id
+                          ? 'bg-emerald-500/15 border-emerald-400 text-emerald-100'
+                          : 'bg-slate-950 border-white/10 text-slate-300'
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold truncate">{track.title}</div>
+                        <div className="text-[11px] opacity-60 truncate">{track.description}</div>
+                      </div>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-black/30 shrink-0">
+                        {track.bpm} BPM
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
         </aside>
       </div>
@@ -738,9 +791,9 @@ export default function EditorPage({ params }: { params: { id: string } }) {
           <div className="w-full max-w-lg rounded-3xl bg-slate-900 border border-white/15 p-6 space-y-5 shadow-2xl">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-bold text-lg">Export Video MP4 &amp; Caption TikTok</h3>
+                <h3 className="font-bold text-lg">Export Video</h3>
                 <p className="text-[11px] text-slate-400">
-                  Dirender di browser dengan HTML5 Canvas + MediaRecorder + AudioContext
+                  Video dirender langsung di browser Anda.
                 </p>
               </div>
               <button
@@ -756,7 +809,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
               <div className="p-4 rounded-2xl bg-rose-950/80 border border-rose-500/40 text-xs text-rose-200 space-y-1.5">
                 <div className="flex items-center gap-2 font-bold text-rose-300">
                   <AlertTriangle className="w-4 h-4" />
-                  <span>Perekaman Video Tidak Didukung</span>
+                  <span>Export gagal</span>
                 </div>
                 <p>{exportError}</p>
               </div>
@@ -811,7 +864,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
             <div className="p-4 rounded-2xl bg-slate-950 border border-white/10 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase text-amber-400">
-                  Caption + Hashtag Otomatis
+                  Caption & Hashtag
                 </span>
                 <button
                   type="button"

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   CategoryType,
@@ -9,6 +9,7 @@ import {
 } from '@/lib/smart-engine';
 import { TemplateId, useEditorStore } from '@/store/useEditorStore';
 import { createClient } from '@/lib/supabase/client';
+import { loadTrainingIntoEngine } from '@/lib/training';
 import { Sparkles, ArrowRight, CheckCircle2, Loader2 } from 'lucide-react';
 
 /**
@@ -31,6 +32,11 @@ export default function CreatePage() {
 
   const [isSimulating, setIsSimulating] = useState(false);
   const [result, setResult] = useState<GeneratedScriptResult | null>(null);
+
+  // Suntik data hasil training admin ke Smart Engine sebelum generate
+  useEffect(() => {
+    loadTrainingIntoEngine();
+  }, []);
 
   const handleCategoryChange = (cat: CategoryType) => {
     setCategory(cat);
@@ -225,7 +231,7 @@ export default function CreatePage() {
             {isSimulating ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Smart Engine menyusun Hook & 4 Scene (800ms)...</span>
+                <span>Menyusun script...</span>
               </>
             ) : (
               <>
