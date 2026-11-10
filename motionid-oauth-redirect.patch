@@ -1,0 +1,73 @@
+From 1e6142db7cb437d0db0fc70b2acf88be992124df Mon Sep 17 00:00:00 2001
+From: claude <c@c>
+Date: Tue, 10 Nov 2026 08:01:10 +0000
+Subject: [PATCH] Harden OAuth redirect: use origin only, sanitize next
+
+---
+ app/auth/callback/route.ts |  4 +++-
+ app/login/page.tsx         | 11 ++++++++++-
+ lib/site.ts                | 14 +++++++++++---
+ 3 files changed, 24 insertions(+), 5 deletions(-)
+
+diff --git a/app/auth/callback/route.ts b/app/auth/callback/route.ts
+index f778f48..e29b984 100644
+--- a/app/auth/callback/route.ts
++++ b/app/auth/callback/route.ts
+@@ -8,7 +8,9 @@ import { createServerSupabase } from '@/lib/supabase/server';
+ export async function GET(request: Request) {
+   const { searchParams, origin } = new URL(request.url);
+   const code = searchParams.get('code');
+-  const next = searchParams.get('next') ?? '/dashboard';
++  const rawNext = searchParams.get('next') ?? '/dashboard';
++  // Hanya izinkan path internal (cegah open redirect)
++  const next = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/dashboard';
+ 
+   if (code) {
+     const supabase = createServerSupabase();
+diff --git a/app/login/page.tsx b/app/login/page.tsx
+index e3ac07e..b3045c2 100644
+--- a/app/login/page.tsx
++++ b/app/login/page.tsx
+@@ -17,7 +17,16 @@ export default function LoginPage() {
+       setLoading(true);
+       setErrorMsg(null);
+       const supabase = createClient();
+-      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
++      // Selalu pakai origin saja (tanpa path), supaya salah isi env tidak
++      // menghasilkan URL ganda seperti /auth/callback/auth/callback
++      let siteUrl = window.location.origin;
++      try {
++        if (process.env.NEXT_PUBLIC_SITE_URL) {
++          siteUrl = new URL(process.env.NEXT_PUBLIC_SITE_URL).origin;
++        }
++      } catch {
++        // abaikan env yang tidak valid
++      }
+ 
+       const { error } = await supabase.auth.signInWithOAuth({
+         provider: 'google',
+diff --git a/lib/site.ts b/lib/site.ts
+index 4650e25..036688c 100644
+--- a/lib/site.ts
++++ b/lib/site.ts
+@@ -1,6 +1,14 @@
+-export const SITE_URL = (
+-  process.env.NEXT_PUBLIC_SITE_URL || 'https://motionid.vercel.app'
+-).replace(/\/$/, '');
++function resolveSiteUrl(): string {
++  try {
++    return new URL(
++      process.env.NEXT_PUBLIC_SITE_URL || 'https://motionid.vercel.app'
++    ).origin;
++  } catch {
++    return 'https://motionid.vercel.app';
++  }
++}
++
++export const SITE_URL = resolveSiteUrl();
+ 
+ export const SITE_NAME = 'MotionKu';
+ export const SITE_TITLE = 'MotionKu — Generator Video TikTok & Reels Otomatis, Gratis';
+-- 
+2.43.0
+

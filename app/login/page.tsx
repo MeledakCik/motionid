@@ -17,7 +17,16 @@ export default function LoginPage() {
       setLoading(true);
       setErrorMsg(null);
       const supabase = createClient();
-      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
+      // Selalu pakai origin saja (tanpa path), supaya salah isi env tidak
+      // menghasilkan URL ganda seperti /auth/callback/auth/callback
+      let siteUrl = window.location.origin;
+      try {
+        if (process.env.NEXT_PUBLIC_SITE_URL) {
+          siteUrl = new URL(process.env.NEXT_PUBLIC_SITE_URL).origin;
+        }
+      } catch {
+        // abaikan env yang tidak valid
+      }
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
