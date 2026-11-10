@@ -2,6 +2,7 @@ import { ImageResponse } from 'next/og';
 
 export const alt = 'MotionKu — Generator Video TikTok & Reels Otomatis';
 export const size = { width: 1200, height: 630 };
+export const runtime = 'edge';
 export const contentType = 'image/png';
 
 export default function OgImage() {

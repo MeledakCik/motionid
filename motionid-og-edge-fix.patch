@@ -1,0 +1,38 @@
+From 681184ae01996dd63ea0d79a3f0978f88bcad6e2 Mon Sep 17 00:00:00 2001
+From: claude <c@c>
+Date: Tue, 10 Nov 2026 07:43:13 +0000
+Subject: [PATCH] Run og image routes on edge runtime (fix Windows prerender
+ error)
+
+---
+ app/icon.tsx            | 1 +
+ app/opengraph-image.tsx | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/app/icon.tsx b/app/icon.tsx
+index a5d122e..770f1a0 100644
+--- a/app/icon.tsx
++++ b/app/icon.tsx
+@@ -1,6 +1,7 @@
+ import { ImageResponse } from 'next/og';
+ 
+ export const size = { width: 64, height: 64 };
++export const runtime = 'edge';
+ export const contentType = 'image/png';
+ 
+ export default function Icon() {
+diff --git a/app/opengraph-image.tsx b/app/opengraph-image.tsx
+index 11b3a68..008886b 100644
+--- a/app/opengraph-image.tsx
++++ b/app/opengraph-image.tsx
+@@ -2,6 +2,7 @@ import { ImageResponse } from 'next/og';
+ 
+ export const alt = 'MotionKu — Generator Video TikTok & Reels Otomatis';
+ export const size = { width: 1200, height: 630 };
++export const runtime = 'edge';
+ export const contentType = 'image/png';
+ 
+ export default function OgImage() {
+-- 
+2.43.0
+
