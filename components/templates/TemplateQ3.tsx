@@ -3,6 +3,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { TemplateProps } from './types';
+import { fontStack } from './fonts';
 
 /**
  * Template Q3: Karaoke word-by-word (kata muncul satu-satu)
@@ -23,7 +24,7 @@ export default function TemplateQ3({
     <div
       className="relative w-full h-full overflow-hidden flex flex-col items-center justify-center p-7 text-center select-none"
       style={{
-        fontFamily: font,
+        fontFamily: fontStack(font),
         color: colors.textColor,
         background: `radial-gradient(circle at center, ${colors.bgSecondary} 0%, ${colors.bgPrimary} 100%)`,
       }}

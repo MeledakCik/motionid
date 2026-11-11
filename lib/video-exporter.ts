@@ -1,5 +1,7 @@
 import { GeneratedScriptResult } from './smart-engine';
 import { ProjectStyleConfig, TemplateId } from '@/store/useEditorStore';
+import { drawFrame } from './canvas-scene';
+import { ensureCanvasFont, resolveCanvasFamily } from '@/components/templates/fonts';
 
 export interface ExportProgressCallback {
   (percent: number, statusText: string, elapsedSec: number, totalSec: number): void;
@@ -55,8 +57,24 @@ export async function exportProjectToVideo(
     throw new Error('Gagal menginisialisasi konteks 2D pada HTML5 Canvas.');
   }
 
-  // Preload gambar background/produk jika ada
-  const loadedImg = await preloadImage(style.backgroundImageUrl);
+  // Preload semua gambar yang dipakai scene + font, supaya frame pertama sudah benar
+  const imageUrls = Array.from(
+    new Set(
+      [
+        style.backgroundImageUrl,
+        ...style.userImages,
+        ...script.scenes.map((sc) => sc.imageUrl),
+      ].filter((u): u is string => Boolean(u))
+    )
+  );
+  const images = new Map<string, HTMLImageElement | null>();
+  await Promise.all(
+    imageUrls.map(async (u) => {
+      images.set(u, await preloadImage(u));
+    })
+  );
+  await ensureCanvasFont(style.font);
+  const family = resolveCanvasFamily(style.font);
 
   // 4. Siapkan AudioContext + MediaStreamDestination jika musik dipilih
   const AudioCtx =
@@ -219,7 +237,6 @@ export async function exportProjectToVideo(
 
       const scene = script.scenes[activeIdx];
       const sceneDur = Math.max(1, Number(scene.duration) || 3);
-      const sceneProgress = Math.min(1, sceneElapsed / sceneDur);
       const overallProgress = Math.min(1, elapsedMs / totalDurationMs);
 
       onProgress?.(
@@ -229,124 +246,18 @@ export async function exportProjectToVideo(
         totalDurationSec
       );
 
-      // 1. Gambar Background
-      ctx.save();
-      if (style.backgroundType === 'solid') {
-        ctx.fillStyle = style.solidColor || style.colors.bgPrimary;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-      } else if (
-        (style.backgroundType === 'upload' || style.backgroundType === 'picsum') &&
-        loadedImg
-      ) {
-        ctx.drawImage(loadedImg, 0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = 'rgba(9, 13, 22, 0.62)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-      } else {
-        const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-        grad.addColorStop(0, style.colors.bgPrimary);
-        grad.addColorStop(1, style.colors.bgSecondary);
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-      }
-
-      // Ornamen lingkaran cahaya lembut
-      ctx.globalAlpha = 0.16;
-      ctx.fillStyle = style.colors.accentColor;
-      ctx.beginPath();
-      ctx.arc(
-        canvas.width * 0.8 + Math.sin(elapsedSec * 2) * 24,
-        canvas.height * 0.2 + Math.cos(elapsedSec * 1.6) * 24,
-        canvas.width * 0.28,
-        0,
-        Math.PI * 2
-      );
-      ctx.fill();
-      ctx.restore();
-
-      // 2. Animasi masuk per scene
-      const introT = Math.min(1, sceneElapsed / 0.42);
-      const easeOut = 1 - Math.pow(1 - introT, 3);
-      const animAlpha = scene.animation === 'fade' ? easeOut : Math.min(1, sceneElapsed / 0.25);
-      const slideOffsetY = scene.animation === 'slide-up' ? (1 - easeOut) * 55 : 0;
-
-      ctx.save();
-      ctx.globalAlpha = animAlpha;
-      ctx.translate(0, slideOffsetY);
-
-      // Badge Template & Role
-      ctx.fillStyle = style.colors.accentColor;
-      const badgeW = 280;
-      const badgeH = 44;
-      const badgeX = (canvas.width - badgeW) / 2;
-      const badgeY = canvas.height * 0.2;
-      ctx.beginPath();
-      ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 22);
-      ctx.fill();
-
-      ctx.fillStyle = style.colors.badgeTextColor;
-      ctx.font = `bold 20px "${style.font}", sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.fillText(
-        `${templateId} • SCENE ${scene.sceneNumber}`,
-        canvas.width / 2,
-        badgeY + 29
-      );
-
-      // Emoji
-      if (style.showEmoji && scene.emoji) {
-        ctx.font = '56px sans-serif';
-        ctx.fillText(scene.emoji, canvas.width / 2, canvas.height * 0.33);
-      }
-
-      // Teks Utama (Word Wrap)
-      ctx.fillStyle = style.colors.textColor;
-      ctx.font = `bold 42px "${style.font}", sans-serif`;
-      const displayText =
-        scene.animation === 'typewriter' || templateId === 'Q2'
-          ? scene.text.slice(
-              0,
-              Math.max(1, Math.ceil(scene.text.length * Math.min(1, sceneProgress * 1.4)))
-            )
-          : scene.text;
-
-      const nextY = wrapCanvasText(
-        ctx,
-        displayText,
-        canvas.width / 2,
-        canvas.height * 0.43,
-        canvas.width * 0.82,
-        54
-      );
-
-      // Subtext / Subtitle
-      if (style.showSubtitle && scene.subtext) {
-        ctx.globalAlpha = animAlpha * 0.88;
-        ctx.fillStyle = style.colors.accentColor;
-        ctx.font = `600 24px "${style.font}", sans-serif`;
-        wrapCanvasText(
-          ctx,
-          scene.subtext,
-          canvas.width / 2,
-          nextY + 32,
-          canvas.width * 0.76,
-          34
-        );
-      }
-
-      ctx.restore();
-
-      // 3. Progress Bar Bawah
-      if (style.showProgressBar) {
-        ctx.fillStyle = 'rgba(255,255,255,0.22)';
-        ctx.fillRect(40, canvas.height - 36, canvas.width - 80, 10);
-        ctx.fillStyle = style.colors.accentColor;
-        ctx.fillRect(
-          40,
-          canvas.height - 36,
-          (canvas.width - 80) * overallProgress,
-          10
-        );
-      }
+      drawFrame(ctx, canvas.width, canvas.height, {
+        script,
+        style,
+        templateId,
+        sceneIdx: activeIdx,
+        sceneElapsed,
+        sceneDur,
+        elapsedSec,
+        overallProgress,
+        images,
+        family,
+      });
 
       if (elapsedMs < totalDurationMs) {
         animFrameId = requestAnimationFrame(renderTick);
@@ -417,31 +328,4 @@ function preloadImage(url?: string): Promise<HTMLImageElement | null> {
     img.onerror = () => resolve(null);
     img.src = url;
   });
-}
-
-function wrapCanvasText(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  x: number,
-  y: number,
-  maxWidth: number,
-  lineHeight: number
-): number {
-  const words = text.split(/\s+/);
-  let line = '';
-  let currentY = y;
-
-  for (let n = 0; n < words.length; n++) {
-    const testLine = line + words[n] + ' ';
-    const metrics = ctx.measureText(testLine);
-    if (metrics.width > maxWidth && n > 0) {
-      ctx.fillText(line.trim(), x, currentY);
-      line = words[n] + ' ';
-      currentY += lineHeight;
-    } else {
-      line = testLine;
-    }
-  }
-  ctx.fillText(line.trim(), x, currentY);
-  return currentY + lineHeight;
 }

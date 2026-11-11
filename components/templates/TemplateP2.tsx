@@ -3,6 +3,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { getAnimationVariants, TemplateProps } from './types';
+import { fontStack } from './fonts';
+import { AnimatedText } from './motion';
 
 /**
  * Template P2: Before-After / List Harga
@@ -23,7 +25,7 @@ export default function TemplateP2({
     <div
       className="relative w-full h-full overflow-hidden flex flex-col justify-center p-6 select-none"
       style={{
-        fontFamily: font,
+        fontFamily: fontStack(font),
         color: colors.textColor,
         backgroundColor: colors.bgPrimary,
       }}
@@ -44,7 +46,7 @@ export default function TemplateP2({
           {showEmoji && <span className="text-2xl">{scene.emoji}</span>}
         </div>
 
-        <h2 className="text-xl md:text-2xl font-bold leading-snug">{scene.text}</h2>
+        <h2 className="text-xl md:text-2xl font-bold leading-snug"><AnimatedText text={scene.text} animation={scene.animation} highlightColor={colors.accentColor} /></h2>
 
         {/* Before vs After Price Card */}
         <div className="grid grid-cols-2 gap-2.5 pt-1">

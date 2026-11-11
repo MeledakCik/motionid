@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { TemplateProps } from './types';
+import { fontStack } from './fonts';
 
 /**
  * Template Q2: Typewriter + background foto blur
@@ -34,12 +35,12 @@ export default function TemplateQ2({
     return () => clearInterval(interval);
   }, [scene.text, activeSceneIndex]);
 
-  const bgImage = background.imageUrl || '/images/quote-rain-bg.jpg';
+  const bgImage = background.imageUrl || 'https://picsum.photos/seed/motionku-quote/720/1280';
 
   return (
     <div
       className="relative w-full h-full overflow-hidden flex flex-col justify-center p-7 select-none"
-      style={{ fontFamily: font, color: colors.textColor, backgroundColor: colors.bgPrimary }}
+      style={{ fontFamily: fontStack(font), color: colors.textColor, backgroundColor: colors.bgPrimary }}
     >
       {/* Background Photo Blur */}
       <div

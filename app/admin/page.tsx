@@ -2,18 +2,32 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, ImagePlus, Loader2, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Download, ImagePlus, Loader2, Plus, Search, Trash2, Wand2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import { interpolateTemplate, parseTopic } from '@/lib/smart-engine';
+import { generateScript, interpolateTemplate, parseTopic, GeneratedScriptResult } from '@/lib/smart-engine';
 import {
   applyTrainingRow,
   fetchTrainingRows,
+  loadTrainingIntoEngine,
   TrainingCategory,
   TrainingRow,
   TrainingType,
 } from '@/lib/training';
 
 const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'kakangkasyaf@gmail.com';
+
+function friendlyError(msg: string): string {
+  if (/does not exist|schema cache|Could not find the table/i.test(msg)) {
+    return 'Tabel ai_training_data belum ada. Jalankan supabase/migration.sql di SQL Editor Supabase.';
+  }
+  if (/row-level security|permission denied|violates/i.test(msg)) {
+    return `Ditolak oleh RLS. Login dengan email admin (${ADMIN_EMAIL}) dan pastikan email yang sama ada di policy migration.`;
+  }
+  if (/bucket/i.test(msg) && /not found/i.test(msg)) {
+    return 'Bucket storage "project-backgrounds" belum dibuat di Supabase.';
+  }
+  return msg;
+}
 
 const TABS: { id: TrainingType; label: string; hint: string }[] = [
   { id: 'hook', label: 'Hook', hint: 'Kalimat pembuka scene 1' },
@@ -52,6 +66,11 @@ export default function AdminTrainingPage() {
   const [imageUrl, setImageUrl] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [bulk, setBulk] = useState(false);
+  const [query, setQuery] = useState('');
+  const [testTopic, setTestTopic] = useState('promo kopi susu gula aren 18rb');
+  const [testCat, setTestCat] = useState<'promo' | 'quote' | 'edukasi'>('promo');
+  const [testResult, setTestResult] = useState<GeneratedScriptResult | null>(null);
 
   const isAdmin = email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
 
@@ -62,7 +81,7 @@ export default function AdminTrainingPage() {
       const data = await fetchTrainingRows();
       setRows(data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Gagal memuat data training.');
+      setError(friendlyError(e instanceof Error ? e.message : 'Gagal memuat data training.'));
     } finally {
       setLoading(false);
     }
@@ -72,7 +91,7 @@ export default function AdminTrainingPage() {
     createClient()
       .auth.getUser()
       .then(({ data }) => setEmail(data.user?.email ?? ''));
-    reload();
+    reload().then(() => loadTrainingIntoEngine());
   }, [reload]);
 
   useEffect(() => {
@@ -87,13 +106,23 @@ export default function AdminTrainingPage() {
     return c;
   }, [rows]);
 
-  const visibleRows = rows.filter((r) => r.type === tab);
+  const visibleRows = rows.filter(
+    (r) =>
+      r.type === tab &&
+      (!query.trim() ||
+        `${r.content_text} ${r.subtext || ''} ${r.category}`
+          .toLowerCase()
+          .includes(query.toLowerCase()))
+  );
   const activeTab = TABS.find((t) => t.id === tab)!;
 
   const needsSubtext = tab === 'scene2' || tab === 'scene3' || tab === 'keyword_rule';
   const needsEmoji = tab === 'scene2' || tab === 'scene3';
   const needsImage = tab === 'image_asset';
   const hideCategory = tab === 'cta' || tab === 'keyword_rule';
+  const bulkAllowed = ['hook', 'cta', 'scene2', 'scene3'].includes(tab);
+  const isBulk = bulk && bulkAllowed;
+  const bulkCount = isBulk ? text.split('\n').map((l) => l.trim()).filter(Boolean).length : 0;
 
   const textLabel =
     tab === 'image_asset'
@@ -104,7 +133,7 @@ export default function AdminTrainingPage() {
   const subtextLabel = tab === 'keyword_rule' ? 'Hashtag (pisahkan koma)' : 'Subtext';
 
   const preview =
-    text.trim() && ['hook', 'scene2', 'scene3', 'cta'].includes(tab)
+    !isBulk && text.trim() && ['hook', 'scene2', 'scene3', 'cta'].includes(tab)
       ? interpolateTemplate(text, SAMPLE_META)
       : '';
 
@@ -136,7 +165,7 @@ export default function AdminTrainingPage() {
       setImageUrl(data.publicUrl);
       if (!text.trim()) setText(file.name.replace(/\.[^.]+$/, ''));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload gagal.');
+      setError(friendlyError(err instanceof Error ? err.message : 'Upload gagal.'));
     } finally {
       setUploading(false);
       e.target.value = '';
@@ -149,30 +178,64 @@ export default function AdminTrainingPage() {
     setError(null);
     try {
       const supabase = createClient();
+      const base = {
+        type: tab,
+        category: hideCategory ? 'all' : category,
+        emoji: needsEmoji ? emoji || '✨' : '✨',
+        image_url: needsImage ? imageUrl.trim() : '',
+        created_by_email: email || ADMIN_EMAIL,
+      };
+
+      let payload;
+      if (isBulk) {
+        // satu baris = satu entri. Untuk scene: "teks | subtext"
+        payload = text
+          .split('\n')
+          .map((l) => l.trim())
+          .filter(Boolean)
+          .map((line) => {
+            const [main, sub] = line.split('|').map((x) => x.trim());
+            return { ...base, content_text: main, subtext: needsSubtext ? sub || subtext.trim() : '' };
+          });
+      } else {
+        payload = [
+          { ...base, content_text: text.trim(), subtext: needsSubtext ? subtext.trim() : '' },
+        ];
+      }
+
       const { data, error: insErr } = await supabase
         .from('ai_training_data')
-        .insert({
-          type: tab,
-          category: hideCategory ? 'all' : category,
-          content_text: text.trim(),
-          subtext: needsSubtext ? subtext.trim() : '',
-          emoji: needsEmoji ? emoji || '✨' : '✨',
-          image_url: needsImage ? imageUrl.trim() : '',
-          created_by_email: email || ADMIN_EMAIL,
-        })
-        .select('*')
-        .single();
+        .insert(payload)
+        .select('*');
       if (insErr) throw new Error(insErr.message);
-      const row = data as TrainingRow;
-      applyTrainingRow(row);
-      setRows((prev) => [row, ...prev]);
+      const added = (data || []) as TrainingRow[];
+      added.forEach(applyTrainingRow);
+      setRows((prev) => [...added, ...prev]);
       resetForm();
-      setNotice('Tersimpan & langsung aktif di engine');
+      setNotice(
+        added.length > 1
+          ? `${added.length} entri tersimpan & langsung aktif`
+          : 'Tersimpan & langsung aktif di engine'
+      );
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Gagal menyimpan.');
+      setError(friendlyError(err instanceof Error ? err.message : 'Gagal menyimpan.'));
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleTest = () => {
+    setTestResult(generateScript(testTopic, testCat));
+  };
+
+  const handleExport = () => {
+    const blob = new Blob([JSON.stringify(rows, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `motionku-training-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleDelete = async (id: string) => {
@@ -182,7 +245,7 @@ export default function AdminTrainingPage() {
       .delete()
       .eq('id', id);
     if (delErr) {
-      setError(delErr.message);
+      setError(friendlyError(delErr.message));
       return;
     }
     setRows((prev) => prev.filter((r) => r.id !== id));
@@ -220,7 +283,18 @@ export default function AdminTrainingPage() {
             </Link>
             <h1 className="text-sm font-bold">Training Smart Engine</h1>
           </div>
-          <span className="text-xs text-slate-500 hidden sm:block">{email}</span>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={rows.length === 0}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-semibold text-slate-300 disabled:opacity-40"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Backup JSON</span>
+            </button>
+            <span className="text-xs text-slate-500 hidden sm:block">{email}</span>
+          </div>
         </div>
       </header>
 
@@ -290,15 +364,38 @@ export default function AdminTrainingPage() {
             )}
 
             <div>
-              <label className={labelCls}>{textLabel}</label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-slate-400">
+                  {isBulk ? 'Satu baris = satu entri' : textLabel}
+                </label>
+                {bulkAllowed && (
+                  <label className="flex items-center gap-1.5 text-[11px] text-slate-400 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={bulk}
+                      onChange={(e) => setBulk(e.target.checked)}
+                      className="accent-violet-500"
+                    />
+                    Banyak sekaligus
+                  </label>
+                )}
+              </div>
               <textarea
-                rows={tab === 'image_asset' || tab === 'keyword_rule' ? 2 : 3}
+                rows={isBulk ? 7 : tab === 'image_asset' || tab === 'keyword_rule' ? 2 : 3}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 className={inputCls}
-                placeholder={tab === 'keyword_rule' ? 'kopi, latte, espresso' : ''}
+                placeholder={
+                  isBulk
+                    ? tab === 'scene2' || tab === 'scene3'
+                      ? 'Teks scene | subtext (opsional)\nTeks scene lain | subtext'
+                      : 'Tulis satu kalimat per baris'
+                    : tab === 'keyword_rule'
+                    ? 'kopi, latte, espresso'
+                    : ''
+                }
               />
-              {['hook', 'scene2', 'scene3', 'cta'].includes(tab) && (
+              {['hook', 'scene2', 'scene3', 'cta'].includes(tab) && !isBulk && (
                 <div className="flex flex-wrap gap-1 mt-2">
                   {PLACEHOLDERS.map((ph) => (
                     <button
@@ -314,7 +411,7 @@ export default function AdminTrainingPage() {
               )}
             </div>
 
-            {needsSubtext && (
+            {needsSubtext && !(isBulk) && (
               <div>
                 <label className={labelCls}>{subtextLabel}</label>
                 <input
@@ -386,7 +483,7 @@ export default function AdminTrainingPage() {
               className="w-full py-3 rounded-xl bg-gradient-to-r from-violet-600 to-cyan-500 text-sm font-bold text-white flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-              <span>Simpan</span>
+              <span>{isBulk && bulkCount > 1 ? `Simpan ${bulkCount} entri` : 'Simpan'}</span>
             </button>
           </section>
 
@@ -397,6 +494,15 @@ export default function AdminTrainingPage() {
                 {activeTab.label} yang sudah dilatih
               </h2>
               <span className="text-xs text-slate-500">{visibleRows.length} item</span>
+            </div>
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Cari di daftar ini..."
+                className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-xs placeholder:text-slate-600 focus:outline-none focus:border-violet-500"
+              />
             </div>
 
             {loading ? (
@@ -448,6 +554,63 @@ export default function AdminTrainingPage() {
             )}
           </section>
         </div>
+
+        {/* Uji hasil training */}
+        <section className="bg-slate-900 border border-white/10 rounded-2xl p-5 space-y-4">
+          <div>
+            <h2 className="text-sm font-bold">Uji hasil training</h2>
+            <p className="text-xs text-slate-500">
+              Generate script dengan data yang sudah aktif. Klik beberapa kali, hasilnya diacak.
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              value={testTopic}
+              onChange={(e) => setTestTopic(e.target.value)}
+              className={`${inputCls} flex-1`}
+              placeholder="Contoh: promo kopi susu 18rb"
+            />
+            <select
+              value={testCat}
+              onChange={(e) => setTestCat(e.target.value as 'promo' | 'quote' | 'edukasi')}
+              className="px-3 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-sm"
+            >
+              <option value="promo">Promo</option>
+              <option value="quote">Quote</option>
+              <option value="edukasi">Edukasi</option>
+            </select>
+            <button
+              type="button"
+              onClick={handleTest}
+              disabled={!testTopic.trim()}
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-sm font-bold disabled:opacity-40"
+            >
+              <Wand2 className="w-4 h-4" />
+              <span>Coba</span>
+            </button>
+          </div>
+          {testResult && (
+            <div className="grid sm:grid-cols-2 gap-2">
+              {testResult.scenes.map((sc) => (
+                <div key={sc.id} className="p-3.5 rounded-xl bg-slate-950 border border-white/5">
+                  <span className="text-[10px] uppercase font-bold text-cyan-400">
+                    Scene {sc.sceneNumber} · {sc.role}
+                  </span>
+                  <p className="text-sm text-slate-100 mt-1">
+                    {sc.emoji} {sc.text}
+                  </p>
+                  {sc.subtext && <p className="text-xs text-slate-500 mt-1">{sc.subtext}</p>}
+                </div>
+              ))}
+              <div className="sm:col-span-2 p-3.5 rounded-xl bg-slate-950 border border-white/5">
+                <span className="text-[10px] uppercase font-bold text-slate-500">Caption</span>
+                <p className="text-xs text-slate-300 mt-1 whitespace-pre-wrap">
+                  {testResult.caption}
+                </p>
+              </div>
+            </div>
+          )}
+        </section>
       </main>
     </div>
   );

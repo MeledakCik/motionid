@@ -1,0 +1,3321 @@
+From 24b649b9e767c70a4cf7a2251cbf2dfe4e2998d1 Mon Sep 17 00:00:00 2001
+From: claude <c@c>
+Date: Wed, 11 Nov 2026 13:33:43 +0000
+Subject: [PATCH] Motion graphic overhaul, distinct templates, admin training
+ upgrade, editor project loading, dashboard cleanup
+
+---
+ app/admin/page.tsx                        |  225 +++-
+ app/dashboard/page.tsx                    |  248 ++--
+ app/editor/[id]/page.tsx                  |   71 +-
+ components/templates/TemplateE1.tsx       |    6 +-
+ components/templates/TemplateE2.tsx       |    6 +-
+ components/templates/TemplateE3.tsx       |    6 +-
+ components/templates/TemplateP1.tsx       |   13 +-
+ components/templates/TemplateP2.tsx       |    6 +-
+ components/templates/TemplateP3.tsx       |    6 +-
+ components/templates/TemplateQ1.tsx       |    6 +-
+ components/templates/TemplateQ2.tsx       |    5 +-
+ components/templates/TemplateQ3.tsx       |    3 +-
+ components/templates/TemplateRenderer.tsx |   61 +-
+ components/templates/fonts.ts             |   43 +
+ components/templates/fx.tsx               |  227 ++++
+ components/templates/motion.tsx           |  229 ++++
+ lib/canvas-scene.ts                       | 1367 +++++++++++++++++++++
+ lib/video-exporter.ts                     |  180 +--
+ 18 files changed, 2436 insertions(+), 272 deletions(-)
+ create mode 100644 components/templates/fonts.ts
+ create mode 100644 components/templates/fx.tsx
+ create mode 100644 components/templates/motion.tsx
+ create mode 100644 lib/canvas-scene.ts
+
+diff --git a/app/admin/page.tsx b/app/admin/page.tsx
+index 8b6c344..5179f25 100644
+--- a/app/admin/page.tsx
++++ b/app/admin/page.tsx
+@@ -2,12 +2,13 @@
+ 
+ import React, { useCallback, useEffect, useMemo, useState } from 'react';
+ import Link from 'next/link';
+-import { ArrowLeft, ImagePlus, Loader2, Plus, Trash2 } from 'lucide-react';
++import { ArrowLeft, Download, ImagePlus, Loader2, Plus, Search, Trash2, Wand2 } from 'lucide-react';
+ import { createClient } from '@/lib/supabase/client';
+-import { interpolateTemplate, parseTopic } from '@/lib/smart-engine';
++import { generateScript, interpolateTemplate, parseTopic, GeneratedScriptResult } from '@/lib/smart-engine';
+ import {
+   applyTrainingRow,
+   fetchTrainingRows,
++  loadTrainingIntoEngine,
+   TrainingCategory,
+   TrainingRow,
+   TrainingType,
+@@ -15,6 +16,19 @@ import {
+ 
+ const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'kakangkasyaf@gmail.com';
+ 
++function friendlyError(msg: string): string {
++  if (/does not exist|schema cache|Could not find the table/i.test(msg)) {
++    return 'Tabel ai_training_data belum ada. Jalankan supabase/migration.sql di SQL Editor Supabase.';
++  }
++  if (/row-level security|permission denied|violates/i.test(msg)) {
++    return `Ditolak oleh RLS. Login dengan email admin (${ADMIN_EMAIL}) dan pastikan email yang sama ada di policy migration.`;
++  }
++  if (/bucket/i.test(msg) && /not found/i.test(msg)) {
++    return 'Bucket storage "project-backgrounds" belum dibuat di Supabase.';
++  }
++  return msg;
++}
++
+ const TABS: { id: TrainingType; label: string; hint: string }[] = [
+   { id: 'hook', label: 'Hook', hint: 'Kalimat pembuka scene 1' },
+   { id: 'scene2', label: 'Scene 2', hint: 'Isi / solusi' },
+@@ -52,6 +66,11 @@ export default function AdminTrainingPage() {
+   const [imageUrl, setImageUrl] = useState('');
+   const [saving, setSaving] = useState(false);
+   const [uploading, setUploading] = useState(false);
++  const [bulk, setBulk] = useState(false);
++  const [query, setQuery] = useState('');
++  const [testTopic, setTestTopic] = useState('promo kopi susu gula aren 18rb');
++  const [testCat, setTestCat] = useState<'promo' | 'quote' | 'edukasi'>('promo');
++  const [testResult, setTestResult] = useState<GeneratedScriptResult | null>(null);
+ 
+   const isAdmin = email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+ 
+@@ -62,7 +81,7 @@ export default function AdminTrainingPage() {
+       const data = await fetchTrainingRows();
+       setRows(data);
+     } catch (e) {
+-      setError(e instanceof Error ? e.message : 'Gagal memuat data training.');
++      setError(friendlyError(e instanceof Error ? e.message : 'Gagal memuat data training.'));
+     } finally {
+       setLoading(false);
+     }
+@@ -72,7 +91,7 @@ export default function AdminTrainingPage() {
+     createClient()
+       .auth.getUser()
+       .then(({ data }) => setEmail(data.user?.email ?? ''));
+-    reload();
++    reload().then(() => loadTrainingIntoEngine());
+   }, [reload]);
+ 
+   useEffect(() => {
+@@ -87,13 +106,23 @@ export default function AdminTrainingPage() {
+     return c;
+   }, [rows]);
+ 
+-  const visibleRows = rows.filter((r) => r.type === tab);
++  const visibleRows = rows.filter(
++    (r) =>
++      r.type === tab &&
++      (!query.trim() ||
++        `${r.content_text} ${r.subtext || ''} ${r.category}`
++          .toLowerCase()
++          .includes(query.toLowerCase()))
++  );
+   const activeTab = TABS.find((t) => t.id === tab)!;
+ 
+   const needsSubtext = tab === 'scene2' || tab === 'scene3' || tab === 'keyword_rule';
+   const needsEmoji = tab === 'scene2' || tab === 'scene3';
+   const needsImage = tab === 'image_asset';
+   const hideCategory = tab === 'cta' || tab === 'keyword_rule';
++  const bulkAllowed = ['hook', 'cta', 'scene2', 'scene3'].includes(tab);
++  const isBulk = bulk && bulkAllowed;
++  const bulkCount = isBulk ? text.split('\n').map((l) => l.trim()).filter(Boolean).length : 0;
+ 
+   const textLabel =
+     tab === 'image_asset'
+@@ -104,7 +133,7 @@ export default function AdminTrainingPage() {
+   const subtextLabel = tab === 'keyword_rule' ? 'Hashtag (pisahkan koma)' : 'Subtext';
+ 
+   const preview =
+-    text.trim() && ['hook', 'scene2', 'scene3', 'cta'].includes(tab)
++    !isBulk && text.trim() && ['hook', 'scene2', 'scene3', 'cta'].includes(tab)
+       ? interpolateTemplate(text, SAMPLE_META)
+       : '';
+ 
+@@ -136,7 +165,7 @@ export default function AdminTrainingPage() {
+       setImageUrl(data.publicUrl);
+       if (!text.trim()) setText(file.name.replace(/\.[^.]+$/, ''));
+     } catch (err) {
+-      setError(err instanceof Error ? err.message : 'Upload gagal.');
++      setError(friendlyError(err instanceof Error ? err.message : 'Upload gagal.'));
+     } finally {
+       setUploading(false);
+       e.target.value = '';
+@@ -149,32 +178,66 @@ export default function AdminTrainingPage() {
+     setError(null);
+     try {
+       const supabase = createClient();
++      const base = {
++        type: tab,
++        category: hideCategory ? 'all' : category,
++        emoji: needsEmoji ? emoji || '✨' : '✨',
++        image_url: needsImage ? imageUrl.trim() : '',
++        created_by_email: email || ADMIN_EMAIL,
++      };
++
++      let payload;
++      if (isBulk) {
++        // satu baris = satu entri. Untuk scene: "teks | subtext"
++        payload = text
++          .split('\n')
++          .map((l) => l.trim())
++          .filter(Boolean)
++          .map((line) => {
++            const [main, sub] = line.split('|').map((x) => x.trim());
++            return { ...base, content_text: main, subtext: needsSubtext ? sub || subtext.trim() : '' };
++          });
++      } else {
++        payload = [
++          { ...base, content_text: text.trim(), subtext: needsSubtext ? subtext.trim() : '' },
++        ];
++      }
++
+       const { data, error: insErr } = await supabase
+         .from('ai_training_data')
+-        .insert({
+-          type: tab,
+-          category: hideCategory ? 'all' : category,
+-          content_text: text.trim(),
+-          subtext: needsSubtext ? subtext.trim() : '',
+-          emoji: needsEmoji ? emoji || '✨' : '✨',
+-          image_url: needsImage ? imageUrl.trim() : '',
+-          created_by_email: email || ADMIN_EMAIL,
+-        })
+-        .select('*')
+-        .single();
++        .insert(payload)
++        .select('*');
+       if (insErr) throw new Error(insErr.message);
+-      const row = data as TrainingRow;
+-      applyTrainingRow(row);
+-      setRows((prev) => [row, ...prev]);
++      const added = (data || []) as TrainingRow[];
++      added.forEach(applyTrainingRow);
++      setRows((prev) => [...added, ...prev]);
+       resetForm();
+-      setNotice('Tersimpan & langsung aktif di engine');
++      setNotice(
++        added.length > 1
++          ? `${added.length} entri tersimpan & langsung aktif`
++          : 'Tersimpan & langsung aktif di engine'
++      );
+     } catch (err) {
+-      setError(err instanceof Error ? err.message : 'Gagal menyimpan.');
++      setError(friendlyError(err instanceof Error ? err.message : 'Gagal menyimpan.'));
+     } finally {
+       setSaving(false);
+     }
+   };
+ 
++  const handleTest = () => {
++    setTestResult(generateScript(testTopic, testCat));
++  };
++
++  const handleExport = () => {
++    const blob = new Blob([JSON.stringify(rows, null, 2)], { type: 'application/json' });
++    const url = URL.createObjectURL(blob);
++    const a = document.createElement('a');
++    a.href = url;
++    a.download = `motionku-training-${new Date().toISOString().slice(0, 10)}.json`;
++    a.click();
++    URL.revokeObjectURL(url);
++  };
++
+   const handleDelete = async (id: string) => {
+     setError(null);
+     const { error: delErr } = await createClient()
+@@ -182,7 +245,7 @@ export default function AdminTrainingPage() {
+       .delete()
+       .eq('id', id);
+     if (delErr) {
+-      setError(delErr.message);
++      setError(friendlyError(delErr.message));
+       return;
+     }
+     setRows((prev) => prev.filter((r) => r.id !== id));
+@@ -220,7 +283,18 @@ export default function AdminTrainingPage() {
+             </Link>
+             <h1 className="text-sm font-bold">Training Smart Engine</h1>
+           </div>
+-          <span className="text-xs text-slate-500 hidden sm:block">{email}</span>
++          <div className="flex items-center gap-3">
++            <button
++              type="button"
++              onClick={handleExport}
++              disabled={rows.length === 0}
++              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-semibold text-slate-300 disabled:opacity-40"
++            >
++              <Download className="w-3.5 h-3.5" />
++              <span>Backup JSON</span>
++            </button>
++            <span className="text-xs text-slate-500 hidden sm:block">{email}</span>
++          </div>
+         </div>
+       </header>
+ 
+@@ -290,15 +364,38 @@ export default function AdminTrainingPage() {
+             )}
+ 
+             <div>
+-              <label className={labelCls}>{textLabel}</label>
++              <div className="flex items-center justify-between mb-1.5">
++                <label className="text-xs font-semibold text-slate-400">
++                  {isBulk ? 'Satu baris = satu entri' : textLabel}
++                </label>
++                {bulkAllowed && (
++                  <label className="flex items-center gap-1.5 text-[11px] text-slate-400 cursor-pointer">
++                    <input
++                      type="checkbox"
++                      checked={bulk}
++                      onChange={(e) => setBulk(e.target.checked)}
++                      className="accent-violet-500"
++                    />
++                    Banyak sekaligus
++                  </label>
++                )}
++              </div>
+               <textarea
+-                rows={tab === 'image_asset' || tab === 'keyword_rule' ? 2 : 3}
++                rows={isBulk ? 7 : tab === 'image_asset' || tab === 'keyword_rule' ? 2 : 3}
+                 value={text}
+                 onChange={(e) => setText(e.target.value)}
+                 className={inputCls}
+-                placeholder={tab === 'keyword_rule' ? 'kopi, latte, espresso' : ''}
++                placeholder={
++                  isBulk
++                    ? tab === 'scene2' || tab === 'scene3'
++                      ? 'Teks scene | subtext (opsional)\nTeks scene lain | subtext'
++                      : 'Tulis satu kalimat per baris'
++                    : tab === 'keyword_rule'
++                    ? 'kopi, latte, espresso'
++                    : ''
++                }
+               />
+-              {['hook', 'scene2', 'scene3', 'cta'].includes(tab) && (
++              {['hook', 'scene2', 'scene3', 'cta'].includes(tab) && !isBulk && (
+                 <div className="flex flex-wrap gap-1 mt-2">
+                   {PLACEHOLDERS.map((ph) => (
+                     <button
+@@ -314,7 +411,7 @@ export default function AdminTrainingPage() {
+               )}
+             </div>
+ 
+-            {needsSubtext && (
++            {needsSubtext && !(isBulk) && (
+               <div>
+                 <label className={labelCls}>{subtextLabel}</label>
+                 <input
+@@ -386,7 +483,7 @@ export default function AdminTrainingPage() {
+               className="w-full py-3 rounded-xl bg-gradient-to-r from-violet-600 to-cyan-500 text-sm font-bold text-white flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+             >
+               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+-              <span>Simpan</span>
++              <span>{isBulk && bulkCount > 1 ? `Simpan ${bulkCount} entri` : 'Simpan'}</span>
+             </button>
+           </section>
+ 
+@@ -398,6 +495,15 @@ export default function AdminTrainingPage() {
+               </h2>
+               <span className="text-xs text-slate-500">{visibleRows.length} item</span>
+             </div>
++            <div className="relative">
++              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
++              <input
++                value={query}
++                onChange={(e) => setQuery(e.target.value)}
++                placeholder="Cari di daftar ini..."
++                className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-xs placeholder:text-slate-600 focus:outline-none focus:border-violet-500"
++              />
++            </div>
+ 
+             {loading ? (
+               <div className="py-16 text-center text-slate-500">
+@@ -448,6 +554,63 @@ export default function AdminTrainingPage() {
+             )}
+           </section>
+         </div>
++
++        {/* Uji hasil training */}
++        <section className="bg-slate-900 border border-white/10 rounded-2xl p-5 space-y-4">
++          <div>
++            <h2 className="text-sm font-bold">Uji hasil training</h2>
++            <p className="text-xs text-slate-500">
++              Generate script dengan data yang sudah aktif. Klik beberapa kali, hasilnya diacak.
++            </p>
++          </div>
++          <div className="flex flex-col sm:flex-row gap-2">
++            <input
++              value={testTopic}
++              onChange={(e) => setTestTopic(e.target.value)}
++              className={`${inputCls} flex-1`}
++              placeholder="Contoh: promo kopi susu 18rb"
++            />
++            <select
++              value={testCat}
++              onChange={(e) => setTestCat(e.target.value as 'promo' | 'quote' | 'edukasi')}
++              className="px-3 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-sm"
++            >
++              <option value="promo">Promo</option>
++              <option value="quote">Quote</option>
++              <option value="edukasi">Edukasi</option>
++            </select>
++            <button
++              type="button"
++              onClick={handleTest}
++              disabled={!testTopic.trim()}
++              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-sm font-bold disabled:opacity-40"
++            >
++              <Wand2 className="w-4 h-4" />
++              <span>Coba</span>
++            </button>
++          </div>
++          {testResult && (
++            <div className="grid sm:grid-cols-2 gap-2">
++              {testResult.scenes.map((sc) => (
++                <div key={sc.id} className="p-3.5 rounded-xl bg-slate-950 border border-white/5">
++                  <span className="text-[10px] uppercase font-bold text-cyan-400">
++                    Scene {sc.sceneNumber} · {sc.role}
++                  </span>
++                  <p className="text-sm text-slate-100 mt-1">
++                    {sc.emoji} {sc.text}
++                  </p>
++                  {sc.subtext && <p className="text-xs text-slate-500 mt-1">{sc.subtext}</p>}
++                </div>
++              ))}
++              <div className="sm:col-span-2 p-3.5 rounded-xl bg-slate-950 border border-white/5">
++                <span className="text-[10px] uppercase font-bold text-slate-500">Caption</span>
++                <p className="text-xs text-slate-300 mt-1 whitespace-pre-wrap">
++                  {testResult.caption}
++                </p>
++              </div>
++            </div>
++          )}
++        </section>
+       </main>
+     </div>
+   );
+diff --git a/app/dashboard/page.tsx b/app/dashboard/page.tsx
+index 1ee26c7..9bcbaa9 100644
+--- a/app/dashboard/page.tsx
++++ b/app/dashboard/page.tsx
+@@ -3,7 +3,7 @@
+ import React, { useEffect, useState } from 'react';
+ import Link from 'next/link';
+ import { createClient } from '@/lib/supabase/client';
+-import { Plus, Search, Trash2, Film, Sparkles, ExternalLink } from 'lucide-react';
++import { Plus, Search, Trash2, Film, Sparkles, ArrowRight, LogOut, Brain } from 'lucide-react';
+ 
+ interface ProjectRow {
+   id: string;
+@@ -23,17 +23,35 @@ export default function DashboardPage() {
+   const [projects, setProjects] = useState<ProjectRow[]>([]);
+   const [searchQuery, setSearchQuery] = useState('');
+   const [loading, setLoading] = useState(true);
++  const [error, setError] = useState<string | null>(null);
++  const [confirmId, setConfirmId] = useState<string | null>(null);
++  const [isAdmin, setIsAdmin] = useState(false);
++  const [filter, setFilter] = useState<'all' | 'promo' | 'quote' | 'edukasi'>('all');
+ 
+   useEffect(() => {
+     const fetchProjects = async () => {
+       setLoading(true);
+       const supabase = createClient();
+-      const { data, error } = await supabase
+-        .from('projects')
+-        .select('id, title, topic, category, template_id, status, updated_at')
+-        .order('updated_at', { ascending: false });
++      const [{ data, error: fetchErr }, userRes] = await Promise.all([
++        supabase
++          .from('projects')
++          .select('id, title, topic, category, template_id, status, updated_at')
++          .order('updated_at', { ascending: false }),
++        supabase.auth.getUser(),
++      ]);
+ 
+-      if (!error && data) {
++      const adminEmail = (
++        process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'kakangkasyaf@gmail.com'
++      ).toLowerCase();
++      setIsAdmin((userRes.data.user?.email || '').toLowerCase() === adminEmail);
++
++      if (fetchErr) {
++        setError(
++          /does not exist|schema cache/i.test(fetchErr.message)
++            ? 'Tabel projects belum ada. Jalankan supabase/migration.sql di SQL Editor Supabase.'
++            : fetchErr.message
++        );
++      } else if (data) {
+         setProjects(data as ProjectRow[]);
+       }
+       setLoading(false);
+@@ -43,18 +61,34 @@ export default function DashboardPage() {
+ 
+   const handleDeleteProject = async (id: string) => {
+     const supabase = createClient();
+-    const { error } = await supabase.from('projects').delete().eq('id', id);
+-    if (!error) {
+-      setProjects((prev) => prev.filter((p) => p.id !== id));
++    const { error: delErr } = await supabase.from('projects').delete().eq('id', id);
++    setConfirmId(null);
++    if (delErr) {
++      setError(delErr.message);
++      return;
+     }
++    setProjects((prev) => prev.filter((p) => p.id !== id));
+   };
+ 
+-  const filteredProjects = projects.filter(
+-    (p) =>
+-      p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+-      p.topic.toLowerCase().includes(searchQuery.toLowerCase()) ||
+-      p.category.toLowerCase().includes(searchQuery.toLowerCase())
+-  );
++  const handleLogout = async () => {
++    await createClient().auth.signOut();
++    window.location.href = '/login';
++  };
++
++  const filteredProjects = projects.filter((p) => {
++    const q = searchQuery.toLowerCase();
++    const matchQuery =
++      p.title.toLowerCase().includes(q) ||
++      p.topic.toLowerCase().includes(q) ||
++      p.category.toLowerCase().includes(q);
++    return matchQuery && (filter === 'all' || p.category === filter);
++  });
++
++  const CATEGORY_STYLE: Record<string, { label: string; chip: string; bar: string }> = {
++    promo: { label: 'Promo', chip: 'bg-amber-500/15 text-amber-300', bar: 'from-amber-500 to-rose-500' },
++    quote: { label: 'Quote', chip: 'bg-violet-500/15 text-violet-300', bar: 'from-violet-500 to-fuchsia-500' },
++    edukasi: { label: 'Edukasi', chip: 'bg-cyan-500/15 text-cyan-300', bar: 'from-cyan-500 to-emerald-500' },
++  };
+ 
+   return (
+     <div className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-10">
+@@ -62,43 +96,87 @@ export default function DashboardPage() {
+         {/* Top Bar */}
+         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-6">
+           <div>
+-            <h1 className="text-2xl md:text-3xl font-bold">Dashboard Proyek Video</h1>
++            <h1 className="text-2xl md:text-3xl font-bold">Proyek Saya</h1>
+             <p className="text-xs text-slate-400 mt-1">
+-              Kelola semua proyek motion graphic TikTok / Reels / Shorts milikmu
++              Video motion graphic TikTok, Reels, dan Shorts buatan Anda
+             </p>
+           </div>
+ 
+-          <Link
+-            href="/create"
+-            className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-violet-600 to-cyan-500 font-bold text-sm text-white shadow-lg hover:opacity-95 transition"
+-          >
+-            <Plus className="w-4 h-4" />
+-            <span>Buat Video Baru</span>
+-          </Link>
++          <div className="flex items-center gap-2">
++            {isAdmin && (
++              <Link
++                href="/admin"
++                className="inline-flex items-center gap-1.5 px-3.5 py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-slate-300 transition"
++              >
++                <Brain className="w-4 h-4" />
++                <span>Training</span>
++              </Link>
++            )}
++            <button
++              type="button"
++              onClick={handleLogout}
++              title="Keluar"
++              aria-label="Keluar"
++              className="p-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-white transition"
++            >
++              <LogOut className="w-4 h-4" />
++            </button>
++            <Link
++              href="/create"
++              className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-violet-600 to-cyan-500 font-bold text-sm text-white shadow-lg hover:opacity-95 transition"
++            >
++              <Plus className="w-4 h-4" />
++              <span>Buat Video Baru</span>
++            </Link>
++          </div>
+         </div>
+ 
+-        {/* Search Input */}
+-        <div className="relative max-w-md">
+-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+-          <input
+-            type="text"
+-            value={searchQuery}
+-            onChange={(e) => setSearchQuery(e.target.value)}
+-            placeholder="Cari judul, topik, atau kategori proyek..."
+-            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-900 border border-white/10 text-sm focus:outline-none focus:border-violet-500"
+-          />
++        {error && (
++          <div className="px-4 py-3 rounded-xl bg-rose-950/60 border border-rose-500/30 text-xs text-rose-200">
++            {error}
++          </div>
++        )}
++
++        {/* Cari + filter */}
++        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
++          <div className="relative flex-1 max-w-md">
++            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
++            <input
++              type="text"
++              value={searchQuery}
++              onChange={(e) => setSearchQuery(e.target.value)}
++              placeholder="Cari judul atau topik..."
++              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-900 border border-white/10 text-sm focus:outline-none focus:border-violet-500"
++            />
++          </div>
++          <div className="flex gap-1.5">
++            {(['all', 'promo', 'quote', 'edukasi'] as const).map((f) => (
++              <button
++                key={f}
++                type="button"
++                onClick={() => setFilter(f)}
++                className={`px-3.5 py-2 rounded-xl text-xs font-semibold border transition ${
++                  filter === f
++                    ? 'bg-violet-600/20 border-violet-500 text-white'
++                    : 'bg-slate-900 border-white/10 text-slate-400 hover:text-white'
++                }`}
++              >
++                {f === 'all' ? 'Semua' : CATEGORY_STYLE[f].label}
++              </button>
++            ))}
++          </div>
+         </div>
+ 
+         {/* Project Grid */}
+         {loading ? (
+-          <div className="text-sm text-slate-400 py-12 text-center">Memuat daftar proyek...</div>
++          <div className="text-sm text-slate-400 py-12 text-center">Memuat proyek...</div>
+         ) : filteredProjects.length === 0 ? (
+           <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-12 text-center space-y-4">
+             <Film className="w-10 h-10 text-violet-400 mx-auto" />
+             <div className="space-y-1">
+-              <h3 className="font-bold text-lg">Belum ada proyek yang cocok</h3>
++              <h3 className="font-bold text-lg">{projects.length === 0 ? 'Belum ada proyek' : 'Tidak ada yang cocok'}</h3>
+               <p className="text-xs text-slate-400">
+-                Mulai buat video pertamamu dengan Smart Template Engine tanpa API Key.
++                Ketik topik, dapatkan video lengkap dengan caption dan hashtag.
+               </p>
+             </div>
+             <Link
+@@ -111,42 +189,72 @@ export default function DashboardPage() {
+           </div>
+         ) : (
+           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+-            {filteredProjects.map((project) => (
+-              <div
+-                key={project.id}
+-                className="rounded-2xl bg-slate-900 border border-white/10 p-5 flex flex-col justify-between gap-4 hover:border-violet-500/40 transition"
+-              >
+-                <div className="space-y-2">
+-                  <div className="flex items-center justify-between text-[11px]">
+-                    <span className="px-2.5 py-0.5 rounded-full bg-violet-500/20 text-violet-300 font-bold uppercase">
+-                      {project.category} • {project.template_id}
+-                    </span>
+-                    <span className="text-slate-400">
+-                      {new Date(project.updated_at).toLocaleDateString('id-ID')}
+-                    </span>
++            {filteredProjects.map((project) => {
++              const cat = CATEGORY_STYLE[project.category] || CATEGORY_STYLE.promo;
++              return (
++                <div
++                  key={project.id}
++                  className="group rounded-2xl bg-slate-900 border border-white/10 overflow-hidden flex flex-col hover:border-violet-500/40 transition"
++                >
++                  <div className={`h-1.5 bg-gradient-to-r ${cat.bar}`} />
++                  <div className="p-5 flex-1 flex flex-col gap-3">
++                    <div className="flex items-center justify-between text-[11px]">
++                      <span className={`px-2.5 py-0.5 rounded-full font-semibold ${cat.chip}`}>
++                        {cat.label} · {project.template_id}
++                      </span>
++                      <span className="text-slate-500">
++                        {new Date(project.updated_at).toLocaleDateString('id-ID', {
++                          day: 'numeric',
++                          month: 'short',
++                        })}
++                      </span>
++                    </div>
++                    <div className="space-y-1">
++                      <h3 className="font-bold text-base line-clamp-1">{project.title}</h3>
++                      <p className="text-xs text-slate-400 line-clamp-2">{project.topic}</p>
++                    </div>
+                   </div>
+-                  <h3 className="font-bold text-base line-clamp-1">{project.title}</h3>
+-                  <p className="text-xs text-slate-400 line-clamp-2">{project.topic}</p>
+-                </div>
+ 
+-                <div className="flex items-center justify-between pt-3 border-t border-white/10">
+-                  <Link
+-                    href={`/editor/${project.id}`}
+-                    className="inline-flex items-center gap-1.5 text-xs font-bold text-cyan-400 hover:underline"
+-                  >
+-                    <span>Buka di Editor</span>
+-                    <ExternalLink className="w-3.5 h-3.5" />
+-                  </Link>
+-                  <button
+-                    onClick={() => handleDeleteProject(project.id)}
+-                    className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition"
+-                    title="Hapus Proyek"
+-                  >
+-                    <Trash2 className="w-4 h-4" />
+-                  </button>
++                  <div className="flex items-center justify-between px-5 py-3 border-t border-white/10 bg-black/10">
++                    <Link
++                      href={`/editor/${project.id}`}
++                      className="inline-flex items-center gap-1.5 text-xs font-bold text-cyan-400 hover:text-cyan-300"
++                    >
++                      <span>Buka editor</span>
++                      <ArrowRight className="w-3.5 h-3.5 transition group-hover:translate-x-0.5" />
++                    </Link>
++                    {confirmId === project.id ? (
++                      <div className="flex items-center gap-1.5 text-xs">
++                        <button
++                          type="button"
++                          onClick={() => handleDeleteProject(project.id)}
++                          className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-semibold"
++                        >
++                          Hapus
++                        </button>
++                        <button
++                          type="button"
++                          onClick={() => setConfirmId(null)}
++                          className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300"
++                        >
++                          Batal
++                        </button>
++                      </div>
++                    ) : (
++                      <button
++                        type="button"
++                        onClick={() => setConfirmId(project.id)}
++                        className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
++                        title="Hapus proyek"
++                        aria-label="Hapus proyek"
++                      >
++                        <Trash2 className="w-4 h-4" />
++                      </button>
++                    )}
++                  </div>
+                 </div>
+-              </div>
+-            ))}
++              );
++            })}
+           </div>
+         )}
+       </div>
+diff --git a/app/editor/[id]/page.tsx b/app/editor/[id]/page.tsx
+index 997dc05..f2b4b91 100644
+--- a/app/editor/[id]/page.tsx
++++ b/app/editor/[id]/page.tsx
+@@ -16,6 +16,7 @@ import {
+ } from '@/store/useEditorStore';
+ import TemplateRenderer from '@/components/templates/TemplateRenderer';
+ import { GRADIENT_PRESETS } from '@/components/templates/types';
++import { fontStack } from '@/components/templates/fonts';
+ import { exportProjectToVideo } from '@/lib/video-exporter';
+ import { createClient } from '@/lib/supabase/client';
+ import { loadTrainingIntoEngine } from '@/lib/training';
+@@ -89,6 +90,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
+     setTemplateId,
+     updateScene,
+     updateStyle,
++    initProject,
+     updateColors,
+     addUserImages,
+     removeUserImage,
+@@ -105,6 +107,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
+   const [copiedCaption, setCopiedCaption] = useState(false);
+   const [panel, setPanel] = useState<'teks' | 'gambar' | 'gaya' | 'musik'>('teks');
+   const [isAdmin, setIsAdmin] = useState(false);
++  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'notfound'>('loading');
+ 
+   useEffect(() => {
+     loadTrainingIntoEngine();
+@@ -119,6 +122,46 @@ export default function EditorPage({ params }: { params: { id: string } }) {
+       .catch(() => setIsAdmin(false));
+   }, []);
+ 
++  // Muat proyek tersimpan dari Supabase (jika bukan proyek yang baru dibuat di sesi ini)
++  useEffect(() => {
++    let cancelled = false;
++    (async () => {
++      if (useEditorStore.getState().projectId === params.id) {
++        if (!cancelled) setLoadState('ready');
++        return;
++      }
++      try {
++        const { data, error } = await createClient()
++          .from('projects')
++          .select('id, title, topic, category, template_id, script_json, style_json')
++          .eq('id', params.id)
++          .maybeSingle();
++        if (cancelled) return;
++        if (error || !data) {
++          setLoadState('notfound');
++          return;
++        }
++        initProject({
++          id: data.id,
++          title: data.title,
++          topic: data.topic,
++          category: data.category,
++          templateId: data.template_id,
++          script: data.script_json || undefined,
++          style: data.style_json || undefined,
++        });
++        setSaveStatus('saved');
++        setLoadState('ready');
++      } catch {
++        if (!cancelled) setLoadState('notfound');
++      }
++    })();
++    return () => {
++      cancelled = true;
++    };
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [params.id]);
++
+   const activeScene = script.scenes[activeSceneIndex] || script.scenes[0];
+   const totalDuration = script.scenes.reduce((acc, s) => acc + s.duration, 0);
+ 
+@@ -135,7 +178,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
+ 
+   // Auto-save ke tabel `projects` di Supabase setiap 2 detik (Debounce)
+   useEffect(() => {
+-    if (saveStatus !== 'unsaved') return;
++    if (loadState !== 'ready' || saveStatus !== 'unsaved') return;
+     const timer = setTimeout(async () => {
+       setSaveStatus('saving');
+       try {
+@@ -189,7 +232,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
+     }, 2000);
+ 
+     return () => clearTimeout(timer);
+-  }, [script, style, templateId, title, topic, category, saveStatus, params.id, setSaveStatus]);
++  }, [script, style, templateId, title, topic, category, saveStatus, loadState, params.id, setSaveStatus]);
+ 
+   // Upload Banyak Gambar User Sekaligus (Multi-Image Motion Graphic)
+   const handleMultiImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+@@ -286,6 +329,28 @@ export default function EditorPage({ params }: { params: { id: string } }) {
+     style.userImages[activeSceneIndex % Math.max(1, style.userImages.length)] ||
+     style.backgroundImageUrl;
+ 
++  if (loadState !== 'ready') {
++    return (
++      <div className="h-screen flex items-center justify-center bg-slate-950 text-slate-300 p-6 text-center">
++        {loadState === 'loading' ? (
++          <p className="text-sm text-slate-400">Memuat proyek...</p>
++        ) : (
++          <div className="space-y-3">
++            <p className="text-sm">Proyek tidak ditemukan atau Anda belum login.</p>
++            <div className="flex items-center justify-center gap-3 text-sm font-semibold">
++              <Link href="/dashboard" className="text-cyan-400 hover:underline">
++                Ke dashboard
++              </Link>
++              <Link href="/create" className="text-violet-300 hover:underline">
++                Buat video baru
++              </Link>
++            </div>
++          </div>
++        )}
++      </div>
++    );
++  }
++
+   return (
+     <div className="h-screen bg-slate-950 text-slate-100 flex flex-col overflow-hidden">
+       {/* Top Header Editor */}
+@@ -710,7 +775,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
+                         key={fontName}
+                         type="button"
+                         onClick={() => updateStyle({ font: fontName })}
+-                        style={{ fontFamily: fontName }}
++                        style={{ fontFamily: fontStack(fontName) }}
+                         className={`px-3 py-2.5 rounded-xl border text-sm text-left truncate ${
+                           style.font === fontName
+                             ? 'bg-violet-600/20 border-violet-500 text-white'
+diff --git a/components/templates/TemplateE1.tsx b/components/templates/TemplateE1.tsx
+index 16f5544..a3be12d 100644
+--- a/components/templates/TemplateE1.tsx
++++ b/components/templates/TemplateE1.tsx
+@@ -3,6 +3,8 @@
+ import React from 'react';
+ import { motion } from 'framer-motion';
+ import { getAnimationVariants, TemplateProps } from './types';
++import { fontStack } from './fonts';
++import { AnimatedText } from './motion';
+ 
+ /**
+  * Template E1: "3 Cara..." dengan angka besar 1, 2, 3
+@@ -24,7 +26,7 @@ export default function TemplateE1({
+     <div
+       className="relative w-full h-full overflow-hidden flex flex-col justify-between p-7 select-none"
+       style={{
+-        fontFamily: font,
++        fontFamily: fontStack(font),
+         color: colors.textColor,
+         background: `linear-gradient(145deg, ${colors.bgPrimary} 0%, ${colors.bgSecondary} 100%)`,
+       }}
+@@ -64,7 +66,7 @@ export default function TemplateE1({
+       >
+         {showEmoji && <span className="text-3xl inline-block">{scene.emoji}</span>}
+         <h2 className="text-xl md:text-2xl font-bold leading-snug whitespace-pre-line">
+-          {scene.text}
++          <AnimatedText text={scene.text} animation={scene.animation} highlightColor={colors.accentColor} />
+         </h2>
+         {showSubtitle && scene.subtext && (
+           <div className="p-3.5 rounded-xl bg-white/10 border-l-4 text-xs leading-relaxed" style={{ borderColor: colors.accentColor }}>
+diff --git a/components/templates/TemplateE2.tsx b/components/templates/TemplateE2.tsx
+index 3323864..60f0500 100644
+--- a/components/templates/TemplateE2.tsx
++++ b/components/templates/TemplateE2.tsx
+@@ -3,6 +3,8 @@
+ import React from 'react';
+ import { motion } from 'framer-motion';
+ import { TemplateProps } from './types';
++import { fontStack } from './fonts';
++import { AnimatedText } from './motion';
+ 
+ /**
+  * Template E2: Fakta mengejutkan + teks pop
+@@ -22,7 +24,7 @@ export default function TemplateE2({
+     <div
+       className="relative w-full h-full overflow-hidden flex flex-col items-center justify-center p-6 text-center select-none"
+       style={{
+-        fontFamily: font,
++        fontFamily: fontStack(font),
+         color: colors.textColor,
+         backgroundColor: colors.bgPrimary,
+       }}
+@@ -53,7 +55,7 @@ export default function TemplateE2({
+ 
+         <div className="p-5 rounded-3xl bg-white/10 backdrop-blur-md border-2 border-white/15 shadow-2xl">
+           <h2 className="text-xl md:text-2xl font-extrabold leading-snug">
+-            {scene.text}
++            <AnimatedText text={scene.text} animation={scene.animation} highlightColor={colors.accentColor} />
+           </h2>
+         </div>
+ 
+diff --git a/components/templates/TemplateE3.tsx b/components/templates/TemplateE3.tsx
+index d72207f..35aabf8 100644
+--- a/components/templates/TemplateE3.tsx
++++ b/components/templates/TemplateE3.tsx
+@@ -3,6 +3,8 @@
+ import React from 'react';
+ import { motion } from 'framer-motion';
+ import { getAnimationVariants, TemplateProps } from './types';
++import { fontStack } from './fonts';
++import { AnimatedText } from './motion';
+ 
+ /**
+  * Template E3: Q&A / Tebak-tebakan
+@@ -24,7 +26,7 @@ export default function TemplateE3({
+     <div
+       className="relative w-full h-full overflow-hidden flex flex-col justify-center p-6 select-none"
+       style={{
+-        fontFamily: font,
++        fontFamily: fontStack(font),
+         color: colors.textColor,
+         background: `linear-gradient(135deg, ${colors.bgPrimary} 0%, ${colors.bgSecondary} 100%)`,
+       }}
+@@ -48,7 +50,7 @@ export default function TemplateE3({
+ 
+         {/* Main Chat / Quiz Card */}
+         <div className="bg-black/40 backdrop-blur-md border border-white/20 rounded-2xl p-5 shadow-xl space-y-3">
+-          <h2 className="text-xl font-bold leading-snug">{scene.text}</h2>
++          <h2 className="text-xl font-bold leading-snug"><AnimatedText text={scene.text} animation={scene.animation} highlightColor={colors.accentColor} /></h2>
+ 
+           {showSubtitle && scene.subtext && (
+             <p className="text-xs opacity-80 pt-2 border-t border-white/10">
+diff --git a/components/templates/TemplateP1.tsx b/components/templates/TemplateP1.tsx
+index 4a8e5b1..dd05c77 100644
+--- a/components/templates/TemplateP1.tsx
++++ b/components/templates/TemplateP1.tsx
+@@ -3,6 +3,8 @@
+ import React from 'react';
+ import { motion } from 'framer-motion';
+ import { getAnimationVariants, TemplateProps } from './types';
++import { fontStack } from './fonts';
++import { AnimatedText, KenBurns } from './motion';
+ 
+ /**
+  * Template P1: Harga besar + stiker DISKON berkedip + foto produk
+@@ -19,13 +21,13 @@ export default function TemplateP1({
+ }: TemplateProps) {
+   const scene = script.scenes[activeSceneIndex] || script.scenes[0];
+   const variants = getAnimationVariants(scene.animation);
+-  const productImg = background.imageUrl || '/images/coffee-product.jpg';
++  const productImg = background.imageUrl || 'https://picsum.photos/seed/motionku-promo/600/600';
+ 
+   return (
+     <div
+       className="relative w-full h-full overflow-hidden flex flex-col justify-between p-6 select-none"
+       style={{
+-        fontFamily: font,
++        fontFamily: fontStack(font),
+         color: colors.textColor,
+         background: `linear-gradient(160deg, ${colors.bgPrimary} 0%, ${colors.bgSecondary} 100%)`,
+       }}
+@@ -53,10 +55,13 @@ export default function TemplateP1({
+         className="relative mx-auto my-2 w-44 h-44 rounded-3xl overflow-hidden border-4 shadow-2xl"
+         style={{ borderColor: colors.accentColor }}
+       >
+-        <img
++        <KenBurns
++          key={productImg + activeSceneIndex}
+           src={productImg}
+           alt={script.extractedMeta.productName}
+           className="w-full h-full object-cover"
++          duration={scene.duration + 1}
++          seed={activeSceneIndex}
+         />
+         {showEmoji && (
+           <span className="absolute bottom-2 right-2 text-2xl bg-black/60 backdrop-blur-sm w-9 h-9 rounded-full flex items-center justify-center">
+@@ -73,7 +78,7 @@ export default function TemplateP1({
+         className="z-10 text-center space-y-2 bg-black/35 backdrop-blur-md p-4 rounded-2xl border border-white/15"
+       >
+         <h2 className="text-xl md:text-2xl font-extrabold leading-tight uppercase">
+-          {scene.text}
++          <AnimatedText text={scene.text} animation={scene.animation} highlightColor={colors.accentColor} />
+         </h2>
+ 
+         <div
+diff --git a/components/templates/TemplateP2.tsx b/components/templates/TemplateP2.tsx
+index 28e0af6..afdd110 100644
+--- a/components/templates/TemplateP2.tsx
++++ b/components/templates/TemplateP2.tsx
+@@ -3,6 +3,8 @@
+ import React from 'react';
+ import { motion } from 'framer-motion';
+ import { getAnimationVariants, TemplateProps } from './types';
++import { fontStack } from './fonts';
++import { AnimatedText } from './motion';
+ 
+ /**
+  * Template P2: Before-After / List Harga
+@@ -23,7 +25,7 @@ export default function TemplateP2({
+     <div
+       className="relative w-full h-full overflow-hidden flex flex-col justify-center p-6 select-none"
+       style={{
+-        fontFamily: font,
++        fontFamily: fontStack(font),
+         color: colors.textColor,
+         backgroundColor: colors.bgPrimary,
+       }}
+@@ -44,7 +46,7 @@ export default function TemplateP2({
+           {showEmoji && <span className="text-2xl">{scene.emoji}</span>}
+         </div>
+ 
+-        <h2 className="text-xl md:text-2xl font-bold leading-snug">{scene.text}</h2>
++        <h2 className="text-xl md:text-2xl font-bold leading-snug"><AnimatedText text={scene.text} animation={scene.animation} highlightColor={colors.accentColor} /></h2>
+ 
+         {/* Before vs After Price Card */}
+         <div className="grid grid-cols-2 gap-2.5 pt-1">
+diff --git a/components/templates/TemplateP3.tsx b/components/templates/TemplateP3.tsx
+index 68f17e0..019778d 100644
+--- a/components/templates/TemplateP3.tsx
++++ b/components/templates/TemplateP3.tsx
+@@ -3,6 +3,8 @@
+ import React, { useEffect, useState } from 'react';
+ import { motion } from 'framer-motion';
+ import { getAnimationVariants, TemplateProps } from './types';
++import { fontStack } from './fonts';
++import { AnimatedText } from './motion';
+ 
+ /**
+  * Template P3: Countdown Promo
+@@ -31,7 +33,7 @@ export default function TemplateP3({
+     <div
+       className="relative w-full h-full overflow-hidden flex flex-col justify-between p-6 text-center select-none"
+       style={{
+-        fontFamily: font,
++        fontFamily: fontStack(font),
+         color: colors.textColor,
+         background: `linear-gradient(180deg, ${colors.bgPrimary} 0%, ${colors.bgSecondary} 100%)`,
+       }}
+@@ -65,7 +67,7 @@ export default function TemplateP3({
+       >
+         {showEmoji && <div className="text-4xl">{scene.emoji}</div>}
+         <h2 className="text-2xl md:text-3xl font-black uppercase leading-tight tracking-wide">
+-          {scene.text}
++          <AnimatedText text={scene.text} animation={scene.animation} highlightColor={colors.accentColor} />
+         </h2>
+         {showSubtitle && scene.subtext && (
+           <p className="text-xs opacity-90 bg-black/30 px-3 py-2 rounded-xl">
+diff --git a/components/templates/TemplateQ1.tsx b/components/templates/TemplateQ1.tsx
+index 8c9a905..1514e8e 100644
+--- a/components/templates/TemplateQ1.tsx
++++ b/components/templates/TemplateQ1.tsx
+@@ -3,6 +3,8 @@
+ import React from 'react';
+ import { motion, AnimatePresence } from 'framer-motion';
+ import { getAnimationVariants, GRADIENT_PRESETS, TemplateProps } from './types';
++import { fontStack } from './fonts';
++import { AnimatedText } from './motion';
+ 
+ /**
+  * Template Q1: Teks besar di tengah, background gradient bergerak
+@@ -32,7 +34,7 @@ export default function TemplateQ1({
+   return (
+     <div
+       className="relative w-full h-full overflow-hidden flex flex-col items-center justify-center p-8 text-center select-none"
+-      style={{ ...bgStyle, fontFamily: font, color: colors.textColor }}
++      style={{ ...bgStyle, fontFamily: fontStack(font), color: colors.textColor }}
+     >
+       {/* Animated Floating Aura Orbs */}
+       <motion.div
+@@ -76,7 +78,7 @@ export default function TemplateQ1({
+           </span>
+ 
+           <h2 className="text-2xl md:text-3xl font-bold leading-snug tracking-tight drop-shadow-lg">
+-            {scene.text}
++            <AnimatedText text={scene.text} animation={scene.animation} highlightColor={colors.accentColor} />
+           </h2>
+ 
+           {showSubtitle && scene.subtext && (
+diff --git a/components/templates/TemplateQ2.tsx b/components/templates/TemplateQ2.tsx
+index 3da2d51..fc8ff56 100644
+--- a/components/templates/TemplateQ2.tsx
++++ b/components/templates/TemplateQ2.tsx
+@@ -3,6 +3,7 @@
+ import React, { useEffect, useState } from 'react';
+ import { motion } from 'framer-motion';
+ import { TemplateProps } from './types';
++import { fontStack } from './fonts';
+ 
+ /**
+  * Template Q2: Typewriter + background foto blur
+@@ -34,12 +35,12 @@ export default function TemplateQ2({
+     return () => clearInterval(interval);
+   }, [scene.text, activeSceneIndex]);
+ 
+-  const bgImage = background.imageUrl || '/images/quote-rain-bg.jpg';
++  const bgImage = background.imageUrl || 'https://picsum.photos/seed/motionku-quote/720/1280';
+ 
+   return (
+     <div
+       className="relative w-full h-full overflow-hidden flex flex-col justify-center p-7 select-none"
+-      style={{ fontFamily: font, color: colors.textColor, backgroundColor: colors.bgPrimary }}
++      style={{ fontFamily: fontStack(font), color: colors.textColor, backgroundColor: colors.bgPrimary }}
+     >
+       {/* Background Photo Blur */}
+       <div
+diff --git a/components/templates/TemplateQ3.tsx b/components/templates/TemplateQ3.tsx
+index 095ff65..dc93286 100644
+--- a/components/templates/TemplateQ3.tsx
++++ b/components/templates/TemplateQ3.tsx
+@@ -3,6 +3,7 @@
+ import React from 'react';
+ import { motion } from 'framer-motion';
+ import { TemplateProps } from './types';
++import { fontStack } from './fonts';
+ 
+ /**
+  * Template Q3: Karaoke word-by-word (kata muncul satu-satu)
+@@ -23,7 +24,7 @@ export default function TemplateQ3({
+     <div
+       className="relative w-full h-full overflow-hidden flex flex-col items-center justify-center p-7 text-center select-none"
+       style={{
+-        fontFamily: font,
++        fontFamily: fontStack(font),
+         color: colors.textColor,
+         background: `radial-gradient(circle at center, ${colors.bgSecondary} 0%, ${colors.bgPrimary} 100%)`,
+       }}
+diff --git a/components/templates/TemplateRenderer.tsx b/components/templates/TemplateRenderer.tsx
+index 59405b5..dfb04f5 100644
+--- a/components/templates/TemplateRenderer.tsx
++++ b/components/templates/TemplateRenderer.tsx
+@@ -2,7 +2,10 @@
+ 
+ import React from 'react';
+ import { TemplateId } from '@/store/useEditorStore';
++import { motion } from 'framer-motion';
+ import { TemplateProps } from './types';
++import { MotionOverlay } from './motion';
++import TemplateFX from './fx';
+ import TemplateQ1 from './TemplateQ1';
+ import TemplateQ2 from './TemplateQ2';
+ import TemplateQ3 from './TemplateQ3';
+@@ -17,7 +20,21 @@ interface DispatcherProps extends TemplateProps {
+   templateId: TemplateId;
+ }
+ 
+-export default function TemplateRenderer({ templateId, ...props }: DispatcherProps) {
++type Cam = { from: number; to: number; rotFrom: number; ease: 'linear' | 'easeOut' | [number, number, number, number] };
++/** Gerak kamera khas tiap template. */
++const CAMERA: Record<string, Cam> = {
++  Q1: { from: 1, to: 1.045, rotFrom: 0, ease: 'linear' },
++  Q2: { from: 1.06, to: 1, rotFrom: 0, ease: 'linear' }, // zoom-out pelan
++  Q3: { from: 1, to: 1.03, rotFrom: -0.6, ease: 'linear' },
++  P1: { from: 1.12, to: 1.02, rotFrom: 0, ease: [0.16, 1, 0.3, 1] }, // punch-in
++  P2: { from: 1, to: 1.035, rotFrom: 0.8, ease: 'linear' },
++  P3: { from: 1.04, to: 1.0, rotFrom: 0, ease: 'easeOut' },
++  E1: { from: 1, to: 1.05, rotFrom: 0, ease: 'linear' },
++  E2: { from: 0.9, to: 1.04, rotFrom: -1.5, ease: [0.34, 1.56, 0.64, 1] }, // pop-in
++  E3: { from: 1, to: 1.04, rotFrom: 0.5, ease: 'linear' },
++};
++
++function renderTemplate(templateId: TemplateId, props: TemplateProps) {
+   switch (templateId) {
+     case 'Q1':
+       return <TemplateQ1 {...props} />;
+@@ -41,3 +58,45 @@ export default function TemplateRenderer({ templateId, ...props }: DispatcherPro
+       return <TemplateP1 {...props} />;
+   }
+ }
++
++/**
++ * Renderer: template + "kamera" push-in pelan + lapisan partikel/cahaya/wipe
++ * yang aktif di semua template.
++ */
++export default function TemplateRenderer({ templateId, ...props }: DispatcherProps) {
++  const idx = props.activeSceneIndex ?? 0;
++  const scene = props.script.scenes[idx] || props.script.scenes[0];
++  const duration = Number(scene?.duration) || 3;
++  const sceneKey = `${scene?.id}-${idx}`;
++  const cam = CAMERA[templateId] || CAMERA.Q1;
++
++  return (
++    <div className="relative w-full h-full overflow-hidden bg-black">
++      <motion.div
++        key={sceneKey}
++        className="absolute inset-0"
++        initial={{ scale: cam.from, opacity: 0.6, rotate: cam.rotFrom }}
++        animate={{ scale: cam.to, opacity: 1, rotate: 0 }}
++        transition={{
++          scale: { duration: duration + 0.5, ease: cam.ease },
++          rotate: { duration: 0.8, ease: 'easeOut' },
++          opacity: { duration: 0.35 },
++        }}
++      >
++        {renderTemplate(templateId, props)}
++      </motion.div>
++      <TemplateFX
++        templateId={templateId}
++        accent={props.colors.accentColor}
++        bpm={props.music?.bpm || 100}
++        badgeText={props.colors.badgeTextColor}
++        textColor={props.colors.textColor}
++      />
++      <MotionOverlay
++        accent={props.colors.accentColor}
++        sceneKey={sceneKey}
++        duration={duration}
++      />
++    </div>
++  );
++}
+diff --git a/components/templates/fonts.ts b/components/templates/fonts.ts
+new file mode 100644
+index 0000000..f2ba138
+--- /dev/null
++++ b/components/templates/fonts.ts
+@@ -0,0 +1,43 @@
++import type { FontFamilyName } from '@/store/useEditorStore';
++
++/**
++ * next/font mengganti nama family jadi hash internal, jadi `font-family: Poppins`
++ * tidak pernah cocok. Gunakan CSS variable yang didaftarkan di app/layout.tsx.
++ */
++const FONT_VARS: Record<FontFamilyName, { cssVar: string; fallback: string }> = {
++  Poppins: { cssVar: '--font-poppins', fallback: 'sans-serif' },
++  Montserrat: { cssVar: '--font-montserrat', fallback: 'sans-serif' },
++  'Bebas Neue': { cssVar: '--font-bebas', fallback: 'Impact, sans-serif' },
++  'Playfair Display': { cssVar: '--font-playfair', fallback: 'Georgia, serif' },
++  'Space Grotesk': { cssVar: '--font-space', fallback: 'sans-serif' },
++  Anton: { cssVar: '--font-anton', fallback: 'Impact, sans-serif' },
++};
++
++/** Untuk properti CSS `fontFamily` di React. */
++export function fontStack(font: FontFamilyName): string {
++  const f = FONT_VARS[font] || FONT_VARS.Poppins;
++  return `var(${f.cssVar}), ${f.fallback}`;
++}
++
++/** Untuk `ctx.font` di canvas: baca nilai variable yang sudah di-resolve browser. */
++export function resolveCanvasFamily(font: FontFamilyName): string {
++  const f = FONT_VARS[font] || FONT_VARS.Poppins;
++  if (typeof document === 'undefined') return f.fallback;
++  const resolved = getComputedStyle(document.body).getPropertyValue(f.cssVar).trim();
++  return resolved ? `${resolved}, ${f.fallback}` : f.fallback;
++}
++
++/** Pastikan font sudah terunduh sebelum dipakai menggambar di canvas. */
++export async function ensureCanvasFont(font: FontFamilyName) {
++  if (typeof document === 'undefined' || !document.fonts) return;
++  const family = resolveCanvasFamily(font);
++  try {
++    await Promise.all([
++      document.fonts.load(`400 40px ${family}`),
++      document.fonts.load(`700 40px ${family}`),
++      document.fonts.load(`800 40px ${family}`),
++    ]);
++  } catch {
++    // lanjut dengan fallback
++  }
++}
+diff --git a/components/templates/fx.tsx b/components/templates/fx.tsx
+new file mode 100644
+index 0000000..a15eff2
+--- /dev/null
++++ b/components/templates/fx.tsx
+@@ -0,0 +1,227 @@
++'use client';
++
++import React, { useMemo } from 'react';
++import { motion } from 'framer-motion';
++import type { TemplateId } from '@/store/useEditorStore';
++
++function seeded(i: number, salt: number) {
++  const x = Math.sin(i * 127.1 + salt * 311.7) * 43758.5453;
++  return x - Math.floor(x);
++}
++
++interface FXProps {
++  templateId: TemplateId;
++  accent: string;
++  bpm: number;
++  badgeText: string;
++  textColor: string;
++}
++
++/** Efek latar khas tiap template (di atas konten, transparan, tidak bisa diklik). */
++export default function TemplateFX({ templateId: id, accent, bpm, badgeText, textColor }: FXProps) {
++  const items = useMemo(() => Array.from({ length: 26 }, (_, i) => i), []);
++  const beat = 60 / Math.max(60, bpm);
++
++  const layer = (children: React.ReactNode) => (
++    <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden" aria-hidden>
++      {children}
++    </div>
++  );
++
++  switch (id) {
++    case 'Q1': // cincin aura
++      return layer(
++        [0, 1, 2].map((k) => (
++          <motion.div
++            key={k}
++            className="absolute left-1/2 top-1/2 rounded-full"
++            style={{
++              width: '90%',
++              aspectRatio: '1',
++              marginLeft: '-45%',
++              marginTop: '-45%',
++              border: `2px solid ${accent}`,
++            }}
++            initial={{ scale: 0.2, opacity: 0.4 }}
++            animate={{ scale: 1.9, opacity: 0 }}
++            transition={{ duration: 3.4, delay: k * 1.1, repeat: Infinity, ease: 'easeOut' }}
++          />
++        ))
++      );
++
++    case 'Q2': // hujan
++      return layer(
++        items.map((i) => (
++          <motion.span
++            key={i}
++            className="absolute block"
++            style={{
++              left: `${seeded(i, 9) * 110 - 5}%`,
++              top: -120,
++              width: 1.5,
++              height: 60 + seeded(i, 7) * 70,
++              background: 'rgba(255,255,255,0.22)',
++              transform: 'rotate(12deg)',
++            }}
++            animate={{ y: [0, 1300] }}
++            transition={{
++              duration: 1 + seeded(i, 8),
++              delay: seeded(i, 10) * 2,
++              repeat: Infinity,
++              ease: 'linear',
++            }}
++          />
++        ))
++      );
++
++    case 'Q3': // equalizer mengikuti BPM
++      return layer(
++        <div className="absolute bottom-6 left-0 right-0 h-24 flex items-end gap-[3px] px-1">
++          {items.map((i) => (
++            <motion.span
++              key={i}
++              className="flex-1 rounded-sm"
++              style={{ background: accent, opacity: 0.5, originY: 1, height: '100%' }}
++              animate={{ scaleY: [0.15, 0.4 + seeded(i, 3) * 0.6, 0.2] }}
++              transition={{
++                duration: beat * (1 + seeded(i, 4)),
++                repeat: Infinity,
++                ease: 'easeInOut',
++                delay: seeded(i, 5) * beat,
++              }}
++            />
++          ))}
++        </div>
++      );
++
++    case 'P1': // confetti
++      return layer(
++        items.slice(0, 20).map((i) => (
++          <motion.span
++            key={i}
++            className="absolute block"
++            style={{
++              left: `${seeded(i, 1) * 100}%`,
++              top: -20,
++              width: 10,
++              height: 5,
++              background: [accent, '#fff', '#fbbf24', '#fb7185'][i % 4],
++              opacity: 0.85,
++            }}
++            animate={{ y: [0, 760], rotate: [0, 360 * (2 + seeded(i, 5) * 3)], x: [0, (seeded(i, 6) - 0.5) * 50] }}
++            transition={{
++              duration: 2.4 + seeded(i, 3) * 2.2,
++              delay: seeded(i, 4) * 3,
++              repeat: Infinity,
++              ease: 'linear',
++            }}
++          />
++        ))
++      );
++
++    case 'P2': { // pita promo berjalan
++      const band = (pos: 'top' | 'bottom', bg: string, fg: string, text: string, dir: 1 | -1) => (
++        <div
++          className="absolute left-0 right-0 h-6 overflow-hidden flex items-center"
++          style={{ [pos]: 0, background: bg, color: fg }}
++        >
++          <motion.div
++            className="flex whitespace-nowrap text-[10px] font-black tracking-[0.2em]"
++            animate={{ x: dir === 1 ? ['-50%', '0%'] : ['0%', '-50%'] }}
++            transition={{ duration: 9, repeat: Infinity, ease: 'linear' }}
++          >
++            {Array.from({ length: 10 }).map((_, i) => (
++              <span key={i} className="px-3">
++                {text} •
++              </span>
++            ))}
++          </motion.div>
++        </div>
++      );
++      return layer(
++        <>
++          {band('top', accent, badgeText, 'PROMO • HEMAT • DISKON', 1)}
++          {band('bottom', 'rgba(0,0,0,0.6)', textColor, 'BANDINGKAN HARGANYA', -1)}
++        </>
++      );
++    }
++
++    case 'P3': // tepi berdenyut + garis scan
++      return layer(
++        <>
++          <motion.div
++            className="absolute inset-1.5 rounded-[1.6rem]"
++            style={{ border: `4px solid ${accent}` }}
++            animate={{ opacity: [0.2, 0.55, 0.2] }}
++            transition={{ duration: 1.05, repeat: Infinity }}
++          />
++          <motion.div
++            className="absolute left-0 right-0 h-24"
++            style={{ background: `linear-gradient(180deg, transparent, ${accent}30, transparent)` }}
++            animate={{ top: ['-10%', '110%'] }}
++            transition={{ duration: 2.8, repeat: Infinity, ease: 'linear' }}
++          />
++        </>
++      );
++
++    case 'E1': // grid melayang
++      return layer(
++        <motion.div
++          className="absolute -inset-14"
++          style={{
++            backgroundImage: `linear-gradient(${accent}1a 1px, transparent 1px), linear-gradient(90deg, ${accent}1a 1px, transparent 1px)`,
++            backgroundSize: '28px 28px',
++          }}
++          animate={{ x: [0, 28], y: [0, 28] }}
++          transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
++        />
++      );
++
++    case 'E2': // sinar bintang berputar
++      return layer(
++        <motion.div
++          className="absolute left-1/2 top-1/2"
++          style={{
++            width: '240%',
++            aspectRatio: '1',
++            marginLeft: '-120%',
++            marginTop: '-120%',
++            background: `repeating-conic-gradient(${accent}18 0deg 10deg, transparent 10deg 20deg)`,
++          }}
++          animate={{ rotate: 360 }}
++          transition={{ duration: 40, repeat: Infinity, ease: 'linear' }}
++        />
++      );
++
++    case 'E3': { // simbol ? ! melayang
++      const glyphs = ['?', '!', '?', '💡', '?', '!'];
++      return layer(
++        items.slice(0, 10).map((i) => (
++          <motion.span
++            key={i}
++            className="absolute font-black"
++            style={{
++              left: `${seeded(i, 1) * 100}%`,
++              bottom: -60,
++              fontSize: 28 + seeded(i, 2) * 40,
++              color: accent,
++              opacity: 0.18,
++            }}
++            animate={{ y: [0, -820], rotate: [-20, 20, -20] }}
++            transition={{
++              duration: 6 + seeded(i, 3) * 6,
++              delay: seeded(i, 4) * 5,
++              repeat: Infinity,
++              ease: 'linear',
++            }}
++          >
++            {glyphs[i % glyphs.length]}
++          </motion.span>
++        ))
++      );
++    }
++
++    default:
++      return null;
++  }
++}
+diff --git a/components/templates/motion.tsx b/components/templates/motion.tsx
+new file mode 100644
+index 0000000..cd14154
+--- /dev/null
++++ b/components/templates/motion.tsx
+@@ -0,0 +1,229 @@
++'use client';
++
++import React, { useMemo } from 'react';
++import { motion, Variants } from 'framer-motion';
++import type { AnimationType } from '@/lib/smart-engine';
++
++/* ------------------------------------------------------------------ */
++/* AnimatedText: teks muncul kata demi kata (stagger) sesuai animasi   */
++/* ------------------------------------------------------------------ */
++const EASE = [0.22, 1, 0.36, 1] as const;
++
++function wordVariants(animation: AnimationType): Variants {
++  switch (animation) {
++    case 'pop':
++      return {
++        hidden: { opacity: 0, scale: 0.4, y: 12 },
++        show: { opacity: 1, scale: 1, y: 0, transition: { type: 'spring', stiffness: 380, damping: 16 } },
++      };
++    case 'bounce':
++      return {
++        hidden: { opacity: 0, y: -50 },
++        show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 260, damping: 11 } },
++      };
++    case 'zoom':
++      return {
++        hidden: { opacity: 0, scale: 1.8, filter: 'blur(8px)' },
++        show: { opacity: 1, scale: 1, filter: 'blur(0px)', transition: { duration: 0.45, ease: EASE } },
++      };
++    case 'slide-up':
++      return {
++        hidden: { opacity: 0, y: 34, rotateX: -50 },
++        show: { opacity: 1, y: 0, rotateX: 0, transition: { duration: 0.5, ease: EASE } },
++      };
++    case 'typewriter':
++      return {
++        hidden: { opacity: 0, x: -6 },
++        show: { opacity: 1, x: 0, transition: { duration: 0.12 } },
++      };
++    case 'fade':
++    default:
++      return {
++        hidden: { opacity: 0, y: 10, filter: 'blur(6px)' },
++        show: { opacity: 1, y: 0, filter: 'blur(0px)', transition: { duration: 0.55, ease: EASE } },
++      };
++  }
++}
++
++interface AnimatedTextProps {
++  text: string;
++  animation?: AnimationType;
++  className?: string;
++  style?: React.CSSProperties;
++  delay?: number;
++  /** warna kata penting (angka / harga / kata berhuruf besar) */
++  highlightColor?: string;
++}
++
++export function AnimatedText({
++  text,
++  animation = 'fade',
++  className,
++  style,
++  delay = 0.05,
++  highlightColor,
++}: AnimatedTextProps) {
++  const words = useMemo(() => text.split(/(\s+)/), [text]);
++  const variants = wordVariants(animation);
++  const step = animation === 'typewriter' ? 0.07 : 0.085;
++
++  let wordIndex = -1;
++  return (
++    <motion.span
++      className={className}
++      style={{ display: 'inline-block', perspective: 600, ...style }}
++      initial="hidden"
++      animate="show"
++      variants={{ show: { transition: { staggerChildren: step, delayChildren: delay } } }}
++      aria-label={text}
++    >
++      {words.map((chunk, i) => {
++        if (/^\s+$/.test(chunk)) return <span key={i}>{' '}</span>;
++        wordIndex += 1;
++        const important = highlightColor && /\d|^[A-Z0-9!?]{3,}$/.test(chunk);
++        return (
++          <motion.span
++            key={i}
++            variants={variants}
++            style={{
++              display: 'inline-block',
++              willChange: 'transform, opacity',
++              color: important ? highlightColor : undefined,
++            }}
++            aria-hidden
++          >
++            {chunk}
++          </motion.span>
++        );
++      })}
++    </motion.span>
++  );
++}
++
++/* ------------------------------------------------------------------ */
++/* KenBurns: gambar bergerak pelan (zoom + geser)                      */
++/* ------------------------------------------------------------------ */
++export function KenBurns({
++  src,
++  alt,
++  duration = 6,
++  className,
++  seed = 0,
++}: {
++  src: string;
++  alt: string;
++  duration?: number;
++  className?: string;
++  seed?: number;
++}) {
++  const dir = seed % 2 === 0 ? 1 : -1;
++  return (
++    <motion.img
++      src={src}
++      alt={alt}
++      className={className}
++      initial={{ scale: 1.02, x: 0, y: 0 }}
++      animate={{ scale: 1.18, x: 14 * dir, y: -8 }}
++      transition={{ duration, ease: 'linear' }}
++    />
++  );
++}
++
++/* ------------------------------------------------------------------ */
++/* MotionOverlay: lapisan partikel, cahaya, vignette, wipe antar scene  */
++/* ------------------------------------------------------------------ */
++function seeded(i: number, salt: number) {
++  const x = Math.sin(i * 127.1 + salt * 311.7) * 43758.5453;
++  return x - Math.floor(x);
++}
++
++export function MotionOverlay({
++  accent,
++  sceneKey,
++  duration,
++  intensity = 1,
++}: {
++  accent: string;
++  sceneKey: string | number;
++  duration: number;
++  intensity?: number;
++}) {
++  const particles = useMemo(
++    () =>
++      Array.from({ length: Math.round(16 * intensity) }, (_, i) => ({
++        left: seeded(i, 1) * 100,
++        size: 3 + seeded(i, 2) * 7,
++        dur: 5 + seeded(i, 3) * 6,
++        delay: seeded(i, 4) * 5,
++        drift: (seeded(i, 5) - 0.5) * 40,
++        opacity: 0.25 + seeded(i, 6) * 0.45,
++      })),
++    [intensity]
++  );
++
++  return (
++    <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden" aria-hidden>
++      {/* Partikel naik pelan */}
++      {particles.map((p, i) => (
++        <motion.span
++          key={i}
++          className="absolute rounded-full"
++          style={{
++            left: `${p.left}%`,
++            bottom: -12,
++            width: p.size,
++            height: p.size,
++            background: accent,
++            filter: 'blur(0.5px)',
++            opacity: 0,
++          }}
++          animate={{ y: [0, -900], x: [0, p.drift], opacity: [0, p.opacity, 0] }}
++          transition={{ duration: p.dur, delay: p.delay, repeat: Infinity, ease: 'linear' }}
++        />
++      ))}
++
++      {/* Sapuan cahaya diagonal tiap pergantian scene */}
++      <motion.div
++        key={`sweep-${sceneKey}`}
++        className="absolute -inset-y-10 w-1/3"
++        style={{
++          background: `linear-gradient(100deg, transparent, ${accent}55, transparent)`,
++          transform: 'skewX(-18deg)',
++          mixBlendMode: 'screen',
++        }}
++        initial={{ left: '-40%', opacity: 0.9 }}
++        animate={{ left: '140%', opacity: 0 }}
++        transition={{ duration: 0.9, ease: 'easeOut' }}
++      />
++
++      {/* Wipe warna saat scene berganti */}
++      <motion.div
++        key={`wipe-${sceneKey}`}
++        className="absolute inset-0"
++        style={{ background: accent, transformOrigin: 'left center' }}
++        initial={{ scaleX: 1, opacity: 0.55 }}
++        animate={{ scaleX: 0, opacity: 0 }}
++        transition={{ duration: 0.55, ease: [0.76, 0, 0.24, 1] }}
++      />
++
++      {/* Vignette */}
++      <div
++        className="absolute inset-0"
++        style={{
++          background:
++            'radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.38) 100%)',
++        }}
++      />
++
++      {/* Garis progress scene di bawah */}
++      <motion.div
++        key={`bar-${sceneKey}`}
++        className="absolute bottom-0 left-0 h-[3px]"
++        style={{ background: accent, boxShadow: `0 0 12px ${accent}` }}
++        initial={{ width: '0%' }}
++        animate={{ width: '100%' }}
++        transition={{ duration, ease: 'linear' }}
++      />
++    </div>
++  );
++}
+diff --git a/lib/canvas-scene.ts b/lib/canvas-scene.ts
+new file mode 100644
+index 0000000..9bc534e
+--- /dev/null
++++ b/lib/canvas-scene.ts
+@@ -0,0 +1,1367 @@
++import type { AnimationType, GeneratedScriptResult } from './smart-engine';
++import type { ProjectStyleConfig, TemplateId } from '@/store/useEditorStore';
++
++/**
++ * Renderer canvas untuk export video. Dibuat mengikuti gaya preview:
++ * teks muncul kata demi kata, gambar Ken Burns, partikel, push-in kamera,
++ * wipe + light sweep antar scene. Tiga layout: Quote (Q*), Promo (P*), Edukasi (E*).
++ */
++
++export interface FrameOptions {
++  script: GeneratedScriptResult;
++  style: ProjectStyleConfig;
++  templateId: TemplateId;
++  sceneIdx: number;
++  sceneElapsed: number;
++  sceneDur: number;
++  elapsedSec: number;
++  overallProgress: number;
++  images: Map<string, HTMLImageElement | null>;
++  family: string;
++}
++
++/* ---------------------------- util ---------------------------- */
++const clamp = (v: number, a = 0, b = 1) => Math.min(b, Math.max(a, v));
++const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
++const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
++const easeOutBack = (t: number) => {
++  const c1 = 1.70158;
++  const c3 = c1 + 1;
++  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
++};
++const easeOutBounce = (t: number) => {
++  const n1 = 7.5625;
++  const d1 = 2.75;
++  if (t < 1 / d1) return n1 * t * t;
++  if (t < 2 / d1) return n1 * (t -= 1.5 / d1) * t + 0.75;
++  if (t < 2.5 / d1) return n1 * (t -= 2.25 / d1) * t + 0.9375;
++  return n1 * (t -= 2.625 / d1) * t + 0.984375;
++};
++
++function seeded(i: number, salt: number) {
++  const x = Math.sin(i * 127.1 + salt * 311.7) * 43758.5453;
++  return x - Math.floor(x);
++}
++
++function rgba(color: string, a: number): string {
++  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec((color || '').trim());
++  if (!m) return `rgba(255,255,255,${a})`;
++  let h = m[1];
++  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
++  const n = parseInt(h, 16);
++  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
++}
++
++function setLetterSpacing(ctx: CanvasRenderingContext2D, px: number) {
++  (ctx as unknown as { letterSpacing?: string }).letterSpacing = `${px}px`;
++}
++
++function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
++  ctx.beginPath();
++  ctx.roundRect(x, y, w, h, r);
++}
++
++function drawCover(
++  ctx: CanvasRenderingContext2D,
++  img: HTMLImageElement,
++  x: number,
++  y: number,
++  w: number,
++  h: number,
++  zoom: number,
++  panX: number,
++  panY: number
++) {
++  const scale = Math.max(w / img.width, h / img.height) * zoom;
++  const dw = img.width * scale;
++  const dh = img.height * scale;
++  ctx.drawImage(img, x + (w - dw) / 2 + panX, y + (h - dh) / 2 + panY, dw, dh);
++}
++
++function wrapLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
++  const words = text.split(/\s+/).filter(Boolean);
++  const lines: string[] = [];
++  let line = '';
++  for (const w of words) {
++    const test = line ? `${line} ${w}` : w;
++    if (ctx.measureText(test).width > maxWidth && line) {
++      lines.push(line);
++      line = w;
++    } else {
++      line = test;
++    }
++  }
++  if (line) lines.push(line);
++  return lines;
++}
++
++function fitLines(
++  ctx: CanvasRenderingContext2D,
++  text: string,
++  weight: number,
++  family: string,
++  maxW: number,
++  startPx: number,
++  minPx: number,
++  lhRatio: number,
++  maxH: number
++) {
++  let px = startPx;
++  let lines: string[] = [];
++  for (; px >= minPx; px -= 2) {
++    ctx.font = `${weight} ${px}px ${family}`;
++    lines = wrapLines(ctx, text, maxW);
++    if (lines.length * px * lhRatio <= maxH) break;
++  }
++  px = Math.max(px, minPx);
++  ctx.font = `${weight} ${px}px ${family}`;
++  lines = wrapLines(ctx, text, maxW);
++  return { px, lines, lh: px * lhRatio };
++}
++
++/* --------------------- teks kata demi kata --------------------- */
++function stepFor(anim: AnimationType) {
++  return anim === 'typewriter' ? 0.07 : 0.085;
++}
++
++export const revealCursor = { x: 0, y: 0, h: 0 };
++
++/** Menggambar baris teks dengan reveal per kata. Mengembalikan waktu selesai (detik). */
++function drawReveal(
++  ctx: CanvasRenderingContext2D,
++  lines: string[],
++  x: number,
++  y0: number,
++  lh: number,
++  align: 'center' | 'left',
++  t: number,
++  anim: AnimationType,
++  color: string,
++  accent: string,
++  startDelay = 0.08,
++  highlightCaps = true,
++  opts: { mode?: 'reveal' | 'karaoke'; step?: number } = {}
++): number {
++  const step = opts.step ?? stepFor(anim);
++  const karaoke = opts.mode === 'karaoke';
++  const dur = anim === 'typewriter' ? 0.12 : 0.5;
++  const spaceW = ctx.measureText(' ').width;
++  ctx.textAlign = 'center';
++  ctx.textBaseline = 'middle';
++
++  let idx = 0;
++  lines.forEach((line, li) => {
++    const words = line.split(' ');
++    const widths = words.map((w) => ctx.measureText(w).width);
++    const lineW = widths.reduce((a, b) => a + b, 0) + spaceW * (words.length - 1);
++    let cursor = align === 'center' ? x - lineW / 2 : x;
++    const y = y0 + li * lh;
++
++    words.forEach((word, wi) => {
++      const p = clamp((t - startDelay - idx * step) / dur);
++      const ww = widths[wi];
++      if (karaoke) {
++        const since = t - (startDelay + idx * step);
++        const current = since >= 0 && since < 0.3;
++        const sc = current ? 1 + 0.12 * Math.sin((since / 0.3) * Math.PI) : 1;
++        ctx.save();
++        ctx.globalAlpha *= since >= 0 ? 1 : 0.25;
++        ctx.translate(cursor + ww / 2, y);
++        ctx.scale(sc, sc);
++        ctx.fillStyle = current ? accent : color;
++        ctx.fillText(word, 0, 0);
++        ctx.restore();
++        if (since >= 0) {
++          revealCursor.x = cursor + ww;
++          revealCursor.y = y;
++        }
++      } else if (p > 0) {
++        let alpha = 1;
++        let dy = 0;
++        let sc = 1;
++        switch (anim) {
++          case 'pop':
++            sc = 0.4 + 0.6 * easeOutBack(p);
++            alpha = clamp(p * 3);
++            break;
++          case 'bounce':
++            dy = -50 * (1 - easeOutBounce(p));
++            alpha = clamp(p * 4);
++            break;
++          case 'zoom':
++            sc = 1.8 - 0.8 * easeOutCubic(p);
++            alpha = easeOutCubic(p);
++            break;
++          case 'slide-up':
++            dy = 34 * (1 - easeOutCubic(p));
++            alpha = easeOutCubic(p);
++            break;
++          case 'typewriter':
++            alpha = 1;
++            break;
++          default:
++            dy = 10 * (1 - easeOutCubic(p));
++            alpha = easeOutCubic(p);
++        }
++        const important = highlightCaps ? /\d|^[A-Z0-9!?]{3,}$/.test(word) : /\d/.test(word);
++        ctx.save();
++        ctx.globalAlpha *= alpha;
++        ctx.translate(cursor + ww / 2, y + dy);
++        ctx.scale(sc, sc);
++        ctx.fillStyle = important ? accent : color;
++        ctx.fillText(word, 0, 0);
++        ctx.restore();
++        revealCursor.x = cursor + ww;
++        revealCursor.y = y + dy;
++      }
++      cursor += ww + spaceW;
++      idx += 1;
++    });
++  });
++  return startDelay + idx * step + dur;
++}
++
++/* --------------------------- latar --------------------------- */
++function drawBackground(
++  ctx: CanvasRenderingContext2D,
++  W: number,
++  H: number,
++  o: FrameOptions,
++  sceneImg: HTMLImageElement | null,
++  fullBleed: boolean
++) {
++  const { style, elapsedSec, sceneElapsed, sceneDur } = o;
++  const c = style.colors;
++
++  if (style.backgroundType === 'solid') {
++    ctx.fillStyle = style.solidColor || c.bgPrimary;
++    ctx.fillRect(0, 0, W, H);
++  } else if (fullBleed && sceneImg) {
++    const p = clamp(sceneElapsed / (sceneDur + 0.5));
++    drawCover(ctx, sceneImg, 0, 0, W, H, 1.02 + 0.16 * p, 14 * p, -8 * p);
++    const g = ctx.createLinearGradient(0, 0, 0, H);
++    g.addColorStop(0, 'rgba(5,8,20,0.55)');
++    g.addColorStop(1, 'rgba(5,8,20,0.78)');
++    ctx.fillStyle = g;
++    ctx.fillRect(0, 0, W, H);
++  } else {
++    const a = elapsedSec * 0.18;
++    const dx = Math.cos(a) * W * 0.6;
++    const dy = Math.sin(a) * H * 0.6;
++    const g = ctx.createLinearGradient(W / 2 - dx, H / 2 - dy, W / 2 + dx, H / 2 + dy);
++    g.addColorStop(0, c.bgPrimary);
++    g.addColorStop(1, c.bgSecondary);
++    ctx.fillStyle = g;
++    ctx.fillRect(0, 0, W, H);
++  }
++
++  // Aurora orbs
++  for (let k = 0; k < 3; k++) {
++    const x = W * (0.15 + 0.35 * k) + Math.sin(elapsedSec * 0.7 + k * 2) * W * 0.08;
++    const y = H * (0.2 + 0.28 * k) + Math.cos(elapsedSec * 0.6 + k) * H * 0.06;
++    const r = W * 0.5;
++    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
++    g.addColorStop(0, rgba(k === 1 ? c.bgSecondary : c.accentColor, k === 1 ? 0.35 : 0.26));
++    g.addColorStop(1, 'rgba(0,0,0,0)');
++    ctx.fillStyle = g;
++    ctx.fillRect(0, 0, W, H);
++  }
++
++  // Partikel naik
++  const count = 18;
++  for (let i = 0; i < count; i++) {
++    const speed = 40 + seeded(i, 3) * 70;
++    const size = 2.5 + seeded(i, 2) * 6;
++    const yy = H + 20 - ((elapsedSec * speed + seeded(i, 4) * H * 1.4) % (H + 40));
++    const xx = seeded(i, 1) * W + Math.sin(elapsedSec + i) * 14;
++    const life = clamp(yy / H);
++    ctx.globalAlpha = Math.sin(life * Math.PI) * (0.25 + seeded(i, 6) * 0.45);
++    ctx.fillStyle = c.accentColor;
++    ctx.beginPath();
++    ctx.arc(xx, yy, size, 0, Math.PI * 2);
++    ctx.fill();
++  }
++  ctx.globalAlpha = 1;
++}
++
++/* ------------------------- layout Quote ------------------------- */
++function drawQuote(ctx: CanvasRenderingContext2D, W: number, H: number, u: number, o: FrameOptions) {
++  const { script, style, sceneIdx, sceneElapsed: t, elapsedSec, family } = o;
++  const scene = script.scenes[sceneIdx];
++  const c = style.colors;
++  const cx = W / 2;
++  const maxW = W * 0.82;
++
++  const fit = fitLines(ctx, scene.text, 800, family, maxW, 58 * u, 34 * u, 1.28, H * 0.5);
++  const lines = fit.lines;
++  const lh = fit.lh;
++  const hasSub = style.showSubtitle && !!scene.subtext;
++  ctx.font = `500 ${28 * u}px ${family}`;
++  const subLines = hasSub ? wrapLines(ctx, scene.subtext, W * 0.7) : [];
++  const subLh = 40 * u;
++
++  const emojiH = style.showEmoji ? 96 * u : 0;
++  const pillH = 46 * u;
++  const blockH = emojiH + pillH + 28 * u + lines.length * lh + (hasSub ? 40 * u + subLines.length * subLh : 0);
++  let y = (H - blockH) / 2;
++
++  if (style.showEmoji && scene.emoji) {
++    const bob = Math.sin(elapsedSec * 2.4) * 8 * u;
++    const e = easeOutBack(clamp(t / 0.5));
++    ctx.save();
++    ctx.translate(cx, y + 48 * u + bob);
++    ctx.scale(e, e);
++    ctx.font = `${72 * u}px sans-serif`;
++    ctx.textAlign = 'center';
++    ctx.textBaseline = 'middle';
++    ctx.fillText(scene.emoji, 0, 0);
++    ctx.restore();
++  }
++  y += emojiH;
++
++  // Role pill
++  ctx.save();
++  ctx.globalAlpha = easeOutCubic(clamp((t - 0.1) / 0.4));
++  ctx.font = `700 ${20 * u}px ${family}`;
++  setLetterSpacing(ctx, 5 * u);
++  const roleText = scene.role.toUpperCase();
++  const rw = ctx.measureText(roleText).width + 48 * u;
++  roundRect(ctx, cx - rw / 2, y, rw, pillH, pillH / 2);
++  ctx.strokeStyle = rgba('#ffffff', 0.25);
++  ctx.lineWidth = 2 * u;
++  ctx.stroke();
++  ctx.fillStyle = c.accentColor;
++  ctx.textAlign = 'center';
++  ctx.textBaseline = 'middle';
++  ctx.fillText(roleText, cx, y + pillH / 2 + 1);
++  setLetterSpacing(ctx, 0);
++  ctx.restore();
++  y += pillH + 28 * u;
++
++  // Teks utama
++  ctx.save();
++  ctx.font = `800 ${fit.px}px ${family}`;
++  ctx.shadowColor = 'rgba(0,0,0,0.45)';
++  ctx.shadowBlur = 18 * u;
++  const isQ2 = o.templateId === 'Q2';
++  const isQ3 = o.templateId === 'Q3';
++  const nWords = scene.text.split(/\s+/).length;
++  const end = drawReveal(
++    ctx, lines, cx, y + lh / 2, lh, 'center', t,
++    isQ2 ? 'typewriter' : scene.animation,
++    c.textColor, c.accentColor, 0.08, true,
++    isQ3
++      ? { mode: 'karaoke', step: Math.max(0.12, (o.sceneDur * 0.72) / nWords) }
++      : isQ2
++      ? { step: Math.max(0.05, Math.min(0.12, (o.sceneDur * 0.6) / nWords)) }
++      : {}
++  );
++  if (isQ2 && Math.floor(elapsedSec * 2.2) % 2 === 0) {
++    ctx.fillStyle = c.accentColor;
++    ctx.fillRect(revealCursor.x + 6 * u, revealCursor.y - fit.px * 0.5, 4 * u, fit.px);
++  }
++  ctx.restore();
++  y += lines.length * lh;
++
++  if (hasSub) {
++    const sp = easeOutCubic(clamp((t - end + 0.1) / 0.5));
++    y += 14 * u;
++    ctx.fillStyle = c.accentColor;
++    ctx.fillRect(cx - 60 * u * sp, y, 120 * u * sp, 3 * u);
++    y += 26 * u;
++    ctx.save();
++    ctx.globalAlpha = sp * 0.9;
++    ctx.font = `500 ${28 * u}px ${family}`;
++    ctx.fillStyle = c.textColor;
++    ctx.textAlign = 'center';
++    ctx.textBaseline = 'middle';
++    subLines.forEach((l, i) => ctx.fillText(l, cx, y + i * subLh + (1 - sp) * 14 * u));
++    ctx.restore();
++  }
++}
++
++/* ------------------------- layout Promo ------------------------- */
++function drawPromoJumbo(
++  ctx: CanvasRenderingContext2D,
++  W: number,
++  H: number,
++  u: number,
++  o: FrameOptions,
++  sceneImg: HTMLImageElement | null
++) {
++  const { script, style, sceneIdx, sceneElapsed: t, sceneDur, elapsedSec, family } = o;
++  const scene = script.scenes[sceneIdx];
++  const c = style.colors;
++  const cx = W / 2;
++  const pad = 48 * u;
++
++  // Baris atas: toko + sticker diskon
++  ctx.save();
++  ctx.globalAlpha = easeOutCubic(clamp(t / 0.4));
++  ctx.font = `700 ${22 * u}px ${family}`;
++  setLetterSpacing(ctx, 2 * u);
++  const store = script.extractedMeta.storeName.toUpperCase();
++  const sw = ctx.measureText(store).width + 40 * u;
++  roundRect(ctx, pad, H * 0.055, sw, 52 * u, 26 * u);
++  ctx.fillStyle = 'rgba(0,0,0,0.4)';
++  ctx.fill();
++  ctx.fillStyle = c.textColor;
++  ctx.textAlign = 'left';
++  ctx.textBaseline = 'middle';
++  ctx.fillText(store, pad + 20 * u, H * 0.055 + 27 * u);
++  setLetterSpacing(ctx, 0);
++  ctx.restore();
++
++  // Sticker DISKON berdenyut
++  ctx.save();
++  const pulse = 1 + Math.sin(elapsedSec * 7) * 0.07;
++  ctx.translate(W - pad - 130 * u, H * 0.055 + 26 * u);
++  ctx.rotate(Math.sin(elapsedSec * 7) * 0.07);
++  ctx.scale(pulse * easeOutBack(clamp(t / 0.5)), pulse * easeOutBack(clamp(t / 0.5)));
++  ctx.font = `900 ${22 * u}px ${family}`;
++  const label = '⚡ DISKON SPESIAL!';
++  const lw = ctx.measureText(label).width + 44 * u;
++  roundRect(ctx, -lw / 2, -27 * u, lw, 54 * u, 27 * u);
++  ctx.fillStyle = c.accentColor;
++  ctx.shadowColor = rgba(c.accentColor, 0.6);
++  ctx.shadowBlur = 18 * u;
++  ctx.fill();
++  ctx.shadowBlur = 0;
++  ctx.fillStyle = c.badgeTextColor;
++  ctx.textAlign = 'center';
++  ctx.textBaseline = 'middle';
++  ctx.fillText(label, 0, 2);
++  ctx.restore();
++
++  // Kartu gambar produk
++  const cs = Math.min(W * 0.5, H * 0.3);
++  const cardX = cx - cs / 2;
++  const cardY = H * 0.14;
++  const cardP = easeOutBack(clamp((t - 0.1) / 0.6));
++  ctx.save();
++  ctx.translate(cx, cardY + cs / 2);
++  ctx.scale(cardP, cardP);
++  ctx.translate(-cx, -(cardY + cs / 2));
++  ctx.shadowColor = 'rgba(0,0,0,0.5)';
++  ctx.shadowBlur = 40 * u;
++  roundRect(ctx, cardX, cardY, cs, cs, 44 * u);
++  ctx.fillStyle = c.bgSecondary;
++  ctx.fill();
++  ctx.shadowBlur = 0;
++  ctx.save();
++  roundRect(ctx, cardX, cardY, cs, cs, 44 * u);
++  ctx.clip();
++  if (sceneImg) {
++    const p = clamp(t / (sceneDur + 1));
++    drawCover(ctx, sceneImg, cardX, cardY, cs, cs, 1.02 + 0.16 * p, 14 * p * (sceneIdx % 2 ? -1 : 1), -8 * p);
++  } else {
++    const g = ctx.createLinearGradient(cardX, cardY, cardX + cs, cardY + cs);
++    g.addColorStop(0, c.accentColor);
++    g.addColorStop(1, c.bgSecondary);
++    ctx.fillStyle = g;
++    ctx.fillRect(cardX, cardY, cs, cs);
++    ctx.font = `${cs * 0.5}px sans-serif`;
++    ctx.textAlign = 'center';
++    ctx.textBaseline = 'middle';
++    ctx.fillText(scene.emoji || '✨', cx, cardY + cs / 2 + Math.sin(elapsedSec * 2) * 8 * u);
++  }
++  ctx.restore();
++  roundRect(ctx, cardX, cardY, cs, cs, 44 * u);
++  ctx.lineWidth = 8 * u;
++  ctx.strokeStyle = c.accentColor;
++  ctx.stroke();
++  if (style.showEmoji && sceneImg && scene.emoji) {
++    ctx.fillStyle = 'rgba(0,0,0,0.6)';
++    ctx.beginPath();
++    ctx.arc(cardX + cs - 38 * u, cardY + cs - 38 * u, 30 * u, 0, Math.PI * 2);
++    ctx.fill();
++    ctx.font = `${34 * u}px sans-serif`;
++    ctx.fillStyle = '#fff';
++    ctx.textAlign = 'center';
++    ctx.textBaseline = 'middle';
++    ctx.fillText(scene.emoji, cardX + cs - 38 * u, cardY + cs - 36 * u);
++  }
++  ctx.restore();
++
++  // Panel headline + harga
++  const pfit = fitLines(ctx, scene.text.toUpperCase(), 900, family, W - pad * 2 - 56 * u, 46 * u, 30 * u, 1.26, H * 0.2);
++  const lines = pfit.lines;
++  const lh = pfit.lh;
++  const hasSub = style.showSubtitle && !!scene.subtext;
++  ctx.font = `500 ${26 * u}px ${family}`;
++  const subLines = hasSub ? wrapLines(ctx, scene.subtext, W - pad * 2 - 56 * u) : [];
++  const priceH = 96 * u;
++  const panelH = 36 * u + lines.length * lh + 20 * u + priceH + (hasSub ? 18 * u + subLines.length * 36 * u : 0) + 24 * u;
++  const panelY = cardY + cs + 36 * u;
++  const slide = easeOutCubic(clamp((t - 0.2) / 0.5));
++  ctx.save();
++  ctx.globalAlpha = slide;
++  ctx.translate(0, (1 - slide) * 40 * u);
++  roundRect(ctx, pad, panelY, W - pad * 2, panelH, 36 * u);
++  ctx.fillStyle = 'rgba(0,0,0,0.38)';
++  ctx.fill();
++  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
++  ctx.lineWidth = 2 * u;
++  ctx.stroke();
++  ctx.restore();
++
++  ctx.save();
++  ctx.font = `900 ${pfit.px}px ${family}`;
++  ctx.shadowColor = 'rgba(0,0,0,0.4)';
++  ctx.shadowBlur = 12 * u;
++  const end = drawReveal(ctx, lines, cx, panelY + 36 * u + lh / 2, lh, 'center', t, scene.animation, c.textColor, c.accentColor, 0.25, false);
++  ctx.restore();
++
++  // Badge harga pop
++  const pp = easeOutBack(clamp((t - Math.min(end, 1.2) + 0.1) / 0.5));
++  const priceY = panelY + 36 * u + lines.length * lh + 20 * u;
++  ctx.save();
++  ctx.translate(cx, priceY + priceH / 2);
++  ctx.scale(Math.max(0.001, pp), Math.max(0.001, pp));
++  ctx.font = `900 ${60 * u}px ${family}`;
++  const price = script.extractedMeta.priceText;
++  const pw = ctx.measureText(price).width + 64 * u;
++  roundRect(ctx, -pw / 2, -priceH / 2, pw, priceH, 28 * u);
++  ctx.fillStyle = c.accentColor;
++  ctx.shadowColor = rgba(c.accentColor, 0.5);
++  ctx.shadowBlur = 22 * u;
++  ctx.fill();
++  ctx.shadowBlur = 0;
++  ctx.fillStyle = c.badgeTextColor;
++  ctx.textAlign = 'center';
++  ctx.textBaseline = 'middle';
++  ctx.fillText(price, 0, 3 * u);
++  ctx.restore();
++
++  if (hasSub) {
++    const sp = easeOutCubic(clamp((t - end - 0.2) / 0.5));
++    ctx.save();
++    ctx.globalAlpha = sp * 0.92;
++    ctx.font = `500 ${26 * u}px ${family}`;
++    ctx.fillStyle = c.textColor;
++    ctx.textAlign = 'center';
++    ctx.textBaseline = 'middle';
++    subLines.forEach((l, i) => ctx.fillText(l, cx, priceY + priceH + 34 * u + i * 36 * u));
++    ctx.restore();
++  }
++}
++
++/* ------------------------ layout Edukasi ------------------------ */
++function drawEdukasi(ctx: CanvasRenderingContext2D, W: number, H: number, u: number, o: FrameOptions) {
++  const { script, style, sceneIdx, sceneElapsed: t, family } = o;
++  const scene = script.scenes[sceneIdx];
++  const c = style.colors;
++  const pad = 64 * u;
++  const total = script.scenes.length;
++  const n = sceneIdx + 1;
++
++  // Watermark angka besar
++  ctx.save();
++  ctx.globalAlpha = 0.09 * easeOutCubic(clamp(t / 0.6));
++  ctx.font = `900 ${420 * u}px ${family}`;
++  ctx.fillStyle = c.accentColor;
++  ctx.textAlign = 'right';
++  ctx.textBaseline = 'top';
++  ctx.fillText(`0${n}`, W + 30 * u - (1 - easeOutCubic(clamp(t / 0.8))) * 80 * u, -40 * u);
++  ctx.restore();
++
++  // Badge langkah
++  const bp = easeOutBack(clamp(t / 0.5));
++  ctx.save();
++  ctx.translate(pad + 42 * u, H * 0.09 + 42 * u);
++  ctx.scale(bp, bp);
++  roundRect(ctx, -42 * u, -42 * u, 84 * u, 84 * u, 26 * u);
++  ctx.fillStyle = c.accentColor;
++  ctx.shadowColor = rgba(c.accentColor, 0.5);
++  ctx.shadowBlur = 20 * u;
++  ctx.fill();
++  ctx.shadowBlur = 0;
++  ctx.fillStyle = c.badgeTextColor;
++  ctx.font = `900 ${46 * u}px ${family}`;
++  ctx.textAlign = 'center';
++  ctx.textBaseline = 'middle';
++  ctx.fillText(String(n), 0, 3 * u);
++  ctx.restore();
++
++  ctx.save();
++  ctx.globalAlpha = easeOutCubic(clamp((t - 0.15) / 0.4));
++  ctx.textAlign = 'left';
++  ctx.textBaseline = 'middle';
++  ctx.font = `600 ${18 * u}px ${family}`;
++  setLetterSpacing(ctx, 4 * u);
++  ctx.fillStyle = rgba(c.textColor, 0.7);
++  ctx.fillText(`LANGKAH ${n} DARI ${total}`, pad + 110 * u, H * 0.09 + 24 * u);
++  setLetterSpacing(ctx, 0);
++  ctx.font = `800 ${26 * u}px ${family}`;
++  ctx.fillStyle = c.accentColor;
++  ctx.fillText(scene.role, pad + 110 * u, H * 0.09 + 60 * u);
++  ctx.restore();
++
++  // Teks utama (rata kiri)
++  const hasSub = style.showSubtitle && !!scene.subtext;
++  ctx.font = `500 ${27 * u}px ${family}`;
++  const subLines = hasSub ? wrapLines(ctx, scene.subtext, W - pad * 2 - 64 * u) : [];
++  const subLh = 38 * u;
++  const emojiH = style.showEmoji ? 90 * u : 0;
++  const subH = hasSub ? 44 * u + subLines.length * subLh : 0;
++  const availH = H - 130 * u - H * 0.2 - emojiH - subH - 30 * u;
++  const efit = fitLines(ctx, scene.text, 800, family, W - pad * 2, 56 * u, 32 * u, 1.28, Math.max(availH, 120 * u));
++  const lines = efit.lines;
++  const lh = efit.lh;
++  const blockH = emojiH + lines.length * lh + subH;
++  let y = Math.max(H * 0.2, (H - blockH) / 2);
++
++  if (style.showEmoji && scene.emoji) {
++    const e = easeOutBack(clamp((t - 0.1) / 0.5));
++    ctx.save();
++    ctx.translate(pad + 36 * u, y + 36 * u);
++    ctx.scale(e, e);
++    ctx.rotate(Math.sin(o.elapsedSec * 2) * 0.08);
++    ctx.font = `${64 * u}px sans-serif`;
++    ctx.textAlign = 'center';
++    ctx.textBaseline = 'middle';
++    ctx.fillText(scene.emoji, 0, 0);
++    ctx.restore();
++  }
++  y += emojiH;
++
++  ctx.save();
++  ctx.font = `800 ${efit.px}px ${family}`;
++  ctx.shadowColor = 'rgba(0,0,0,0.4)';
++  ctx.shadowBlur = 14 * u;
++  const end = drawReveal(ctx, lines, pad, y + lh / 2, lh, 'left', t, scene.animation, c.textColor, c.accentColor);
++  ctx.restore();
++  y += lines.length * lh + 30 * u;
++
++  if (hasSub) {
++    const sp = easeOutCubic(clamp((t - end + 0.1) / 0.5));
++    const bh = subLines.length * subLh + 40 * u;
++    ctx.save();
++    ctx.globalAlpha = sp;
++    ctx.translate((1 - sp) * -40 * u, 0);
++    roundRect(ctx, pad, y, W - pad * 2, bh, 22 * u);
++    ctx.fillStyle = 'rgba(255,255,255,0.10)';
++    ctx.fill();
++    ctx.fillStyle = c.accentColor;
++    ctx.fillRect(pad, y + 6 * u, 8 * u, bh - 12 * u);
++    ctx.font = `500 ${27 * u}px ${family}`;
++    ctx.fillStyle = c.textColor;
++    ctx.textAlign = 'left';
++    ctx.textBaseline = 'middle';
++    subLines.forEach((l, i) => ctx.fillText(l, pad + 36 * u, y + 20 * u + subLh / 2 + i * subLh));
++    ctx.restore();
++  }
++
++  // Indikator langkah
++  const dotY = H - 110 * u;
++  let dx = pad;
++  for (let i = 0; i < total; i++) {
++    const active = i === sceneIdx;
++    const w = active ? 64 * u : 20 * u;
++    roundRect(ctx, dx, dotY, w, 10 * u, 5 * u);
++    ctx.fillStyle = active ? c.accentColor : 'rgba(255,255,255,0.28)';
++    ctx.fill();
++    dx += w + 12 * u;
++  }
++}
++
++
++/* ----------------- helper kartu kaca + pill ----------------- */
++function glass(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number, fill = 0.1) {
++  roundRect(ctx, x, y, w, h, r);
++  ctx.fillStyle = `rgba(255,255,255,${fill})`;
++  ctx.fill();
++  ctx.strokeStyle = 'rgba(255,255,255,0.16)';
++  ctx.lineWidth = 2;
++  ctx.stroke();
++}
++
++function pill(
++  ctx: CanvasRenderingContext2D,
++  text: string,
++  x: number,
++  y: number,
++  u: number,
++  family: string,
++  bg: string,
++  fg: string,
++  align: 'left' | 'center' = 'left',
++  scale = 1
++) {
++  ctx.save();
++  ctx.font = `900 ${20 * u}px ${family}`;
++  setLetterSpacing(ctx, 2 * u);
++  const w = ctx.measureText(text).width + 44 * u;
++  const h = 48 * u;
++  const px = align === 'center' ? x - w / 2 : x;
++  ctx.translate(px + w / 2, y + h / 2);
++  ctx.scale(scale, scale);
++  roundRect(ctx, -w / 2, -h / 2, w, h, 14 * u);
++  ctx.fillStyle = bg;
++  ctx.shadowColor = rgba(bg, 0.5);
++  ctx.shadowBlur = 18 * u;
++  ctx.fill();
++  ctx.shadowBlur = 0;
++  ctx.fillStyle = fg;
++  ctx.textAlign = 'center';
++  ctx.textBaseline = 'middle';
++  ctx.fillText(text, 0, 2 * u);
++  setLetterSpacing(ctx, 0);
++  ctx.restore();
++  return { w, h };
++}
++
++/* ---------------------- P2: Before / After ---------------------- */
++function drawPromoBA(ctx: CanvasRenderingContext2D, W: number, H: number, u: number, o: FrameOptions) {
++  const { script, style, sceneIdx, sceneElapsed: t, family } = o;
++  const scene = script.scenes[sceneIdx];
++  const c = style.colors;
++  const pad = 48 * u;
++  const meta = script.extractedMeta;
++
++  pill(ctx, 'BANDINGKAN HARGANYA', pad, H * 0.11, u, family, c.accentColor, c.badgeTextColor, 'left', easeOutBack(clamp(t / 0.45)));
++  if (style.showEmoji) {
++    ctx.save();
++    ctx.font = `${50 * u}px sans-serif`;
++    ctx.textAlign = 'right';
++    ctx.textBaseline = 'middle';
++    ctx.globalAlpha = easeOutCubic(clamp((t - 0.1) / 0.4));
++    ctx.fillText(scene.emoji, W - pad, H * 0.11 + 26 * u);
++    ctx.restore();
++  }
++
++  const fit = fitLines(ctx, scene.text, 800, family, W - pad * 2, 52 * u, 32 * u, 1.28, H * 0.22);
++  ctx.save();
++  ctx.font = `800 ${fit.px}px ${family}`;
++  ctx.shadowColor = 'rgba(0,0,0,0.4)';
++  ctx.shadowBlur = 12 * u;
++  const end = drawReveal(ctx, fit.lines, pad, H * 0.11 + 100 * u, fit.lh, 'left', t, scene.animation, c.textColor, c.accentColor);
++  ctx.restore();
++
++  let y = H * 0.11 + 100 * u + fit.lines.length * fit.lh + 10 * u;
++  const cw = (W - pad * 2 - 20 * u) / 2;
++  const ch = 150 * u;
++  const lp = easeOutCubic(clamp((t - 0.35) / 0.5));
++  ctx.save();
++  ctx.globalAlpha = lp;
++  ctx.translate(-(1 - lp) * 60 * u, 0);
++  glass(ctx, pad, y, cw, ch, 24 * u);
++  ctx.textAlign = 'center';
++  ctx.textBaseline = 'middle';
++  ctx.font = `600 ${18 * u}px ${family}`;
++  ctx.fillStyle = rgba(c.textColor, 0.7);
++  ctx.fillText('HARGA BIASA', pad + cw / 2, y + 36 * u);
++  ctx.font = `800 ${40 * u}px ${family}`;
++  ctx.fillStyle = '#fda4af';
++  const old = meta.originalPriceText;
++  ctx.fillText(old, pad + cw / 2, y + 92 * u);
++  const ow = ctx.measureText(old).width;
++  const strike = easeOutCubic(clamp((t - 0.9) / 0.4));
++  ctx.strokeStyle = '#fb7185';
++  ctx.lineWidth = 5 * u;
++  ctx.beginPath();
++  ctx.moveTo(pad + cw / 2 - ow / 2 - 6 * u, y + 92 * u);
++  ctx.lineTo(pad + cw / 2 - ow / 2 - 6 * u + (ow + 12 * u) * strike, y + 92 * u);
++  ctx.stroke();
++  ctx.restore();
++
++  const rp = easeOutBack(clamp((t - 0.65) / 0.5));
++  ctx.save();
++  ctx.translate(pad + cw + 20 * u + cw / 2, y + ch / 2);
++  ctx.scale(Math.max(0.001, rp), Math.max(0.001, rp));
++  roundRect(ctx, -cw / 2, -ch / 2, cw, ch, 24 * u);
++  ctx.fillStyle = c.accentColor;
++  ctx.shadowColor = rgba(c.accentColor, 0.55);
++  ctx.shadowBlur = 26 * u;
++  ctx.fill();
++  ctx.shadowBlur = 0;
++  ctx.fillStyle = c.badgeTextColor;
++  ctx.textAlign = 'center';
++  ctx.textBaseline = 'middle';
++  ctx.font = `800 ${18 * u}px ${family}`;
++  ctx.fillText('HARGA PROMO', 0, -38 * u);
++  ctx.font = `900 ${50 * u}px ${family}`;
++  ctx.fillText(meta.priceText, 0, 14 * u);
++  ctx.restore();
++
++  y += ch + 26 * u;
++  const rows: [string, string][] = [
++    ['✔', `Produk: ${meta.productName}`],
++    ['✔', `Lokasi: ${meta.storeName}`],
++  ];
++  if (style.showSubtitle && scene.subtext) rows.push(['★', scene.subtext]);
++  ctx.font = `500 ${25 * u}px ${family}`;
++  const rowLines = rows.map(([m, txt]) => ({ m, lines: wrapLines(ctx, txt, W - pad * 2 - 90 * u) }));
++  const rowLh = 34 * u;
++  const panelH = rowLines.reduce((a, r) => a + r.lines.length * rowLh + 14 * u, 0) + 28 * u;
++  ctx.save();
++  ctx.globalAlpha = easeOutCubic(clamp((t - Math.min(end, 1.0)) / 0.5));
++  glass(ctx, pad, y, W - pad * 2, panelH, 26 * u, 0.12);
++  let ry = y + 26 * u;
++  rowLines.forEach((r, i) => {
++    const ip = easeOutCubic(clamp((t - Math.min(end, 1.0) - 0.15 * i) / 0.4));
++    ctx.save();
++    ctx.globalAlpha *= ip;
++    ctx.translate((1 - ip) * 30 * u, 0);
++    ctx.textAlign = 'left';
++    ctx.textBaseline = 'middle';
++    ctx.fillStyle = c.accentColor;
++    ctx.font = `800 ${26 * u}px ${family}`;
++    ctx.fillText(r.m, pad + 26 * u, ry + rowLh / 2);
++    ctx.font = `500 ${25 * u}px ${family}`;
++    ctx.fillStyle = c.textColor;
++    r.lines.forEach((l, li) => ctx.fillText(l, pad + 66 * u, ry + rowLh / 2 + li * rowLh));
++    ctx.restore();
++    ry += r.lines.length * rowLh + 14 * u;
++  });
++  ctx.restore();
++}
++
++/* ---------------------- P3: Countdown ---------------------- */
++function drawPromoCountdown(ctx: CanvasRenderingContext2D, W: number, H: number, u: number, o: FrameOptions) {
++  const { script, style, sceneIdx, sceneElapsed: t, elapsedSec, family } = o;
++  const scene = script.scenes[sceneIdx];
++  const c = style.colors;
++  const cx = W / 2;
++  const pad = 48 * u;
++
++  ctx.save();
++  ctx.globalAlpha = easeOutCubic(clamp(t / 0.4));
++  ctx.font = `600 ${17 * u}px ${family}`;
++  setLetterSpacing(ctx, 4 * u);
++  ctx.fillStyle = rgba(c.textColor, 0.8);
++  ctx.textAlign = 'center';
++  ctx.textBaseline = 'middle';
++  ctx.fillText('BERAKHIR DALAM HITUNGAN DETIK', cx, H * 0.075);
++  setLetterSpacing(ctx, 0);
++  ctx.restore();
++
++  const sec = 59 - (Math.floor(elapsedSec * 1) % 60);
++  const units = ['00', '14', String(sec).padStart(2, '0')];
++  const bs = 104 * u;
++  const gap = 34 * u;
++  const total = bs * 3 + gap * 2;
++  let bx = cx - total / 2;
++  const frac = elapsedSec % 1;
++  units.forEach((txt, i) => {
++    const tick = i === 2 ? 1 + 0.12 * Math.pow(1 - frac, 3) : 1;
++    ctx.save();
++    ctx.translate(bx + bs / 2, H * 0.075 + 30 * u + bs / 2);
++    ctx.scale(tick * easeOutBack(clamp(t / 0.5)), tick * easeOutBack(clamp(t / 0.5)));
++    roundRect(ctx, -bs / 2, -bs / 2, bs, bs, 24 * u);
++    ctx.fillStyle = c.accentColor;
++    ctx.shadowColor = rgba(c.accentColor, 0.55);
++    ctx.shadowBlur = 20 * u;
++    ctx.fill();
++    ctx.shadowBlur = 0;
++    ctx.fillStyle = c.badgeTextColor;
++    ctx.font = `900 ${54 * u}px ${family}`;
++    ctx.textAlign = 'center';
++    ctx.textBaseline = 'middle';
++    ctx.fillText(txt, 0, 3 * u);
++    ctx.restore();
++    if (i < 2) {
++      ctx.fillStyle = c.textColor;
++      ctx.font = `900 ${50 * u}px ${family}`;
++      ctx.textAlign = 'center';
++      ctx.textBaseline = 'middle';
++      ctx.fillText(':', bx + bs + gap / 2, H * 0.075 + 30 * u + bs / 2);
++    }
++    bx += bs + gap;
++  });
++
++  // headline tengah
++  const fit = fitLines(ctx, scene.text.toUpperCase(), 900, family, W - pad * 2, 56 * u, 34 * u, 1.22, H * 0.3);
++  const hasSub = style.showSubtitle && !!scene.subtext;
++  ctx.font = `500 ${25 * u}px ${family}`;
++  const subLines = hasSub ? wrapLines(ctx, scene.subtext, W - pad * 2 - 40 * u) : [];
++  const emojiH = style.showEmoji ? 100 * u : 0;
++  const blockH = emojiH + fit.lines.length * fit.lh + (hasSub ? 30 * u + subLines.length * 34 * u + 30 * u : 0);
++  const top = H * 0.075 + 30 * u + bs + 30 * u;
++  const bottom = H - 280 * u;
++  let y = top + Math.max(0, (bottom - top - blockH) / 2);
++  if (style.showEmoji) {
++    const e = easeOutBack(clamp((t - 0.1) / 0.5));
++    ctx.save();
++    ctx.translate(cx, y + 44 * u);
++    ctx.scale(e, e);
++    ctx.rotate(Math.sin(elapsedSec * 5) * 0.08);
++    ctx.font = `${74 * u}px sans-serif`;
++    ctx.textAlign = 'center';
++    ctx.textBaseline = 'middle';
++    ctx.fillText(scene.emoji, 0, 0);
++    ctx.restore();
++  }
++  y += emojiH;
++  ctx.save();
++  ctx.font = `900 ${fit.px}px ${family}`;
++  ctx.shadowColor = 'rgba(0,0,0,0.45)';
++  ctx.shadowBlur = 16 * u;
++  const end = drawReveal(ctx, fit.lines, cx, y + fit.lh / 2, fit.lh, 'center', t, scene.animation, c.textColor, c.accentColor, 0.1, false);
++  ctx.restore();
++  y += fit.lines.length * fit.lh + 24 * u;
++  if (hasSub) {
++    const sp = easeOutCubic(clamp((t - end) / 0.4));
++    ctx.save();
++    ctx.globalAlpha = sp;
++    const sh = subLines.length * 34 * u + 28 * u;
++    roundRect(ctx, pad, y, W - pad * 2, sh, 22 * u);
++    ctx.fillStyle = 'rgba(0,0,0,0.35)';
++    ctx.fill();
++    ctx.font = `500 ${25 * u}px ${family}`;
++    ctx.fillStyle = c.textColor;
++    ctx.textAlign = 'center';
++    ctx.textBaseline = 'middle';
++    subLines.forEach((l, i) => ctx.fillText(l, cx, y + 14 * u + 17 * u + i * 34 * u));
++    ctx.restore();
++  }
++
++  // Banner CTA bawah
++  const by = H - 230 * u;
++  const bh = 120 * u;
++  const bp = easeOutCubic(clamp((t - 0.3) / 0.5));
++  ctx.save();
++  ctx.globalAlpha = bp;
++  ctx.translate(0, (1 - bp) * 60 * u);
++  roundRect(ctx, pad, by, W - pad * 2, bh, 30 * u);
++  ctx.fillStyle = 'rgba(0,0,0,0.45)';
++  ctx.fill();
++  ctx.strokeStyle = 'rgba(255,255,255,0.22)';
++  ctx.lineWidth = 2;
++  ctx.stroke();
++  ctx.textAlign = 'left';
++  ctx.textBaseline = 'middle';
++  ctx.font = `600 ${17 * u}px ${family}`;
++  ctx.fillStyle = rgba(c.textColor, 0.75);
++  ctx.fillText('PROMO HARI INI', pad + 30 * u, by + 38 * u);
++  ctx.font = `900 ${46 * u}px ${family}`;
++  ctx.fillStyle = c.accentColor;
++  ctx.fillText(script.extractedMeta.priceText, pad + 30 * u, by + 82 * u);
++  const btnPulse = 1 + Math.sin(elapsedSec * 6) * 0.05;
++  ctx.font = `900 ${21 * u}px ${family}`;
++  const label = 'KLAIM SEKARANG';
++  const lw = ctx.measureText(label).width + 48 * u;
++  ctx.translate(W - pad - 30 * u - lw / 2, by + bh / 2);
++  ctx.scale(btnPulse, btnPulse);
++  roundRect(ctx, -lw / 2, -30 * u, lw, 60 * u, 18 * u);
++  ctx.fillStyle = c.accentColor;
++  ctx.fill();
++  ctx.fillStyle = c.badgeTextColor;
++  ctx.textAlign = 'center';
++  ctx.fillText(label, 0, 2 * u);
++  ctx.restore();
++}
++
++/* ---------------------- E2: Fakta mengejutkan ---------------------- */
++function drawFakta(ctx: CanvasRenderingContext2D, W: number, H: number, u: number, o: FrameOptions) {
++  const { script, style, sceneIdx, sceneElapsed: t, family } = o;
++  const scene = script.scenes[sceneIdx];
++  const c = style.colors;
++  const cx = W / 2;
++  const pad = 56 * u;
++  const cardW = W - pad * 2;
++
++  const fit = fitLines(ctx, scene.text, 800, family, cardW - 80 * u, 52 * u, 32 * u, 1.3, H * 0.34);
++  const hasSub = style.showSubtitle && !!scene.subtext;
++  ctx.font = `500 ${26 * u}px ${family}`;
++  const subLines = hasSub ? wrapLines(ctx, scene.subtext, cardW - 40 * u) : [];
++  const cardH = fit.lines.length * fit.lh + 80 * u;
++  const blockH = 70 * u + cardH + (hasSub ? 30 * u + subLines.length * 36 * u : 0);
++  const y0 = (H - blockH) / 2;
++
++  const pp = easeOutBack(clamp(t / 0.55));
++  pill(ctx, `${style.showEmoji ? scene.emoji + '  ' : ''}FAKTA MENGEJUTKAN`, cx, y0, u, family, c.accentColor, c.badgeTextColor, 'center', Math.max(0.001, pp));
++
++  const cp = easeOutBack(clamp((t - 0.12) / 0.6));
++  const cardY = y0 + 70 * u;
++  ctx.save();
++  ctx.translate(cx, cardY + cardH / 2);
++  ctx.scale(Math.max(0.001, cp), Math.max(0.001, cp));
++  ctx.translate(-cx, -(cardY + cardH / 2));
++  ctx.shadowColor = 'rgba(0,0,0,0.45)';
++  ctx.shadowBlur = 36 * u;
++  glass(ctx, pad, cardY, cardW, cardH, 40 * u, 0.12);
++  ctx.restore();
++
++  ctx.save();
++  ctx.font = `800 ${fit.px}px ${family}`;
++  ctx.shadowColor = 'rgba(0,0,0,0.35)';
++  ctx.shadowBlur = 10 * u;
++  const end = drawReveal(ctx, fit.lines, cx, cardY + 40 * u + fit.lh / 2, fit.lh, 'center', t, scene.animation === 'fade' ? 'pop' : scene.animation, c.textColor, c.accentColor, 0.3);
++  ctx.restore();
++
++  if (hasSub) {
++    const sp = easeOutCubic(clamp((t - end) / 0.5));
++    ctx.save();
++    ctx.globalAlpha = sp * 0.9;
++    ctx.font = `500 ${26 * u}px ${family}`;
++    ctx.fillStyle = c.textColor;
++    ctx.textAlign = 'center';
++    ctx.textBaseline = 'middle';
++    subLines.forEach((l, i) => ctx.fillText(l, cx, cardY + cardH + 40 * u + i * 36 * u + (1 - sp) * 12 * u));
++    ctx.restore();
++  }
++}
++
++/* ---------------------- E3: Tebak cepat (Q&A) ---------------------- */
++function drawQA(ctx: CanvasRenderingContext2D, W: number, H: number, u: number, o: FrameOptions) {
++  const { script, style, sceneIdx, sceneElapsed: t, family } = o;
++  const scene = script.scenes[sceneIdx];
++  const c = style.colors;
++  const pad = 56 * u;
++  const cardW = W - pad * 2;
++  const isQuestion = sceneIdx === 0 || sceneIdx === script.scenes.length - 1;
++
++  const fit = fitLines(ctx, scene.text, 700, family, cardW - 64 * u, 50 * u, 32 * u, 1.3, H * 0.3);
++  const hasSub = style.showSubtitle && !!scene.subtext;
++  ctx.font = `500 ${25 * u}px ${family}`;
++  const subLines = hasSub ? wrapLines(ctx, scene.subtext, cardW - 64 * u) : [];
++  const cardH = 32 * u + fit.lines.length * fit.lh + (hasSub ? 40 * u + subLines.length * 34 * u : 0) + 28 * u;
++  const blockH = 70 * u + cardH + 30 * u + 82 * u;
++  const y0 = (H - blockH) / 2;
++
++  pill(ctx, isQuestion ? '❓ TEBAK CEPAT' : '💡 JAWABAN FAKTA', pad, y0, u, family, c.accentColor, c.badgeTextColor, 'left', Math.max(0.001, easeOutBack(clamp(t / 0.45))));
++  if (style.showEmoji) {
++    ctx.save();
++    ctx.globalAlpha = easeOutCubic(clamp((t - 0.1) / 0.4));
++    ctx.font = `${52 * u}px sans-serif`;
++    ctx.textAlign = 'right';
++    ctx.textBaseline = 'middle';
++    ctx.fillText(scene.emoji, W - pad, y0 + 26 * u);
++    ctx.restore();
++  }
++
++  const cardY = y0 + 70 * u;
++  const cp = easeOutCubic(clamp((t - 0.1) / 0.5));
++  ctx.save();
++  ctx.globalAlpha = cp;
++  ctx.translate(0, (1 - cp) * 50 * u);
++  ctx.shadowColor = 'rgba(0,0,0,0.4)';
++  ctx.shadowBlur = 30 * u;
++  roundRect(ctx, pad, cardY, cardW, cardH, 30 * u);
++  ctx.fillStyle = 'rgba(0,0,0,0.42)';
++  ctx.fill();
++  ctx.shadowBlur = 0;
++  ctx.strokeStyle = 'rgba(255,255,255,0.2)';
++  ctx.lineWidth = 2;
++  ctx.stroke();
++  ctx.restore();
++
++  ctx.save();
++  ctx.font = `700 ${fit.px}px ${family}`;
++  const end = drawReveal(ctx, fit.lines, pad + 32 * u, cardY + 32 * u + fit.lh / 2, fit.lh, 'left', t, scene.animation, c.textColor, c.accentColor, 0.2);
++  ctx.restore();
++
++  let sy = cardY + 32 * u + fit.lines.length * fit.lh;
++  if (hasSub) {
++    const sp = easeOutCubic(clamp((t - end) / 0.4));
++    ctx.save();
++    ctx.globalAlpha = sp;
++    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
++    ctx.lineWidth = 2;
++    ctx.beginPath();
++    ctx.moveTo(pad + 32 * u, sy + 16 * u);
++    ctx.lineTo(W - pad - 32 * u, sy + 16 * u);
++    ctx.stroke();
++    ctx.font = `500 ${25 * u}px ${family}`;
++    ctx.fillStyle = rgba(c.textColor, 0.85);
++    ctx.textAlign = 'left';
++    ctx.textBaseline = 'middle';
++    subLines.forEach((l, i) => ctx.fillText(l, pad + 32 * u, sy + 40 * u + i * 34 * u));
++    ctx.restore();
++  }
++
++  // Pill pilihan A / B
++  const oy = cardY + cardH + 30 * u;
++  const ow = (cardW - 20 * u) / 2;
++  ['Sudah Tahu', 'Baru Tahu!'].forEach((label, i) => {
++    const ip = easeOutBack(clamp((t - 0.6 - i * 0.15) / 0.45));
++    const hit = !isQuestion && i === 1 && t > 1.4;
++    ctx.save();
++    const ox = pad + i * (ow + 20 * u);
++    ctx.translate(ox + ow / 2, oy + 41 * u);
++    ctx.scale(Math.max(0.001, ip) * (hit ? 1.05 + Math.sin(t * 8) * 0.01 : 1), Math.max(0.001, ip) * (hit ? 1.05 : 1));
++    roundRect(ctx, -ow / 2, -41 * u, ow, 82 * u, 22 * u);
++    ctx.fillStyle = hit ? c.accentColor : 'rgba(255,255,255,0.1)';
++    ctx.fill();
++    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
++    ctx.lineWidth = 2;
++    ctx.stroke();
++    ctx.beginPath();
++    ctx.arc(-ow / 2 + 38 * u, 0, 18 * u, 0, Math.PI * 2);
++    ctx.fillStyle = hit ? c.badgeTextColor : c.accentColor;
++    ctx.fill();
++    ctx.fillStyle = hit ? c.accentColor : c.badgeTextColor;
++    ctx.font = `900 ${19 * u}px ${family}`;
++    ctx.textAlign = 'center';
++    ctx.textBaseline = 'middle';
++    ctx.fillText(i === 0 ? 'A' : 'B', -ow / 2 + 38 * u, 1);
++    ctx.fillStyle = hit ? c.badgeTextColor : c.textColor;
++    ctx.font = `800 ${24 * u}px ${family}`;
++    ctx.textAlign = 'left';
++    ctx.fillText(label, -ow / 2 + 72 * u, 2 * u);
++    ctx.restore();
++  });
++}
++
++/* ---------------- efek khas tiap template ---------------- */
++function drawFX(
++  ctx: CanvasRenderingContext2D,
++  W: number,
++  H: number,
++  u: number,
++  o: FrameOptions,
++  phase: 'under' | 'over'
++) {
++  const { templateId: id, elapsedSec: t, style, family } = o;
++  const c = style.colors;
++  const bpm = style.music?.bpm || 100;
++
++  if (phase === 'under') {
++    if (id === 'Q1') {
++      for (let k = 0; k < 3; k++) {
++        const p = (t * 0.3 + k / 3) % 1;
++        ctx.strokeStyle = rgba(c.accentColor, 0.32 * (1 - p));
++        ctx.lineWidth = 3 * u;
++        ctx.beginPath();
++        ctx.arc(W / 2, H / 2, Math.min(W, H) * (0.12 + p * 0.85), 0, Math.PI * 2);
++        ctx.stroke();
++      }
++    } else if (id === 'Q2') {
++      ctx.strokeStyle = 'rgba(255,255,255,0.2)';
++      ctx.lineWidth = 1.5 * u;
++      for (let i = 0; i < 28; i++) {
++        const len = (60 + seeded(i, 7) * 70) * u;
++        const speed = 520 + seeded(i, 8) * 520;
++        const x = seeded(i, 9) * (W + 200) - 100;
++        const y = ((t * speed + seeded(i, 10) * (H + 300)) % (H + 300)) - 150;
++        ctx.beginPath();
++        ctx.moveTo(x, y);
++        ctx.lineTo(x - len * 0.22, y + len);
++        ctx.stroke();
++      }
++    } else if (id === 'E1') {
++      const g = 56 * u;
++      const off = (t * 14 * u) % g;
++      ctx.strokeStyle = rgba(c.accentColor, 0.1);
++      ctx.lineWidth = 1.5 * u;
++      for (let x = -g + off; x < W + g; x += g) {
++        ctx.beginPath();
++        ctx.moveTo(x, 0);
++        ctx.lineTo(x, H);
++        ctx.stroke();
++      }
++      for (let y = -g + off; y < H + g; y += g) {
++        ctx.beginPath();
++        ctx.moveTo(0, y);
++        ctx.lineTo(W, y);
++        ctx.stroke();
++      }
++    } else if (id === 'E2') {
++      ctx.save();
++      ctx.translate(W / 2, H / 2);
++      ctx.rotate(t * 0.12);
++      const R = Math.max(W, H);
++      const rays = 18;
++      for (let i = 0; i < rays; i++) {
++        const a0 = (i / rays) * Math.PI * 2;
++        const a1 = a0 + (Math.PI * 2) / rays / 2;
++        ctx.fillStyle = rgba(c.accentColor, 0.09);
++        ctx.beginPath();
++        ctx.moveTo(0, 0);
++        ctx.lineTo(Math.cos(a0) * R, Math.sin(a0) * R);
++        ctx.lineTo(Math.cos(a1) * R, Math.sin(a1) * R);
++        ctx.closePath();
++        ctx.fill();
++      }
++      ctx.restore();
++      const gp = 38 * u;
++      ctx.fillStyle = rgba(c.accentColor, 0.16);
++      for (let x = gp / 2; x < W; x += gp) {
++        for (let y = gp / 2; y < H; y += gp) {
++          ctx.beginPath();
++          ctx.arc(x, y, 1.6 * u, 0, Math.PI * 2);
++          ctx.fill();
++        }
++      }
++    } else if (id === 'E3') {
++      const glyphs = ['?', '!', '?', '💡', '?', '!'];
++      for (let i = 0; i < 10; i++) {
++        const yy = H + 60 - ((t * (50 + seeded(i, 3) * 60) + seeded(i, 4) * H * 1.3) % (H + 120));
++        const xx = seeded(i, 1) * W;
++        ctx.save();
++        ctx.globalAlpha = 0.13 + seeded(i, 5) * 0.12;
++        ctx.translate(xx, yy);
++        ctx.rotate(Math.sin(t + i) * 0.5);
++        ctx.fillStyle = c.accentColor;
++        ctx.font = `900 ${(46 + seeded(i, 2) * 50) * u}px ${family}`;
++        ctx.textAlign = 'center';
++        ctx.textBaseline = 'middle';
++        ctx.fillText(glyphs[i % glyphs.length], 0, 0);
++        ctx.restore();
++      }
++    }
++    return;
++  }
++
++  // ---- phase 'over'
++  if (id === 'Q3') {
++    const n = 26;
++    const bw = W / n;
++    const w = (bpm / 60) * Math.PI;
++    for (let i = 0; i < n; i++) {
++      const h = (0.18 + 0.82 * Math.abs(Math.sin(t * w + i * 0.65 + seeded(i, 1) * 3))) * 110 * u;
++      ctx.fillStyle = rgba(c.accentColor, 0.5);
++      roundRect(ctx, i * bw + bw * 0.18, H - 96 * u - h, bw * 0.64, h, 5 * u);
++      ctx.fill();
++    }
++  } else if (id === 'P1') {
++    const cols = [c.accentColor, '#ffffff', '#fbbf24', '#fb7185'];
++    for (let i = 0; i < 20; i++) {
++      const speed = 130 + seeded(i, 3) * 170;
++      const y = ((t * speed + seeded(i, 4) * (H + 80)) % (H + 80)) - 40;
++      const x = seeded(i, 1) * W + Math.sin(t * 2 + i) * 20 * u;
++      ctx.save();
++      ctx.translate(x, y);
++      ctx.rotate(t * (2 + seeded(i, 5) * 3) + i);
++      ctx.fillStyle = cols[i % cols.length];
++      ctx.globalAlpha = 0.85;
++      ctx.fillRect(-6 * u, -3 * u, 12 * u, 6 * u);
++      ctx.restore();
++    }
++  } else if (id === 'P2') {
++    const band = (y: number, h: number, bg: string, fg: string, text: string, dir: number) => {
++      ctx.save();
++      ctx.fillStyle = bg;
++      ctx.fillRect(0, y, W, h);
++      ctx.font = `900 ${18 * u}px ${family}`;
++      ctx.fillStyle = fg;
++      ctx.textBaseline = 'middle';
++      ctx.textAlign = 'left';
++      setLetterSpacing(ctx, 3 * u);
++      const unit = `${text}   •   `;
++      const uw = ctx.measureText(unit).width;
++      const off = (t * 90 * u * dir) % uw;
++      for (let x = -uw + (dir > 0 ? off : -off); x < W + uw; x += uw) ctx.fillText(unit, x, y + h / 2 + 1);
++      setLetterSpacing(ctx, 0);
++      ctx.restore();
++    };
++    band(0, 38 * u, c.accentColor, c.badgeTextColor, 'PROMO  •  HEMAT  •  DISKON', 1);
++    band(H - 38 * u, 38 * u, 'rgba(0,0,0,0.6)', c.textColor, 'BANDINGKAN HARGANYA', -1);
++  } else if (id === 'P3') {
++    const pulse = 0.3 + 0.25 * Math.sin(t * 6);
++    ctx.save();
++    ctx.strokeStyle = rgba(c.accentColor, pulse);
++    ctx.lineWidth = 14 * u;
++    ctx.strokeRect(7 * u, 7 * u, W - 14 * u, H - 14 * u);
++    const sy = ((t * 0.35) % 1) * H;
++    const g = ctx.createLinearGradient(0, sy - 60 * u, 0, sy + 60 * u);
++    g.addColorStop(0, 'rgba(255,255,255,0)');
++    g.addColorStop(0.5, rgba(c.accentColor, 0.16));
++    g.addColorStop(1, 'rgba(255,255,255,0)');
++    ctx.fillStyle = g;
++    ctx.fillRect(0, sy - 60 * u, W, 120 * u);
++    ctx.restore();
++  }
++}
++
++/* ------------------------- frame utama ------------------------- */
++export function drawFrame(ctx: CanvasRenderingContext2D, W: number, H: number, o: FrameOptions) {
++  const { script, style, templateId, sceneIdx, sceneElapsed, sceneDur, images } = o;
++  const scene = script.scenes[sceneIdx];
++  const u = Math.min(W, H) / 720;
++
++  const sceneImgUrl =
++    scene.imageUrl ||
++    (style.userImages.length ? style.userImages[sceneIdx % style.userImages.length] : '') ||
++    style.backgroundImageUrl;
++  const sceneImg = (sceneImgUrl && images.get(sceneImgUrl)) || null;
++
++  ctx.clearRect(0, 0, W, H);
++
++  // Kamera push-in pelan sepanjang scene
++  const push = 1 + 0.045 * clamp(sceneElapsed / (sceneDur + 0.5));
++  ctx.save();
++  ctx.translate(W / 2, H / 2);
++  ctx.scale(push, push);
++  ctx.translate(-W / 2, -H / 2);
++
++  drawBackground(ctx, W, H, o, sceneImg, templateId === 'Q2');
++  drawFX(ctx, W, H, u, o, 'under');
++
++  switch (templateId) {
++    case 'P1':
++      drawPromoJumbo(ctx, W, H, W > H ? u * 0.78 : u, o, sceneImg);
++      break;
++    case 'P2':
++      drawPromoBA(ctx, W, H, W > H ? u * 0.78 : u, o);
++      break;
++    case 'P3':
++      drawPromoCountdown(ctx, W, H, W > H ? u * 0.74 : u, o);
++      break;
++    case 'E1':
++      drawEdukasi(ctx, W, H, u, o);
++      break;
++    case 'E2':
++      drawFakta(ctx, W, H, u, o);
++      break;
++    case 'E3':
++      drawQA(ctx, W, H, u, o);
++      break;
++    default:
++      drawQuote(ctx, W, H, u, o);
++  }
++
++  drawFX(ctx, W, H, u, o, 'over');
++
++  ctx.restore();
++
++  // Light sweep + wipe di awal scene
++  const accent = style.colors.accentColor;
++  if (sceneElapsed < 0.9) {
++    const p = clamp(sceneElapsed / 0.9);
++    ctx.save();
++    ctx.globalCompositeOperation = 'screen';
++    const sx = -W * 0.4 + W * 1.8 * easeOutCubic(p);
++    const g = ctx.createLinearGradient(sx, 0, sx + W * 0.35, 0);
++    g.addColorStop(0, 'rgba(0,0,0,0)');
++    g.addColorStop(0.5, rgba(accent, 0.33 * (1 - p)));
++    g.addColorStop(1, 'rgba(0,0,0,0)');
++    ctx.fillStyle = g;
++    ctx.transform(1, 0, -0.32, 1, 0, 0);
++    ctx.fillRect(sx, -50, W * 0.35, H + 100);
++    ctx.restore();
++  }
++  if (sceneElapsed < 0.55) {
++    const p = clamp(sceneElapsed / 0.55);
++    ctx.save();
++    ctx.globalAlpha = 0.55 * (1 - p);
++    ctx.fillStyle = accent;
++    ctx.fillRect(0, 0, W * (1 - easeInOut(p)), H);
++    ctx.restore();
++  }
++
++  // Vignette
++  const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.75);
++  vg.addColorStop(0, 'rgba(0,0,0,0)');
++  vg.addColorStop(1, 'rgba(0,0,0,0.4)');
++  ctx.fillStyle = vg;
++  ctx.fillRect(0, 0, W, H);
++
++  // Progress bar
++  if (style.showProgressBar) {
++    const bx = 48 * u;
++    const bw = W - bx * 2;
++    const by = H - 52 * u;
++    roundRect(ctx, bx, by, bw, 8 * u, 4 * u);
++    ctx.fillStyle = 'rgba(255,255,255,0.22)';
++    ctx.fill();
++    ctx.save();
++    ctx.shadowColor = accent;
++    ctx.shadowBlur = 14 * u;
++    roundRect(ctx, bx, by, Math.max(8 * u, bw * o.overallProgress), 8 * u, 4 * u);
++    ctx.fillStyle = accent;
++    ctx.fill();
++    ctx.restore();
++  }
++}
+diff --git a/lib/video-exporter.ts b/lib/video-exporter.ts
+index f181263..34c3ddf 100644
+--- a/lib/video-exporter.ts
++++ b/lib/video-exporter.ts
+@@ -1,5 +1,7 @@
+ import { GeneratedScriptResult } from './smart-engine';
+ import { ProjectStyleConfig, TemplateId } from '@/store/useEditorStore';
++import { drawFrame } from './canvas-scene';
++import { ensureCanvasFont, resolveCanvasFamily } from '@/components/templates/fonts';
+ 
+ export interface ExportProgressCallback {
+   (percent: number, statusText: string, elapsedSec: number, totalSec: number): void;
+@@ -55,8 +57,24 @@ export async function exportProjectToVideo(
+     throw new Error('Gagal menginisialisasi konteks 2D pada HTML5 Canvas.');
+   }
+ 
+-  // Preload gambar background/produk jika ada
+-  const loadedImg = await preloadImage(style.backgroundImageUrl);
++  // Preload semua gambar yang dipakai scene + font, supaya frame pertama sudah benar
++  const imageUrls = Array.from(
++    new Set(
++      [
++        style.backgroundImageUrl,
++        ...style.userImages,
++        ...script.scenes.map((sc) => sc.imageUrl),
++      ].filter((u): u is string => Boolean(u))
++    )
++  );
++  const images = new Map<string, HTMLImageElement | null>();
++  await Promise.all(
++    imageUrls.map(async (u) => {
++      images.set(u, await preloadImage(u));
++    })
++  );
++  await ensureCanvasFont(style.font);
++  const family = resolveCanvasFamily(style.font);
+ 
+   // 4. Siapkan AudioContext + MediaStreamDestination jika musik dipilih
+   const AudioCtx =
+@@ -219,7 +237,6 @@ export async function exportProjectToVideo(
+ 
+       const scene = script.scenes[activeIdx];
+       const sceneDur = Math.max(1, Number(scene.duration) || 3);
+-      const sceneProgress = Math.min(1, sceneElapsed / sceneDur);
+       const overallProgress = Math.min(1, elapsedMs / totalDurationMs);
+ 
+       onProgress?.(
+@@ -229,124 +246,18 @@ export async function exportProjectToVideo(
+         totalDurationSec
+       );
+ 
+-      // 1. Gambar Background
+-      ctx.save();
+-      if (style.backgroundType === 'solid') {
+-        ctx.fillStyle = style.solidColor || style.colors.bgPrimary;
+-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+-      } else if (
+-        (style.backgroundType === 'upload' || style.backgroundType === 'picsum') &&
+-        loadedImg
+-      ) {
+-        ctx.drawImage(loadedImg, 0, 0, canvas.width, canvas.height);
+-        ctx.fillStyle = 'rgba(9, 13, 22, 0.62)';
+-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+-      } else {
+-        const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+-        grad.addColorStop(0, style.colors.bgPrimary);
+-        grad.addColorStop(1, style.colors.bgSecondary);
+-        ctx.fillStyle = grad;
+-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+-      }
+-
+-      // Ornamen lingkaran cahaya lembut
+-      ctx.globalAlpha = 0.16;
+-      ctx.fillStyle = style.colors.accentColor;
+-      ctx.beginPath();
+-      ctx.arc(
+-        canvas.width * 0.8 + Math.sin(elapsedSec * 2) * 24,
+-        canvas.height * 0.2 + Math.cos(elapsedSec * 1.6) * 24,
+-        canvas.width * 0.28,
+-        0,
+-        Math.PI * 2
+-      );
+-      ctx.fill();
+-      ctx.restore();
+-
+-      // 2. Animasi masuk per scene
+-      const introT = Math.min(1, sceneElapsed / 0.42);
+-      const easeOut = 1 - Math.pow(1 - introT, 3);
+-      const animAlpha = scene.animation === 'fade' ? easeOut : Math.min(1, sceneElapsed / 0.25);
+-      const slideOffsetY = scene.animation === 'slide-up' ? (1 - easeOut) * 55 : 0;
+-
+-      ctx.save();
+-      ctx.globalAlpha = animAlpha;
+-      ctx.translate(0, slideOffsetY);
+-
+-      // Badge Template & Role
+-      ctx.fillStyle = style.colors.accentColor;
+-      const badgeW = 280;
+-      const badgeH = 44;
+-      const badgeX = (canvas.width - badgeW) / 2;
+-      const badgeY = canvas.height * 0.2;
+-      ctx.beginPath();
+-      ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 22);
+-      ctx.fill();
+-
+-      ctx.fillStyle = style.colors.badgeTextColor;
+-      ctx.font = `bold 20px "${style.font}", sans-serif`;
+-      ctx.textAlign = 'center';
+-      ctx.fillText(
+-        `${templateId} • SCENE ${scene.sceneNumber}`,
+-        canvas.width / 2,
+-        badgeY + 29
+-      );
+-
+-      // Emoji
+-      if (style.showEmoji && scene.emoji) {
+-        ctx.font = '56px sans-serif';
+-        ctx.fillText(scene.emoji, canvas.width / 2, canvas.height * 0.33);
+-      }
+-
+-      // Teks Utama (Word Wrap)
+-      ctx.fillStyle = style.colors.textColor;
+-      ctx.font = `bold 42px "${style.font}", sans-serif`;
+-      const displayText =
+-        scene.animation === 'typewriter' || templateId === 'Q2'
+-          ? scene.text.slice(
+-              0,
+-              Math.max(1, Math.ceil(scene.text.length * Math.min(1, sceneProgress * 1.4)))
+-            )
+-          : scene.text;
+-
+-      const nextY = wrapCanvasText(
+-        ctx,
+-        displayText,
+-        canvas.width / 2,
+-        canvas.height * 0.43,
+-        canvas.width * 0.82,
+-        54
+-      );
+-
+-      // Subtext / Subtitle
+-      if (style.showSubtitle && scene.subtext) {
+-        ctx.globalAlpha = animAlpha * 0.88;
+-        ctx.fillStyle = style.colors.accentColor;
+-        ctx.font = `600 24px "${style.font}", sans-serif`;
+-        wrapCanvasText(
+-          ctx,
+-          scene.subtext,
+-          canvas.width / 2,
+-          nextY + 32,
+-          canvas.width * 0.76,
+-          34
+-        );
+-      }
+-
+-      ctx.restore();
+-
+-      // 3. Progress Bar Bawah
+-      if (style.showProgressBar) {
+-        ctx.fillStyle = 'rgba(255,255,255,0.22)';
+-        ctx.fillRect(40, canvas.height - 36, canvas.width - 80, 10);
+-        ctx.fillStyle = style.colors.accentColor;
+-        ctx.fillRect(
+-          40,
+-          canvas.height - 36,
+-          (canvas.width - 80) * overallProgress,
+-          10
+-        );
+-      }
++      drawFrame(ctx, canvas.width, canvas.height, {
++        script,
++        style,
++        templateId,
++        sceneIdx: activeIdx,
++        sceneElapsed,
++        sceneDur,
++        elapsedSec,
++        overallProgress,
++        images,
++        family,
++      });
+ 
+       if (elapsedMs < totalDurationMs) {
+         animFrameId = requestAnimationFrame(renderTick);
+@@ -418,30 +329,3 @@ function preloadImage(url?: string): Promise<HTMLImageElement | null> {
+     img.src = url;
+   });
+ }
+-
+-function wrapCanvasText(
+-  ctx: CanvasRenderingContext2D,
+-  text: string,
+-  x: number,
+-  y: number,
+-  maxWidth: number,
+-  lineHeight: number
+-): number {
+-  const words = text.split(/\s+/);
+-  let line = '';
+-  let currentY = y;
+-
+-  for (let n = 0; n < words.length; n++) {
+-    const testLine = line + words[n] + ' ';
+-    const metrics = ctx.measureText(testLine);
+-    if (metrics.width > maxWidth && n > 0) {
+-      ctx.fillText(line.trim(), x, currentY);
+-      line = words[n] + ' ';
+-      currentY += lineHeight;
+-    } else {
+-      line = testLine;
+-    }
+-  }
+-  ctx.fillText(line.trim(), x, currentY);
+-  return currentY + lineHeight;
+-}
+-- 
+2.43.0
+

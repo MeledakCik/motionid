@@ -3,6 +3,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { getAnimationVariants, TemplateProps } from './types';
+import { fontStack } from './fonts';
+import { AnimatedText } from './motion';
 
 /**
  * Template E1: "3 Cara..." dengan angka besar 1, 2, 3
@@ -24,7 +26,7 @@ export default function TemplateE1({
     <div
       className="relative w-full h-full overflow-hidden flex flex-col justify-between p-7 select-none"
       style={{
-        fontFamily: font,
+        fontFamily: fontStack(font),
         color: colors.textColor,
         background: `linear-gradient(145deg, ${colors.bgPrimary} 0%, ${colors.bgSecondary} 100%)`,
       }}
@@ -64,7 +66,7 @@ export default function TemplateE1({
       >
         {showEmoji && <span className="text-3xl inline-block">{scene.emoji}</span>}
         <h2 className="text-xl md:text-2xl font-bold leading-snug whitespace-pre-line">
-          {scene.text}
+          <AnimatedText text={scene.text} animation={scene.animation} highlightColor={colors.accentColor} />
         </h2>
         {showSubtitle && scene.subtext && (
           <div className="p-3.5 rounded-xl bg-white/10 border-l-4 text-xs leading-relaxed" style={{ borderColor: colors.accentColor }}>

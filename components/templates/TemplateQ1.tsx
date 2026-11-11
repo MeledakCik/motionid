@@ -3,6 +3,8 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getAnimationVariants, GRADIENT_PRESETS, TemplateProps } from './types';
+import { fontStack } from './fonts';
+import { AnimatedText } from './motion';
 
 /**
  * Template Q1: Teks besar di tengah, background gradient bergerak
@@ -32,7 +34,7 @@ export default function TemplateQ1({
   return (
     <div
       className="relative w-full h-full overflow-hidden flex flex-col items-center justify-center p-8 text-center select-none"
-      style={{ ...bgStyle, fontFamily: font, color: colors.textColor }}
+      style={{ ...bgStyle, fontFamily: fontStack(font), color: colors.textColor }}
     >
       {/* Animated Floating Aura Orbs */}
       <motion.div
@@ -76,7 +78,7 @@ export default function TemplateQ1({
           </span>
 
           <h2 className="text-2xl md:text-3xl font-bold leading-snug tracking-tight drop-shadow-lg">
-            {scene.text}
+            <AnimatedText text={scene.text} animation={scene.animation} highlightColor={colors.accentColor} />
           </h2>
 
           {showSubtitle && scene.subtext && (

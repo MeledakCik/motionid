@@ -16,6 +16,7 @@ import {
 } from '@/store/useEditorStore';
 import TemplateRenderer from '@/components/templates/TemplateRenderer';
 import { GRADIENT_PRESETS } from '@/components/templates/types';
+import { fontStack } from '@/components/templates/fonts';
 import { exportProjectToVideo } from '@/lib/video-exporter';
 import { createClient } from '@/lib/supabase/client';
 import { loadTrainingIntoEngine } from '@/lib/training';
@@ -89,6 +90,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
     setTemplateId,
     updateScene,
     updateStyle,
+    initProject,
     updateColors,
     addUserImages,
     removeUserImage,
@@ -105,6 +107,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
   const [copiedCaption, setCopiedCaption] = useState(false);
   const [panel, setPanel] = useState<'teks' | 'gambar' | 'gaya' | 'musik'>('teks');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'notfound'>('loading');
 
   useEffect(() => {
     loadTrainingIntoEngine();
@@ -118,6 +121,46 @@ export default function EditorPage({ params }: { params: { id: string } }) {
       )
       .catch(() => setIsAdmin(false));
   }, []);
+
+  // Muat proyek tersimpan dari Supabase (jika bukan proyek yang baru dibuat di sesi ini)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (useEditorStore.getState().projectId === params.id) {
+        if (!cancelled) setLoadState('ready');
+        return;
+      }
+      try {
+        const { data, error } = await createClient()
+          .from('projects')
+          .select('id, title, topic, category, template_id, script_json, style_json')
+          .eq('id', params.id)
+          .maybeSingle();
+        if (cancelled) return;
+        if (error || !data) {
+          setLoadState('notfound');
+          return;
+        }
+        initProject({
+          id: data.id,
+          title: data.title,
+          topic: data.topic,
+          category: data.category,
+          templateId: data.template_id,
+          script: data.script_json || undefined,
+          style: data.style_json || undefined,
+        });
+        setSaveStatus('saved');
+        setLoadState('ready');
+      } catch {
+        if (!cancelled) setLoadState('notfound');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.id]);
 
   const activeScene = script.scenes[activeSceneIndex] || script.scenes[0];
   const totalDuration = script.scenes.reduce((acc, s) => acc + s.duration, 0);
@@ -135,7 +178,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
 
   // Auto-save ke tabel `projects` di Supabase setiap 2 detik (Debounce)
   useEffect(() => {
-    if (saveStatus !== 'unsaved') return;
+    if (loadState !== 'ready' || saveStatus !== 'unsaved') return;
     const timer = setTimeout(async () => {
       setSaveStatus('saving');
       try {
@@ -189,7 +232,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
     }, 2000);
 
     return () => clearTimeout(timer);
-  }, [script, style, templateId, title, topic, category, saveStatus, params.id, setSaveStatus]);
+  }, [script, style, templateId, title, topic, category, saveStatus, loadState, params.id, setSaveStatus]);
 
   // Upload Banyak Gambar User Sekaligus (Multi-Image Motion Graphic)
   const handleMultiImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -285,6 +328,28 @@ export default function EditorPage({ params }: { params: { id: string } }) {
     activeScene?.imageUrl ||
     style.userImages[activeSceneIndex % Math.max(1, style.userImages.length)] ||
     style.backgroundImageUrl;
+
+  if (loadState !== 'ready') {
+    return (
+      <div className="h-screen flex items-center justify-center bg-slate-950 text-slate-300 p-6 text-center">
+        {loadState === 'loading' ? (
+          <p className="text-sm text-slate-400">Memuat proyek...</p>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm">Proyek tidak ditemukan atau Anda belum login.</p>
+            <div className="flex items-center justify-center gap-3 text-sm font-semibold">
+              <Link href="/dashboard" className="text-cyan-400 hover:underline">
+                Ke dashboard
+              </Link>
+              <Link href="/create" className="text-violet-300 hover:underline">
+                Buat video baru
+              </Link>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen bg-slate-950 text-slate-100 flex flex-col overflow-hidden">
@@ -710,7 +775,7 @@ export default function EditorPage({ params }: { params: { id: string } }) {
                         key={fontName}
                         type="button"
                         onClick={() => updateStyle({ font: fontName })}
-                        style={{ fontFamily: fontName }}
+                        style={{ fontFamily: fontStack(fontName) }}
                         className={`px-3 py-2.5 rounded-xl border text-sm text-left truncate ${
                           style.font === fontName
                             ? 'bg-violet-600/20 border-violet-500 text-white'

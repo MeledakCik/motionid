@@ -3,6 +3,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { TemplateProps } from './types';
+import { fontStack } from './fonts';
+import { AnimatedText } from './motion';
 
 /**
  * Template E2: Fakta mengejutkan + teks pop
@@ -22,7 +24,7 @@ export default function TemplateE2({
     <div
       className="relative w-full h-full overflow-hidden flex flex-col items-center justify-center p-6 text-center select-none"
       style={{
-        fontFamily: font,
+        fontFamily: fontStack(font),
         color: colors.textColor,
         backgroundColor: colors.bgPrimary,
       }}
@@ -53,7 +55,7 @@ export default function TemplateE2({
 
         <div className="p-5 rounded-3xl bg-white/10 backdrop-blur-md border-2 border-white/15 shadow-2xl">
           <h2 className="text-xl md:text-2xl font-extrabold leading-snug">
-            {scene.text}
+            <AnimatedText text={scene.text} animation={scene.animation} highlightColor={colors.accentColor} />
           </h2>
         </div>
 

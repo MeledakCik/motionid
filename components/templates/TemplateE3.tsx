@@ -3,6 +3,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { getAnimationVariants, TemplateProps } from './types';
+import { fontStack } from './fonts';
+import { AnimatedText } from './motion';
 
 /**
  * Template E3: Q&A / Tebak-tebakan
@@ -24,7 +26,7 @@ export default function TemplateE3({
     <div
       className="relative w-full h-full overflow-hidden flex flex-col justify-center p-6 select-none"
       style={{
-        fontFamily: font,
+        fontFamily: fontStack(font),
         color: colors.textColor,
         background: `linear-gradient(135deg, ${colors.bgPrimary} 0%, ${colors.bgSecondary} 100%)`,
       }}
@@ -48,7 +50,7 @@ export default function TemplateE3({
 
         {/* Main Chat / Quiz Card */}
         <div className="bg-black/40 backdrop-blur-md border border-white/20 rounded-2xl p-5 shadow-xl space-y-3">
-          <h2 className="text-xl font-bold leading-snug">{scene.text}</h2>
+          <h2 className="text-xl font-bold leading-snug"><AnimatedText text={scene.text} animation={scene.animation} highlightColor={colors.accentColor} /></h2>
 
           {showSubtitle && scene.subtext && (
             <p className="text-xs opacity-80 pt-2 border-t border-white/10">

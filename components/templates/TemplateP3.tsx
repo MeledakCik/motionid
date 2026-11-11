@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { getAnimationVariants, TemplateProps } from './types';
+import { fontStack } from './fonts';
+import { AnimatedText } from './motion';
 
 /**
  * Template P3: Countdown Promo
@@ -31,7 +33,7 @@ export default function TemplateP3({
     <div
       className="relative w-full h-full overflow-hidden flex flex-col justify-between p-6 text-center select-none"
       style={{
-        fontFamily: font,
+        fontFamily: fontStack(font),
         color: colors.textColor,
         background: `linear-gradient(180deg, ${colors.bgPrimary} 0%, ${colors.bgSecondary} 100%)`,
       }}
@@ -65,7 +67,7 @@ export default function TemplateP3({
       >
         {showEmoji && <div className="text-4xl">{scene.emoji}</div>}
         <h2 className="text-2xl md:text-3xl font-black uppercase leading-tight tracking-wide">
-          {scene.text}
+          <AnimatedText text={scene.text} animation={scene.animation} highlightColor={colors.accentColor} />
         </h2>
         {showSubtitle && scene.subtext && (
           <p className="text-xs opacity-90 bg-black/30 px-3 py-2 rounded-xl">
