@@ -20,7 +20,7 @@ export type TrainingType =
   | 'image_asset'
   | 'keyword_rule';
 
-export type TrainingCategory = CategoryType | 'saas' | 'edukasi' | 'promo' | 'quote' | 'all';
+export type TrainingCategory = CategoryType | 'saas' | 'all';
 
 export interface TrainingRow {
   id: string;
@@ -42,13 +42,13 @@ const appliedIds = new Set<string>();
 let inflight: Promise<number> | null = null;
 
 function categoriesOf(cat: TrainingCategory): CategoryType[] {
-  if (cat === 'all') {
-    return ['kuliner', 'fashion', 'elektronik', 'jasa', 'umum'];
+  if (cat === 'quote' || cat === 'promo' || cat === 'edukasi') {
+    return [cat];
   }
-  if (cat === 'saas' || cat === 'edukasi' || cat === 'promo' || cat === 'quote') {
-    return ['jasa', 'elektronik', 'umum'];
+  if (cat === 'saas') {
+    return ['edukasi', 'promo'];
   }
-  return [cat as CategoryType];
+  return ['quote', 'promo', 'edukasi'];
 }
 
 function splitList(val: string): string[] {
@@ -65,7 +65,7 @@ function splitList(val: string): string[] {
 export function analyzeCreatorVideoReference(
   videoUrl: string,
   title: string,
-  creatorHandle = '@creator'
+  creatorHandle = '@depup.web'
 ): MotionTelemetryProfile {
   const lower = `${videoUrl} ${title} ${creatorHandle}`.toLowerCase();
   const isDepupStyle =
@@ -89,7 +89,7 @@ export function analyzeCreatorVideoReference(
       stepBadges: ['1 Tempel', '2 Periksa', '3 Deploy'],
       cardRadius: 24,
       glassBlur: 18,
-      staggerMs: 140,
+      staggerMs: 85,
     };
   }
 
@@ -106,7 +106,7 @@ export function analyzeCreatorVideoReference(
       stepBadges: ['01 Overview', '02 Metrics', '03 Launch'],
       cardRadius: 20,
       glassBlur: 24,
-      staggerMs: 110,
+      staggerMs: 75,
     };
   }
 
@@ -117,12 +117,12 @@ export function analyzeCreatorVideoReference(
     easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
     cameraMotion: 'whip-zoom-spring',
     bpm: 128,
-    paletteId: 'aurora-mint',
-    widgetSequence: ['kinetic_hook_card', 'interactive_showcase_card', 'terminal_build_card'],
+    paletteId: 'cyber-sunset',
+    widgetSequence: ['kinetic_hook_card', 'repo_scanner_card', 'terminal_build_card'],
     stepBadges: ['1 Mulai', '2 Proses', '3 Hasil'],
     cardRadius: 22,
     glassBlur: 16,
-    staggerMs: 120,
+    staggerMs: 80,
   };
 }
 
@@ -141,7 +141,7 @@ export function applyTrainingRow(row: TrainingRow): boolean {
         analyzeCreatorVideoReference(
           row.video_url || row.image_url || '',
           row.content_text,
-          row.creator_handle || '@creator'
+          row.creator_handle || '@depup.web'
         );
       addTrainedVideoPresetToEngine({
         id: row.id,
@@ -149,9 +149,10 @@ export function applyTrainingRow(row: TrainingRow): boolean {
         description: row.subtext || 'Trained Creator Motion Graphic Preset',
         category: row.category,
         videoUrl: row.video_url || row.image_url || '',
-        creatorHandle: row.creator_handle || profile.creatorHandle || '@creator',
+        creatorHandle: row.creator_handle || profile.creatorHandle || '@depup.web',
         profile,
       });
+      cats.forEach((c) => addCustomHookToEngine(c, row.content_text));
       return true;
     }
     case 'hook':

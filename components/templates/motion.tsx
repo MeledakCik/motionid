@@ -1,193 +1,384 @@
-import React from 'react';
+'use client';
+
+import React, { useMemo } from 'react';
+import { motion, Variants } from 'framer-motion';
+import { AnimationType, solveSpring } from '@/lib/smart-engine';
+
+/* -------------------------------------------------------------------------- */
+/* 1. AnimatedText: Staggered Word-by-Word Kinetic Typography (Opus 5.5)     */
+/* -------------------------------------------------------------------------- */
+const EASE = [0.22, 1, 0.36, 1] as const;
+
+function wordVariants(animation: AnimationType): Variants {
+  switch (animation) {
+    case 'pop':
+      return {
+        hidden: { opacity: 0, scale: 0.45, y: 16, filter: 'blur(4px)' },
+        show: {
+          opacity: 1,
+          scale: 1,
+          y: 0,
+          filter: 'blur(0px)',
+          transition: { type: 'spring', stiffness: 360, damping: 15 },
+        },
+      };
+    case 'bounce':
+      return {
+        hidden: { opacity: 0, y: -44, scale: 0.75 },
+        show: {
+          opacity: 1,
+          y: 0,
+          scale: 1,
+          transition: { type: 'spring', stiffness: 260, damping: 11 },
+        },
+      };
+    case 'zoom':
+      return {
+        hidden: { opacity: 0, scale: 1.75, filter: 'blur(8px)' },
+        show: {
+          opacity: 1,
+          scale: 1,
+          filter: 'blur(0px)',
+          transition: { duration: 0.45, ease: EASE },
+        },
+      };
+    case 'slide-up':
+      return {
+        hidden: { opacity: 0, y: 34, rotateX: -45 },
+        show: {
+          opacity: 1,
+          y: 0,
+          rotateX: 0,
+          transition: { type: 'spring', stiffness: 240, damping: 16 },
+        },
+      };
+    case 'typewriter':
+      return {
+        hidden: { opacity: 0, x: -8 },
+        show: { opacity: 1, x: 0, transition: { duration: 0.14 } },
+      };
+    case 'fade':
+    default:
+      return {
+        hidden: { opacity: 0, y: 12, filter: 'blur(6px)' },
+        show: {
+          opacity: 1,
+          y: 0,
+          filter: 'blur(0px)',
+          transition: { duration: 0.5, ease: EASE },
+        },
+      };
+  }
+}
+
+export interface AnimatedTextProps {
+  text: string;
+  animation?: AnimationType;
+  className?: string;
+  style?: React.CSSProperties;
+  delay?: number;
+  highlightColor?: string;
+}
+
+export function AnimatedText({
+  text,
+  animation = 'pop',
+  className,
+  style,
+  delay = 0.05,
+  highlightColor,
+}: AnimatedTextProps) {
+  const words = useMemo(() => (text || '').split(/(\s+)/), [text]);
+  const variants = wordVariants(animation);
+  const step = animation === 'typewriter' ? 0.065 : 0.08;
+
+  return (
+    <motion.span
+      className={className}
+      style={{ display: 'inline-block', perspective: 700, ...style }}
+      initial="hidden"
+      animate="show"
+      variants={{ show: { transition: { staggerChildren: step, delayChildren: delay } } }}
+      aria-label={text}
+    >
+      {words.map((chunk, i) => {
+        if (/^\s+$/.test(chunk)) return <span key={i}>{' '}</span>;
+        const important = highlightColor && /\d|^[A-Z0-9!?]{3,}$/.test(chunk);
+        return (
+          <motion.span
+            key={i}
+            variants={variants}
+            style={{
+              display: 'inline-block',
+              willChange: 'transform, opacity',
+              color: important ? highlightColor : undefined,
+              padding: important ? '0 6px' : undefined,
+              borderRadius: important ? '8px' : undefined,
+              backgroundColor: important ? `${highlightColor}22` : undefined,
+            }}
+            aria-hidden
+          >
+            {chunk}
+          </motion.span>
+        );
+      })}
+    </motion.span>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* 2. KenBurns: Smooth Parallax Camera Drift on Images                        */
+/* -------------------------------------------------------------------------- */
+export function KenBurns({
+  src,
+  alt,
+  duration = 6,
+  className,
+  seed = 0,
+}: {
+  src: string;
+  alt: string;
+  duration?: number;
+  className?: string;
+  seed?: number;
+}) {
+  const dir = seed % 2 === 0 ? 1 : -1;
+  return (
+    <motion.img
+      src={src}
+      alt={alt}
+      className={className}
+      initial={{ scale: 1.03, x: 0, y: 0 }}
+      animate={{ scale: 1.18, x: 14 * dir, y: -8 }}
+      transition={{ duration, ease: 'linear' }}
+    />
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* 3. MotionOverlay: @depup.web Orbs + Autonomous Cursor Rig + Particles      */
+/* -------------------------------------------------------------------------- */
+function seeded(i: number, salt: number) {
+  const x = Math.sin(i * 127.1 + salt * 311.7) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+export function MotionOverlay({
+  accent,
+  sceneKey,
+  duration,
+  intensity = 1,
+}: {
+  accent: string;
+  sceneKey: string | number;
+  duration: number;
+  intensity?: number;
+}) {
+  const particles = useMemo(
+    () =>
+      Array.from({ length: Math.round(16 * intensity) }, (_, i) => ({
+        left: seeded(i, 1) * 100,
+        size: 3 + seeded(i, 2) * 7,
+        dur: 4.5 + seeded(i, 3) * 5.5,
+        delay: seeded(i, 4) * 4,
+        drift: (seeded(i, 5) - 0.5) * 45,
+        opacity: 0.25 + seeded(i, 6) * 0.45,
+      })),
+    [intensity]
+  );
+
+  return (
+    <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden" aria-hidden>
+      {/* Signature @depup.web Organic Ambient Glow Orb in Top-Right */}
+      <motion.div
+        key={`orb-${sceneKey}`}
+        className="absolute -top-16 -right-12 w-60 h-60 rounded-full blur-3xl"
+        style={{
+          background: `radial-gradient(circle, rgba(163,230,53,0.38) 0%, ${accent}22 55%, transparent 75%)`,
+        }}
+        initial={{ scale: 0.85, opacity: 0.5 }}
+        animate={{ scale: [0.85, 1.15, 0.95], opacity: [0.5, 0.85, 0.6] }}
+        transition={{ duration: Math.max(2.5, duration), repeat: Infinity, ease: 'easeInOut' }}
+      />
+
+      {/* Floating Bezier Data Particles */}
+      {particles.map((p, i) => (
+        <motion.span
+          key={i}
+          className="absolute rounded-full"
+          style={{
+            left: `${p.left}%`,
+            bottom: -12,
+            width: p.size,
+            height: p.size,
+            background: i % 3 === 0 ? '#a3e635' : accent,
+            filter: 'blur(0.5px)',
+            opacity: 0,
+          }}
+          animate={{ y: [0, -900], x: [0, p.drift], opacity: [0, p.opacity, 0] }}
+          transition={{ duration: p.dur, delay: p.delay, repeat: Infinity, ease: 'linear' }}
+        />
+      ))}
+
+      {/* Autonomous Simulated AI Cursor + Click Ripple Choreography */}
+      <motion.div
+        key={`cursor-${sceneKey}`}
+        className="absolute z-40 flex items-center gap-1.5"
+        initial={{ left: '22%', top: '68%', scale: 1, opacity: 0 }}
+        animate={{
+          left: ['22%', '62%', '68%', '68%'],
+          top: ['68%', '52%', '56%', '56%'],
+          scale: [1, 1, 0.86, 1],
+          opacity: [0, 0.95, 0.95, 0],
+        }}
+        transition={{
+          duration: Math.min(3.2, Math.max(2.0, duration * 0.85)),
+          times: [0, 0.5, 0.68, 1],
+          ease: EASE,
+        }}
+      >
+        <div className="relative">
+          <motion.span
+            className="absolute -inset-3 rounded-full border-2"
+            style={{ borderColor: accent }}
+            initial={{ scale: 0.2, opacity: 0 }}
+            animate={{ scale: [0.2, 2.1], opacity: [0, 0.8, 0] }}
+            transition={{ delay: duration * 0.45, duration: 0.65, ease: 'easeOut' }}
+          />
+          <svg width="20" height="24" viewBox="0 0 20 24" fill="none">
+            <path
+              d="M2 2L2 20L6.8 15.8L10.2 22.5L13.4 21L10 14.2L16.5 14.2L2 2Z"
+              fill="#0f172a"
+              stroke="#ffffff"
+              strokeWidth="2"
+            />
+          </svg>
+        </div>
+        <span
+          className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white shadow-md"
+          style={{ background: accent }}
+        >
+          AI Motion
+        </span>
+      </motion.div>
+
+      {/* Diagonal Light Sweep on Scene Cut */}
+      <motion.div
+        key={`sweep-${sceneKey}`}
+        className="absolute -inset-y-10 w-1/3"
+        style={{
+          background: `linear-gradient(100deg, transparent, ${accent}55, transparent)`,
+          transform: 'skewX(-18deg)',
+          mixBlendMode: 'screen',
+        }}
+        initial={{ left: '-40%', opacity: 0.9 }}
+        animate={{ left: '140%', opacity: 0 }}
+        transition={{ duration: 0.85, ease: 'easeOut' }}
+      />
+
+      {/* Bottom Progress Bar */}
+      <motion.div
+        key={`bar-${sceneKey}`}
+        className="absolute bottom-0 left-0 h-[3.5px]"
+        style={{ background: accent, boxShadow: `0 0 12px ${accent}` }}
+        initial={{ width: '0%' }}
+        animate={{ width: '100%' }}
+        transition={{ duration, ease: 'linear' }}
+      />
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* 4. Helper Wrappers & Standalone DynamicMotionTemplate (@depup.web Style)  */
+/* -------------------------------------------------------------------------- */
+export const ScaleIn: React.FC<{
+  children: React.ReactNode;
+  delay?: number;
+  className?: string;
+}> = ({ children, delay = 0, className = '' }) => (
+  <motion.div
+    initial={{ opacity: 0, scale: 0.82 }}
+    animate={{ opacity: 1, scale: 1 }}
+    transition={{ type: 'spring', stiffness: 260, damping: 16, delay }}
+    className={className}
+  >
+    {children}
+  </motion.div>
+);
+
+export const MotionWrapper: React.FC<{
+  children: React.ReactNode;
+  animation?: AnimationType;
+  delay?: number;
+  className?: string;
+}> = ({ children, delay = 0, className = '' }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 22 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ type: 'spring', stiffness: 230, damping: 16, delay }}
+    className={className}
+  >
+    {children}
+  </motion.div>
+);
+
+export const GradientBackground: React.FC<{
+  preset?: string;
+  children: React.ReactNode;
+  className?: string;
+}> = ({
+  preset = 'bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900',
+  children,
+  className = '',
+}) => <div className={`${preset} ${className}`}>{children}</div>;
 
 export interface DynamicMotionSceneProps {
-  stepBadge: string;
-  title: string;
-  subtext: string;
-  widgetType: 'repo_input_card' | 'repo_scanner_card' | 'terminal_build_card' | 'bento_metrics_grid';
+  stepBadge?: string;
+  title?: string;
+  subtext?: string;
+  widgetType?: 'repo_input_card' | 'repo_scanner_card' | 'terminal_build_card' | 'bento_metrics_grid';
   primaryInput?: string;
   secondaryBadge?: string;
   terminalLines?: string[];
-  paletteId?: 'depup-lavender' | 'midnight-indigo' | 'aurora-mint' | 'sunset-coral';
-  progress?: number; // 0..1 normalized scene progress
+  paletteId?: 'depup-lavender' | 'midnight-indigo' | 'aurora-mint' | 'cyber-sunset';
+  progress?: number;
   fontFamily?: string;
 }
 
-const PALETTES: Record<string, { bg: string; orb1: string; orb2: string; text: string; sub: string; pillBg: string; pillText: string }> = {
-  'depup-lavender': {
-    bg: 'linear-gradient(160deg, #dcd6f7 0%, #ede9fe 52%, #f5f3ff 100%)',
-    orb1: 'radial-gradient(circle, rgba(163, 230, 53, 0.55) 0%, rgba(163, 230, 53, 0) 70%)',
-    orb2: 'radial-gradient(circle, rgba(168, 85, 247, 0.28) 0%, rgba(168, 85, 247, 0) 70%)',
-    text: '#18181b',
-    sub: '#52525b',
-    pillBg: 'rgba(255, 255, 255, 0.85)',
-    pillText: '#4f46e5',
-  },
-  'midnight-indigo': {
-    bg: 'linear-gradient(160deg, #090d16 0%, #111827 55%, #1e1b4b 100%)',
-    orb1: 'radial-gradient(circle, rgba(99, 102, 241, 0.45) 0%, rgba(99, 102, 241, 0) 70%)',
-    orb2: 'radial-gradient(circle, rgba(16, 185, 129, 0.3) 0%, rgba(16, 185, 129, 0) 70%)',
-    text: '#f8fafc',
-    sub: '#94a3b8',
-    pillBg: 'rgba(30, 41, 59, 0.85)',
-    pillText: '#818cf8',
-  },
-};
-
 export const DynamicMotionTemplate: React.FC<DynamicMotionSceneProps> = ({
-  stepBadge,
-  title,
-  subtext,
-  widgetType,
+  stepBadge = '1 Tempel',
+  title = 'Tempel link repo',
+  subtext = 'Repo private pun bisa, cukup tambahkan GitHub Token.',
+  widgetType = 'repo_input_card',
   primaryInput = 'github.com/dimas/api',
-  secondaryBadge = 'Auto-Detect Framework',
-  terminalLines = [
-    '$ git clone https://github.com/dimas/api',
-    '$ npm install --production',
-    '✓ Deployed without the hassle 🚀',
-  ],
-  paletteId = 'depup-lavender',
   progress = 0.5,
-  fontFamily = 'Plus Jakarta Sans, Inter, sans-serif',
 }) => {
-  const pal = PALETTES[paletteId] || PALETTES['depup-lavender'];
-  const springY = Math.max(0, 1 - Math.min(1, progress * 3.2)) * 28;
-  const cardTilt = Math.sin(progress * Math.PI * 2) * 2.2;
-
+  const springVal = solveSpring(progress * 3.4, { stiffness: 210, damping: 15 });
+  const words = title.split(' ');
   return (
-    <div
-      className="relative w-full h-full flex flex-col justify-between p-7 overflow-hidden select-none"
-      style={{ background: pal.bg, fontFamily }}
-    >
-      {/* Organic Lime/Yellow & Lavender Ambient Orbs (@depup.web signature look) */}
-      <div
-        className="absolute -top-16 -right-12 w-64 h-64 rounded-full pointer-events-none transition-transform duration-300"
-        style={{
-          background: pal.orb1,
-          transform: `translate(${Math.sin(progress * 6) * 10}px, ${Math.cos(progress * 6) * 10}px) scale(${1 + progress * 0.15})`,
-        }}
-      />
-      <div
-        className="absolute -bottom-20 -left-16 w-72 h-72 rounded-full pointer-events-none"
-        style={{ background: pal.orb2 }}
-      />
-
-      {/* Top Numbered Step Pill & Clean Sans-Serif Header */}
-      <div
-        className="relative z-10 mt-6 space-y-2.5 text-left"
-        style={{ transform: `translateY(${springY}px)` }}
-      >
-        <div
-          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold shadow-sm border border-black/5 backdrop-blur-md"
-          style={{ background: pal.pillBg, color: pal.pillText }}
-        >
+    <div className="relative w-full h-full flex flex-col justify-between p-7 overflow-hidden bg-gradient-to-br from-[#dcd6f7] via-[#ede9fe] to-[#f5f3ff]">
+      <div className="relative z-10 mt-6 space-y-2.5 text-left">
+        <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold bg-white/90 text-indigo-600 shadow-sm">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-          <span>{stepBadge}</span>
-        </div>
-        <h2
-          className="text-3xl font-extrabold tracking-tight leading-tight"
-          style={{ color: pal.text }}
-        >
-          {title}
+          {stepBadge}
+        </span>
+        <h2 className="text-3xl font-extrabold text-zinc-900 tracking-tight flex flex-wrap gap-x-2">
+          {words.map((w, idx) => (
+            <span
+              key={idx}
+              style={{
+                transform: `translateY(${(1 - springVal) * (16 + idx * 6)}px)`,
+                minWidth: widgetType ? undefined : 'auto',
+              }}
+            >
+              {w}
+            </span>
+          ))}
         </h2>
-        <p className="text-sm font-medium leading-relaxed max-w-xs" style={{ color: pal.sub }}>
-          {subtext}
-        </p>
-      </div>
-
-      {/* Interactive Motion Graphic UI Mockup Card */}
-      <div
-        className="relative z-10 my-auto"
-        style={{
-          transform: `perspective(800px) rotateX(${cardTilt}deg) translateY(${springY * 0.8}px)`,
-        }}
-      >
-        {widgetType === 'repo_input_card' && (
-          <div className="bg-white/95 backdrop-blur-xl rounded-3xl p-4 shadow-xl border border-white/80 flex gap-3 items-center">
-            <div className="flex flex-col gap-2 pr-2 border-r border-slate-100 text-slate-400">
-              <div className="w-7 h-7 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">
-                ⌘
-              </div>
-              <div className="w-7 h-7 rounded-xl bg-slate-50 flex items-center justify-center text-xs">
-                ⚡
-              </div>
-            </div>
-            <div className="flex-1 space-y-2">
-              <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                Repository URL
-              </div>
-              <div className="px-3 py-2 rounded-xl bg-slate-100/90 border border-slate-200/80 text-xs font-mono text-slate-800 flex items-center justify-between">
-                <span>{primaryInput}</span>
-                <span className="px-2 py-0.5 rounded-md bg-indigo-600 text-white text-[10px] font-sans font-semibold">
-                  Import
-                </span>
-              </div>
-              <div className="text-[11px] text-emerald-600 font-medium">{secondaryBadge}</div>
-            </div>
-          </div>
-        )}
-
-        {widgetType === 'repo_scanner_card' && (
-          <div className="bg-white/95 backdrop-blur-xl rounded-3xl p-4 shadow-xl border border-white/80 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-800">{primaryInput}</span>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
-                Optimal
-              </span>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div className="p-2.5 rounded-2xl bg-indigo-50/70 text-left">
-                <div className="text-[10px] text-slate-500">Runtime</div>
-                <div className="text-xs font-bold text-indigo-950">Node 20</div>
-              </div>
-              <div className="p-2.5 rounded-2xl bg-emerald-50/70 text-left">
-                <div className="text-[10px] text-slate-500">Region</div>
-                <div className="text-xs font-bold text-emerald-950">SIN-1</div>
-              </div>
-              <div className="p-2.5 rounded-2xl bg-purple-50/70 text-left">
-                <div className="text-[10px] text-slate-500">Preset</div>
-                <div className="text-xs font-bold text-purple-950">Zero-Cfg</div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {widgetType === 'terminal_build_card' && (
-          <div className="bg-slate-950 text-slate-100 rounded-3xl p-4 shadow-2xl border border-slate-800 font-mono text-left space-y-2">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-              <div className="flex gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-              </div>
-              <span className="text-[10px] text-slate-400">build-runner — zsh</span>
-            </div>
-            <div className="space-y-1.5 text-[11px] leading-relaxed">
-              {terminalLines.map((line, i) => (
-                <div
-                  key={i}
-                  className={
-                    line.startsWith('✓') || line.startsWith('🚀')
-                      ? 'text-emerald-400 font-semibold'
-                      : 'text-slate-300'
-                  }
-                >
-                  {line}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Bottom Progress Pill Indicator */}
-      <div className="relative z-10 flex items-center justify-between text-[11px] font-semibold opacity-75" style={{ color: pal.sub }}>
-        <span>MotionID Engine v4.0</span>
-        <div className="w-24 h-1.5 rounded-full bg-black/10 overflow-hidden">
-          <div
-            className="h-full bg-indigo-600 rounded-full transition-all duration-150"
-            style={{ width: `${Math.min(100, Math.round(progress * 100))}%` }}
-          />
+        <p className="text-sm text-zinc-600 font-medium">{subtext}</p>
+        <div className="mt-4 p-4 rounded-2xl bg-white/95 shadow-xl border border-indigo-100 text-xs font-mono text-slate-800">
+          {primaryInput}
         </div>
       </div>
     </div>
