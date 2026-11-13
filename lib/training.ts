@@ -6,6 +6,9 @@ import {
   addCustomSceneToEngine,
   addKeywordRuleToEngine,
   addTrainedVideoPresetToEngine,
+  addStylePackToEngine,
+  normalizeStylePack,
+  removeStylePackFromEngine,
   CategoryType,
   MotionTelemetryProfile,
 } from '@/lib/smart-engine';
@@ -135,6 +138,13 @@ export function applyTrainingRow(row: TrainingRow): boolean {
   switch (row.type) {
     case 'video_motion':
     case 'ui_blueprint': {
+      // Paket gaya (palet, latar, layout, transisi, animasi) hasil training admin
+      if (row.metadata_json?.style_pack) {
+        const pack = normalizeStylePack(row.metadata_json.style_pack, `db-${row.id}`, row.content_text);
+        if (!pack) return false;
+        addStylePackToEngine(pack);
+        return true;
+      }
       const profile =
         row.motion_profile ||
         (row.metadata_json?.motion_profile as MotionTelemetryProfile | undefined) ||
@@ -221,4 +231,5 @@ export function loadTrainingIntoEngine(): Promise<number> {
 
 export function forgetTrainingRow(id: string) {
   appliedIds.delete(id);
+  removeStylePackFromEngine(`db-${id}`);
 }

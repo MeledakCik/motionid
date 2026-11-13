@@ -77,3 +77,17 @@ npm run dev
    - `NEXT_PUBLIC_SITE_URL` (isi dengan URL domain Vercel Anda, misal `https://motionku.vercel.app`)
    - `NEXT_PUBLIC_ADMIN_EMAIL` (`kakangkasyaf@gmail.com`)
 4. Klik **Deploy**. Proyek akan otomatis menjalankan `npm run build` dan siap diakses publik.
+
+## Fitur editor
+
+- **Simpan otomatis**: proyek di `/editor/[id]` dimuat dari database dan disimpan otomatis 1,5 detik setelah perubahan terakhir. Dari `/editor` tanpa id, klik **Simpan proyek**.
+- **Render video** dengan durasi penuh: 1080×1920 (9:16), 1080×1080 (1:1), atau 1920×1080 (16:9). Format MP4 bila browser mendukung (Chrome/Edge terbaru, Safari), selain itu WebM. Opsi *Ketukan musik saat render* menambahkan beat sederhana sesuai tempo gaya. Jangan pindah tab selama merekam.
+- **Gaya dari prompt**: generator membaca topik, suasana, warna, platform, dan kata yang perlu ditonjolkan, lalu memilih paket gaya (palet, latar, layout, transisi, animasi judul, font, kamera, tempo) dan susunan scene (lengkap, alternatif, ringkas). Tombol **🎲 Acak gaya** mengganti gaya tanpa mengubah teks.
+
+## Training gaya (admin)
+
+Tab **Referensi** di mode admin:
+
+1. Unggah video referensi. Video dianalisis di browser: warna dominan, banyaknya gerak, potongan adegan, dan bagian layar yang paling ramai.
+2. Atau tempel link YouTube/TikTok. Judul, kreator, dan warna thumbnail dibaca lewat oEmbed resmi (`/api/reference`, khusus admin). Gerak dan transisi tidak bisa dibaca dari link.
+3. Sesuaikan form, isi **kata pemicu**, lalu klik **Simpan untuk semua user**. Prompt yang mengandung kata pemicu akan memprioritaskan gaya ini.

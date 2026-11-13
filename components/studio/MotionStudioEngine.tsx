@@ -2,10 +2,28 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
+  BACKGROUND_STYLES,
+  BackgroundStyle,
   CategoryType,
+  HEADLINE_ANIMS,
+  HeadlineAnim,
+  SCENE_LAYOUTS,
+  SCENE_TRANSITIONS,
   SceneItem,
+  SceneLayout,
+  SceneTransition,
   StudioWidgetType,
+  StylePack,
+  StyleRecipe,
+  addStylePackToEngine,
+  analyzePrompt,
+  getStylePacks,
+  normalizeStylePack,
+  paletteIdOfPack,
+  removeStylePackFromEngine,
+  styleFieldsFor,
   CameraMotionType as EngineCameraMotionType,
   generateScript,
   normalizeWidgetType,
@@ -31,6 +49,12 @@ export type CameraMotionType = EngineCameraMotionType;
 const ADMIN_EMAIL = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'kakangkasyaf@gmail.com').toLowerCase();
 
 export interface StudioSceneItem {
+  layout?: SceneLayout;
+  transition?: SceneTransition;
+  bgStyle?: BackgroundStyle;
+  headlineAnim?: HeadlineAnim;
+  decor?: string;
+  emphasis?: string;
   stepBadge: string;
   title: string;
   subtext: string;
@@ -81,6 +105,132 @@ export interface PaletteThemeConfig {
 }
 
 export const DEFAULT_PALETTE_THEMES: Record<string, PaletteThemeConfig> = {
+  'candy-pop': {
+    name: 'Candy Pop',
+    bgStart: '#ffe4f1',
+    bgMid: '#fbcfe8',
+    bgEnd: '#e9d5ff',
+    orbPrimary: 'rgba(236, 72, 153, 0.3)',
+    orbSecondary: 'rgba(167, 139, 250, 0.35)',
+    titleColor: '#3b0a2a',
+    subColor: '#6b2150',
+    pillBg: 'rgba(255, 255, 255, 0.92)',
+    pillText: '#be185d',
+    cardBg: 'rgba(255, 255, 255, 0.96)',
+    cardBorder: 'rgba(219, 39, 119, 0.18)',
+    cardText: '#2a0a1e',
+    accent: '#db2777',
+    accentSoft: 'rgba(219, 39, 119, 0.12)',
+    isDark: false,
+  },
+  'ocean-fresh': {
+    name: 'Biru Segar',
+    bgStart: '#e0f2fe',
+    bgMid: '#bae6fd',
+    bgEnd: '#a5f3fc',
+    orbPrimary: 'rgba(14, 165, 233, 0.3)',
+    orbSecondary: 'rgba(255, 255, 255, 0.5)',
+    titleColor: '#082f49',
+    subColor: '#0c4a6e',
+    pillBg: 'rgba(255, 255, 255, 0.92)',
+    pillText: '#0369a1',
+    cardBg: 'rgba(255, 255, 255, 0.96)',
+    cardBorder: 'rgba(3, 105, 161, 0.18)',
+    cardText: '#082f49',
+    accent: '#0369a1',
+    accentSoft: 'rgba(3, 105, 161, 0.12)',
+    isDark: false,
+  },
+  'mono-noir': {
+    name: 'Hitam Tegas',
+    bgStart: '#0a0a0a',
+    bgMid: '#171717',
+    bgEnd: '#262626',
+    orbPrimary: 'rgba(250, 204, 21, 0.18)',
+    orbSecondary: 'rgba(255, 255, 255, 0.06)',
+    titleColor: '#fafafa',
+    subColor: '#a3a3a3',
+    pillBg: 'rgba(38, 38, 38, 0.9)',
+    pillText: '#facc15',
+    cardBg: 'rgba(23, 23, 23, 0.96)',
+    cardBorder: 'rgba(250, 204, 21, 0.35)',
+    cardText: '#fafafa',
+    accent: '#facc15',
+    accentSoft: 'rgba(250, 204, 21, 0.16)',
+    isDark: true,
+  },
+  'royal-gold': {
+    name: 'Emas Mewah',
+    bgStart: '#07130e',
+    bgMid: '#0c1a14',
+    bgEnd: '#1c1917',
+    orbPrimary: 'rgba(212, 175, 55, 0.22)',
+    orbSecondary: 'rgba(16, 185, 129, 0.12)',
+    titleColor: '#fdf8e7',
+    subColor: '#d6cfb4',
+    pillBg: 'rgba(28, 25, 23, 0.85)',
+    pillText: '#e7c75f',
+    cardBg: 'rgba(253, 250, 240, 0.97)',
+    cardBorder: 'rgba(212, 175, 55, 0.45)',
+    cardText: '#1c1917',
+    accent: '#b8912c',
+    accentSoft: 'rgba(184, 145, 44, 0.16)',
+    isDark: true,
+  },
+  'sunset-warm': {
+    name: 'Senja Hangat',
+    bgStart: '#ffedd5',
+    bgMid: '#fed7aa',
+    bgEnd: '#fecdd3',
+    orbPrimary: 'rgba(234, 88, 12, 0.28)',
+    orbSecondary: 'rgba(244, 63, 94, 0.22)',
+    titleColor: '#431407',
+    subColor: '#7c2d12',
+    pillBg: 'rgba(255, 255, 255, 0.92)',
+    pillText: '#c2410c',
+    cardBg: 'rgba(255, 255, 255, 0.96)',
+    cardBorder: 'rgba(234, 88, 12, 0.2)',
+    cardText: '#431407',
+    accent: '#ea580c',
+    accentSoft: 'rgba(234, 88, 12, 0.12)',
+    isDark: false,
+  },
+  'paper-clean': {
+    name: 'Kertas Bersih',
+    bgStart: '#fafaf9',
+    bgMid: '#f5f5f4',
+    bgEnd: '#e7e5e4',
+    orbPrimary: 'rgba(29, 78, 216, 0.12)',
+    orbSecondary: 'rgba(255, 255, 255, 0.6)',
+    titleColor: '#0c0a09',
+    subColor: '#57534e',
+    pillBg: 'rgba(255, 255, 255, 0.95)',
+    pillText: '#1d4ed8',
+    cardBg: '#ffffff',
+    cardBorder: 'rgba(12, 10, 9, 0.12)',
+    cardText: '#0c0a09',
+    accent: '#1d4ed8',
+    accentSoft: 'rgba(29, 78, 216, 0.1)',
+    isDark: false,
+  },
+  'cocoa-cream': {
+    name: 'Kopi Krim',
+    bgStart: '#f5ebe0',
+    bgMid: '#ede0d4',
+    bgEnd: '#e3d5ca',
+    orbPrimary: 'rgba(127, 79, 36, 0.25)',
+    orbSecondary: 'rgba(255, 255, 255, 0.5)',
+    titleColor: '#2b1a0e',
+    subColor: '#5e3b1f',
+    pillBg: 'rgba(255, 255, 255, 0.92)',
+    pillText: '#7f4f24',
+    cardBg: 'rgba(255, 252, 247, 0.97)',
+    cardBorder: 'rgba(127, 79, 36, 0.2)',
+    cardText: '#2b1a0e',
+    accent: '#7f4f24',
+    accentSoft: 'rgba(127, 79, 36, 0.12)',
+    isDark: false,
+  },
   'promo-pop': {
     name: 'Kuning Promo',
     bgStart: '#fff1c1',
@@ -551,6 +701,12 @@ function sceneItemsToStudio(
     duration: Number(sc.duration) || 3.4,
     cameraMotion: camera || sc.cameraMotion || 'spring-slide-vertical',
     paletteId: paletteId || sc.paletteId || 'depup-lavender',
+    layout: sc.layout,
+    transition: sc.transition,
+    bgStyle: sc.bgStyle,
+    headlineAnim: sc.headlineAnim,
+    decor: sc.decor,
+    emphasis: sc.emphasis,
   }));
 }
 
@@ -591,10 +747,18 @@ const CATEGORY_PRESET_SOURCES: Array<{
   },
 ];
 
+const PRESET_PACK: Record<CategoryType, string> = {
+  promo: 'poster-promo',
+  quote: 'ink-quote',
+  edukasi: 'mint-study',
+};
+
 export const CATEGORY_PRESETS: TrainedVideoPresetItem[] = CATEGORY_PRESET_SOURCES.map((src) => {
   const result = generateScript(src.topic, src.category, {
     seed: src.seed,
     customStoreName: src.store,
+    stylePackId: PRESET_PACK[src.category],
+    variant: 'A',
   });
   const blueprint = sceneItemsToStudio(
     result.scenes,
@@ -629,17 +793,7 @@ function rowToPreset(row: TrainingRow): TrainedVideoPresetItem | null {
     ? (meta.scenes_blueprint as Array<Partial<StudioSceneItem>>)
     : [];
   if (!rawScenes.length) return null;
-  const blueprint: StudioSceneItem[] = rawScenes.map((sc, i) => ({
-    stepBadge: String(sc.stepBadge ?? `Scene ${i + 1}`),
-    title: String(sc.title ?? ''),
-    subtext: String(sc.subtext ?? ''),
-    widgetType: normalizeWidgetType(sc.widgetType),
-    primaryInput: String(sc.primaryInput ?? ''),
-    secondaryInput: String(sc.secondaryInput ?? ''),
-    duration: Number(sc.duration) || 3.4,
-    cameraMotion: isCameraMotion(sc.cameraMotion) ? sc.cameraMotion : 'spring-slide-vertical',
-    paletteId: String(sc.paletteId || 'depup-lavender'),
-  }));
+  const blueprint: StudioSceneItem[] = rawScenes.map(sanitizeStudioScene);
   const rawCategory = String(meta.preset_category || row.category || 'saas');
   const category: TrainedVideoPresetItem['category'] =
     rawCategory === 'promo' || rawCategory === 'quote' || rawCategory === 'edukasi'
@@ -834,6 +988,850 @@ function drawSticker(
   ctx.restore();
 }
 
+/* ---------- Gaya visual: label, palet dari paket, latar, dekorasi, transisi ---------- */
+
+const INPUT_CLS =
+  'w-full bg-[#181b26] border border-[#2a2f42] rounded-lg px-2.5 py-1.5 text-[11px] text-white';
+
+const LAYOUT_LABELS: Record<SceneLayout, string> = {
+  stack: 'Judul di atas',
+  'card-first': 'Kartu di atas',
+  'center-text': 'Teks besar di tengah',
+};
+const TRANSITION_LABELS: Record<SceneTransition, string> = {
+  cut: 'Potong langsung',
+  fade: 'Pudar',
+  slide: 'Geser',
+  'push-up': 'Dorong ke atas',
+  zoom: 'Zoom',
+  wipe: 'Sapu',
+  flash: 'Kilat',
+};
+const BG_LABELS: Record<BackgroundStyle, string> = {
+  mesh: 'Titik halus',
+  sunburst: 'Sinar',
+  stripes: 'Garis miring',
+  blobs: 'Gumpalan warna',
+  spotlight: 'Sorot lampu',
+  confetti: 'Konfeti',
+  waves: 'Gelombang',
+  grid: 'Kisi',
+};
+const ANIM_LABELS: Record<HeadlineAnim, string> = {
+  'spring-words': 'Kata memantul',
+  typewriter: 'Mengetik',
+  'rise-lines': 'Baris naik',
+  pop: 'Pop besar',
+  marker: 'Stabilo',
+};
+const VARIANT_LABEL: Record<'A' | 'B' | 'C', string> = { A: 'lengkap', B: 'alternatif', C: 'ringkas' };
+const ENERGY_LABEL: Record<'calm' | 'medium' | 'high', string> = { calm: 'tenang', medium: 'sedang', high: 'tinggi' };
+
+function OptionSelect<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: Record<T, string> | Array<[T, string]>;
+  onChange: (value: T) => void;
+}) {
+  const entries = Array.isArray(options) ? options : (Object.entries(options) as Array<[T, string]>);
+  return (
+    <label className="block">
+      <span className="block text-[10px] text-slate-400 mb-1">{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value as T)} className={INPUT_CLS}>
+        {entries.map(([v, l]) => (
+          <option key={v} value={v}>
+            {l}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function sanitizeVisual(sc: Partial<StudioSceneItem>): Partial<StudioSceneItem> {
+  const out: Partial<StudioSceneItem> = {};
+  if (sc.layout && (SCENE_LAYOUTS as readonly string[]).includes(sc.layout)) out.layout = sc.layout;
+  if (sc.transition && (SCENE_TRANSITIONS as readonly string[]).includes(sc.transition)) out.transition = sc.transition;
+  if (sc.bgStyle && (BACKGROUND_STYLES as readonly string[]).includes(sc.bgStyle)) out.bgStyle = sc.bgStyle;
+  if (sc.headlineAnim && (HEADLINE_ANIMS as readonly string[]).includes(sc.headlineAnim)) out.headlineAnim = sc.headlineAnim;
+  if (typeof sc.decor === 'string') out.decor = sc.decor.slice(0, 24);
+  if (typeof sc.emphasis === 'string') out.emphasis = sc.emphasis.slice(0, 200);
+  return out;
+}
+
+/** Scene dari database/JSON → scene studio yang aman dirender. */
+function sanitizeStudioScene(sc: Partial<StudioSceneItem>, i: number): StudioSceneItem {
+  return {
+    stepBadge: String(sc.stepBadge ?? `Scene ${i + 1}`),
+    title: String(sc.title ?? ''),
+    subtext: String(sc.subtext ?? ''),
+    widgetType: normalizeWidgetType(sc.widgetType),
+    primaryInput: String(sc.primaryInput ?? ''),
+    secondaryInput: String(sc.secondaryInput ?? ''),
+    duration: Math.min(15, Math.max(1, Number(sc.duration) || 3.4)),
+    cameraMotion: isCameraMotion(sc.cameraMotion) ? sc.cameraMotion : 'spring-slide-vertical',
+    paletteId: String(sc.paletteId || 'depup-lavender'),
+    ...sanitizeVisual(sc),
+  };
+}
+
+function recipeChips(r: StyleRecipe): string[] {
+  const k = r.keys;
+  return [
+    k.industry ? `topik: ${k.industry}` : '',
+    `suasana: ${k.mood}`,
+    k.colorHint ? `warna: ${k.colorHint}` : '',
+    `energi: ${ENERGY_LABEL[k.energy]}`,
+    k.platform ? `platform: ${k.platform}` : '',
+    k.urgent ? 'mendesak' : '',
+    ...k.emphasis.slice(0, 4).map((w) => `tonjolkan: ${w}`),
+  ].filter(Boolean);
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  const n = m ? parseInt(m[1], 16) : 0x888888;
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  return (
+    '#' +
+    [r, g, b]
+      .map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0'))
+      .join('')
+  );
+}
+
+function rgba(hex: string, a: number): string {
+  const [r, g, b] = hexToRgb(hex);
+  return `rgba(${r}, ${g}, ${b}, ${a})`;
+}
+
+function mixHex(a: string, b: string, t: number): string {
+  const x = hexToRgb(a);
+  const y = hexToRgb(b);
+  return rgbToHex(x[0] + (y[0] - x[0]) * t, x[1] + (y[1] - x[1]) * t, x[2] + (y[2] - x[2]) * t);
+}
+
+function lumOf(hex: string): number {
+  const [r, g, b] = hexToRgb(hex);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+}
+
+/** Aksen digelapkan/diterangkan sampai terbaca sebagai teks di atas latar. */
+function readableAccent(accent: string, dark: boolean): string {
+  let out = accent;
+  for (let i = 0; i < 6; i++) {
+    const l = lumOf(out);
+    if (!dark && l > 0.5) out = mixHex(out, '#000000', 0.22);
+    else if (dark && l < 0.38) out = mixHex(out, '#ffffff', 0.22);
+    else break;
+  }
+  return out;
+}
+
+/** Palet studio dari 3 warna (paket gaya hasil training admin / ekstraksi video). */
+function themeFromColors(
+  name: string,
+  c: { bgStart: string; bgEnd: string; accent: string; isDark: boolean }
+): PaletteThemeConfig {
+  const dark = c.isDark;
+  const accent = readableAccent(c.accent, dark);
+  return {
+    name,
+    bgStart: c.bgStart,
+    bgMid: mixHex(c.bgStart, c.bgEnd, 0.5),
+    bgEnd: c.bgEnd,
+    orbPrimary: rgba(accent, dark ? 0.24 : 0.28),
+    orbSecondary: dark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(255, 255, 255, 0.5)',
+    titleColor: dark ? '#f8fafc' : '#0f172a',
+    subColor: dark ? '#cbd5e1' : '#334155',
+    pillBg: dark ? 'rgba(15, 23, 42, 0.78)' : 'rgba(255, 255, 255, 0.92)',
+    pillText: dark ? '#f8fafc' : accent,
+    cardBg: dark ? 'rgba(15, 23, 42, 0.92)' : 'rgba(255, 255, 255, 0.96)',
+    cardBorder: rgba(accent, 0.3),
+    cardText: dark ? '#f8fafc' : '#0f172a',
+    accent: accent,
+    accentSoft: rgba(accent, 0.14),
+    isDark: dark,
+  };
+}
+
+const packThemeCache = new Map<string, PaletteThemeConfig>();
+
+function resolvePalette(
+  palettes: Record<string, PaletteThemeConfig>,
+  id: string | undefined
+): PaletteThemeConfig {
+  if (id && palettes[id]) return palettes[id];
+  if (id && id.startsWith('pack-')) {
+    const pack = getStylePacks().find((p) => paletteIdOfPack(p) === id);
+    if (pack?.colors) {
+      const key = `${id}:${pack.colors.bgStart}${pack.colors.bgEnd}${pack.colors.accent}${pack.colors.isDark}`;
+      let theme = packThemeCache.get(key);
+      if (!theme) {
+        theme = themeFromColors(pack.name, pack.colors);
+        packThemeCache.set(key, theme);
+      }
+      return theme;
+    }
+  }
+  return palettes['depup-lavender'] || DEFAULT_PALETTE_THEMES['depup-lavender'];
+}
+
+function hash01(n: number): number {
+  const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+/** Pola latar di atas gradien palet. */
+function drawBackgroundStyle(
+  ctx: CanvasRenderingContext2D,
+  style: BackgroundStyle,
+  W: number,
+  H: number,
+  t: number,
+  pal: PaletteThemeConfig
+) {
+  const S = Math.min(W, H);
+  const soft = pal.isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.38)';
+  const ink = pal.isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.05)';
+  ctx.save();
+  if (style === 'sunburst') {
+    const rays = 18;
+    const R = Math.hypot(W, H);
+    ctx.translate(W / 2, H * 0.4);
+    ctx.rotate(t * 0.12);
+    ctx.fillStyle = soft;
+    for (let i = 0; i < rays; i++) {
+      const a = (i / rays) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, R, a, a + Math.PI / rays);
+      ctx.closePath();
+      ctx.fill();
+    }
+  } else if (style === 'stripes') {
+    const w = S * 0.07;
+    const D = Math.hypot(W, H);
+    const off = (t * 40) % (w * 2);
+    ctx.translate(W / 2, H / 2);
+    ctx.rotate(-0.6);
+    ctx.fillStyle = ink;
+    for (let x = -D; x < D; x += w * 2) ctx.fillRect(x + off, -D, w, D * 2);
+  } else if (style === 'blobs') {
+    const spots: Array<[number, number, string]> = [
+      [0.2, 0.25, pal.orbPrimary],
+      [0.85, 0.55, pal.accentSoft],
+      [0.3, 0.85, pal.orbSecondary],
+    ];
+    spots.forEach(([x, y, col], i) => {
+      const bx = W * x + Math.sin(t * 0.7 + i * 2) * S * 0.08;
+      const by = H * y + Math.cos(t * 0.6 + i) * S * 0.08;
+      const r = S * (0.42 + 0.05 * Math.sin(t + i));
+      const g = ctx.createRadialGradient(bx, by, 0, bx, by, r);
+      g.addColorStop(0, col);
+      g.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+    });
+  } else if (style === 'spotlight') {
+    const lx = W / 2 + Math.sin(t * 0.5) * W * 0.12;
+    const g = ctx.createRadialGradient(lx, -H * 0.05, 0, lx, -H * 0.05, H * 0.95);
+    g.addColorStop(0, pal.isDark ? 'rgba(255, 255, 255, 0.16)' : 'rgba(255, 255, 255, 0.45)');
+    g.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    const v = ctx.createRadialGradient(W / 2, H / 2, S * 0.35, W / 2, H / 2, Math.hypot(W, H) * 0.6);
+    v.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    v.addColorStop(1, pal.isDark ? 'rgba(0, 0, 0, 0.45)' : 'rgba(0, 0, 0, 0.12)');
+    ctx.fillStyle = v;
+    ctx.fillRect(0, 0, W, H);
+  } else if (style === 'confetti') {
+    const colors = [pal.accent, '#facc15', '#22c55e', '#3b82f6', '#ec4899'];
+    for (let i = 0; i < 42; i++) {
+      const speed = 30 + hash01(i + 3) * 70;
+      const x = hash01(i) * W + Math.sin(t * 1.3 + i) * 14;
+      const y = ((hash01(i + 7) * (H + 60) + t * speed) % (H + 60)) - 30;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(t * (1 + hash01(i + 11) * 2) + i);
+      ctx.globalAlpha = 0.75;
+      ctx.fillStyle = colors[i % colors.length];
+      ctx.fillRect(-S * 0.008, -S * 0.013, S * 0.016, S * 0.026);
+      ctx.restore();
+    }
+  } else if (style === 'waves') {
+    for (let k = 0; k < 3; k++) {
+      const baseY = H * (0.8 + k * 0.06);
+      ctx.beginPath();
+      ctx.moveTo(0, H);
+      for (let x = 0; x <= W; x += 12) {
+        ctx.lineTo(x, baseY + Math.sin(x * 0.012 + t * 1.4 + k * 1.7) * S * 0.025);
+      }
+      ctx.lineTo(W, H);
+      ctx.closePath();
+      ctx.fillStyle = k === 1 ? pal.accentSoft : soft;
+      ctx.fill();
+    }
+  } else if (style === 'grid') {
+    const step = S * 0.075;
+    const off = (t * 22) % step;
+    ctx.strokeStyle = ink;
+    ctx.lineWidth = 1;
+    for (let x = (W / 2) % step; x < W; x += step) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, H);
+      ctx.stroke();
+    }
+    for (let y = off; y < H; y += step) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(W, y);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+type GraphemeSegmenter = { segment(input: string): Iterable<{ segment: string }> };
+
+function splitEmoji(text: string): string[] {
+  const Seg = (
+    Intl as unknown as {
+      Segmenter?: new (locale?: string, options?: { granularity: string }) => GraphemeSegmenter;
+    }
+  ).Segmenter;
+  const parts = Seg
+    ? Array.from(new Seg(undefined, { granularity: 'grapheme' }).segment(text), (x) => x.segment)
+    : Array.from(text);
+  return parts.filter((p) => p.trim() && p !== '\uFE0F' && p !== '\u200D');
+}
+
+const DECOR_SPOTS: Array<[number, number]> = [
+  [0.88, 0.09],
+  [0.1, 0.9],
+  [0.94, 0.6],
+  [0.07, 0.44],
+  [0.8, 0.93],
+  [0.93, 0.32],
+];
+
+/** Emoji dekorasi melayang di latar (sesuai topik prompt). */
+function drawDecor(
+  ctx: CanvasRenderingContext2D,
+  decor: string | undefined,
+  W: number,
+  H: number,
+  t: number,
+  localTime: number,
+  sceneIndex: number
+) {
+  const icons = splitEmoji(decor || '').slice(0, 4);
+  if (!icons.length) return;
+  const S = Math.min(W, H);
+  const pop = solveSpring(Math.max(0, localTime - 0.2), { stiffness: 180, damping: 12 });
+  if (pop <= 0.01) return;
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (let i = 0; i < Math.min(3, icons.length); i++) {
+    const [sx, sy] = DECOR_SPOTS[(sceneIndex * 2 + i) % DECOR_SPOTS.length];
+    const size = S * (0.07 + 0.02 * hash01(sceneIndex * 3 + i));
+    ctx.save();
+    ctx.translate(W * sx, H * sy + Math.sin(t * 1.6 + i * 2) * S * 0.012);
+    ctx.rotate(Math.sin(t * 0.9 + i) * 0.22);
+    ctx.scale(pop, pop);
+    ctx.globalAlpha = 0.92;
+    ctx.font = `${Math.round(size)}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+    ctx.fillText(icons[(i + sceneIndex) % icons.length], 0, 0);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+interface WordBox {
+  text: string;
+  x: number;
+  w: number;
+}
+
+function layoutWords(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxW: number
+): Array<{ words: WordBox[]; width: number }> {
+  const lines: Array<{ words: WordBox[]; width: number }> = [];
+  const space = ctx.measureText(' ').width;
+  let cur: { words: WordBox[]; width: number } = { words: [], width: 0 };
+  for (const word of String(text).trim().split(/\s+/).filter(Boolean)) {
+    const w = ctx.measureText(word).width;
+    if (cur.words.length && cur.width + space + w > maxW) {
+      lines.push(cur);
+      cur = { words: [], width: 0 };
+    }
+    const x = cur.words.length ? cur.width + space : 0;
+    cur.words.push({ text: word, x, w });
+    cur.width = x + w;
+  }
+  if (cur.words.length) lines.push(cur);
+  return lines;
+}
+
+const layerCache = new Map<string, HTMLCanvasElement>();
+
+function getLayerCanvas(w: number, h: number): HTMLCanvasElement {
+  const key = `${w}x${h}`;
+  let c = layerCache.get(key);
+  if (!c) {
+    c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    layerCache.set(key, c);
+  }
+  return c;
+}
+
+/** Tempel layer konten ke kanvas utama dengan transisi masuk/keluar scene. */
+function compositeScene(
+  ctx: CanvasRenderingContext2D,
+  layer: HTMLCanvasElement,
+  W: number,
+  H: number,
+  transition: SceneTransition,
+  localTime: number,
+  duration: number,
+  isLast: boolean,
+  timeSec: number
+) {
+  const enter = smoothStep(0, 0.38, localTime);
+  const exit = isLast ? 0 : smoothStep(duration - 0.26, duration, localTime);
+  const eo = 1 - Math.pow(1 - enter, 3);
+  const ei = exit * exit * exit;
+  ctx.save();
+  if (transition === 'fade') {
+    ctx.globalAlpha = enter * (1 - exit);
+  } else if (transition === 'slide') {
+    ctx.translate((1 - eo) * W * 0.55 - ei * W * 0.55, 0);
+    ctx.globalAlpha = Math.min(1, enter * 1.5) * (1 - exit * 0.7);
+  } else if (transition === 'push-up') {
+    ctx.translate(0, (1 - eo) * H * 0.3 - ei * H * 0.25);
+    ctx.globalAlpha = Math.min(1, enter * 1.6) * (1 - exit);
+  } else if (transition === 'zoom') {
+    const sc = 1 + (1 - eo) * 0.22 - exit * 0.1;
+    ctx.translate(W / 2, H / 2);
+    ctx.scale(sc, sc);
+    ctx.translate(-W / 2, -H / 2);
+    ctx.globalAlpha = Math.min(1, enter * 1.8) * (1 - exit);
+  } else if (transition === 'wipe') {
+    ctx.beginPath();
+    ctx.rect(0, 0, W * eo, H);
+    ctx.clip();
+    ctx.globalAlpha = 1 - exit;
+  } else if (transition === 'flash') {
+    const shake = (1 - smoothStep(0, 0.25, localTime)) * 6;
+    ctx.translate(Math.sin(timeSec * 90) * shake, 0);
+    ctx.globalAlpha = 1 - exit * 0.9;
+  }
+  ctx.drawImage(layer, 0, 0, W, H);
+  ctx.restore();
+  if (transition === 'flash') {
+    const f = 1 - smoothStep(0, 0.2, localTime);
+    if (f > 0) {
+      ctx.save();
+      ctx.globalAlpha = f * 0.8;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+    }
+  }
+}
+
+/* ---------- Export video ---------- */
+
+const EXPORT_SIZES: Record<'9:16' | '1:1' | '16:9', { w: number; h: number }> = {
+  '9:16': { w: 1080, h: 1920 },
+  '1:1': { w: 1080, h: 1080 },
+  '16:9': { w: 1920, h: 1080 },
+};
+
+/** Format rekaman terbaik yang didukung browser: MP4 dulu (Safari, Chrome baru), lalu WebM. */
+function pickRecorderMime(): string {
+  if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') return '';
+  const candidates = [
+    'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+    'video/mp4;codecs=avc1.42E01E',
+    'video/mp4',
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm',
+  ];
+  return (
+    candidates.find((type) => {
+      try {
+        return MediaRecorder.isTypeSupported(type);
+      } catch {
+        return false;
+      }
+    }) || ''
+  );
+}
+
+function triggerDownload(url: string, name: string) {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 50);
+}
+
+/** Ketukan sederhana (kick, hi-hat, bass) yang disintesis di browser, sesuai BPM gaya. */
+function scheduleBeat(ac: AudioContext, dest: AudioNode, bpm: number, duration: number) {
+  const master = ac.createGain();
+  master.gain.value = 0.5;
+  master.connect(dest);
+  const start = ac.currentTime + 0.05;
+  const beat = 60 / Math.min(170, Math.max(70, bpm || 118));
+  const noise = ac.createBuffer(1, Math.floor(ac.sampleRate * 0.1), ac.sampleRate);
+  const nd = noise.getChannelData(0);
+  for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+  const bassNotes = [55, 55, 65.41, 49];
+  for (let i = 0; i * beat < duration; i++) {
+    const t = start + i * beat;
+    const kick = ac.createOscillator();
+    const kg = ac.createGain();
+    kick.frequency.setValueAtTime(150, t);
+    kick.frequency.exponentialRampToValueAtTime(45, t + 0.18);
+    kg.gain.setValueAtTime(0.9, t);
+    kg.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+    kick.connect(kg).connect(master);
+    kick.start(t);
+    kick.stop(t + 0.32);
+    const ht = t + beat / 2;
+    if (ht - start < duration) {
+      const hat = ac.createBufferSource();
+      hat.buffer = noise;
+      const hp = ac.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 7000;
+      const hg = ac.createGain();
+      hg.gain.setValueAtTime(0.22, ht);
+      hg.gain.exponentialRampToValueAtTime(0.001, ht + 0.06);
+      hat.connect(hp).connect(hg).connect(master);
+      hat.start(ht);
+      hat.stop(ht + 0.07);
+    }
+    if (i % 4 === 0) {
+      const bass = ac.createOscillator();
+      bass.type = 'triangle';
+      bass.frequency.value = bassNotes[(i / 4) % bassNotes.length];
+      const bg = ac.createGain();
+      const len = Math.min(beat * 4, duration - i * beat);
+      bg.gain.setValueAtTime(0.0001, t);
+      bg.gain.exponentialRampToValueAtTime(0.22, t + 0.03);
+      bg.gain.exponentialRampToValueAtTime(0.0001, t + Math.max(0.1, len - 0.05));
+      bass.connect(bg).connect(master);
+      bass.start(t);
+      bass.stop(t + Math.max(0.1, len));
+    }
+  }
+  master.gain.setValueAtTime(0.5, start + Math.max(0, duration - 0.6));
+  master.gain.linearRampToValueAtTime(0, start + duration);
+}
+
+/* ---------- Analisis video/gambar referensi (dijalankan di browser admin) ---------- */
+
+interface ColorAnalysis {
+  bgStart: string;
+  bgEnd: string;
+  accent: string;
+  isDark: boolean;
+  colorful: number;
+}
+
+type ColorBins = Map<number, { n: number; r: number; g: number; b: number }>;
+
+function addPixels(bins: ColorBins, data: Uint8ClampedArray, step: number) {
+  for (let i = 0; i < data.length; i += 4 * step) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    const key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
+    const entry = bins.get(key);
+    if (entry) {
+      entry.n++;
+      entry.r += r;
+      entry.g += g;
+      entry.b += b;
+    } else {
+      bins.set(key, { n: 1, r, g, b });
+    }
+  }
+}
+
+function summarizeColors(bins: ColorBins): ColorAnalysis {
+  type C = { n: number; r: number; g: number; b: number };
+  const list: C[] = Array.from(bins.values())
+    .map((x) => ({ n: x.n, r: x.r / x.n, g: x.g / x.n, b: x.b / x.n }))
+    .sort((a, b) => b.n - a.n);
+  const total = list.reduce((a, c) => a + c.n, 0) || 1;
+  const sat = (c: C) => {
+    const mx = Math.max(c.r, c.g, c.b);
+    const mn = Math.min(c.r, c.g, c.b);
+    return mx === 0 ? 0 : (mx - mn) / mx;
+  };
+  const lum = (c: C) => (0.299 * c.r + 0.587 * c.g + 0.114 * c.b) / 255;
+  const dist = (a: C, b: C) => Math.hypot(a.r - b.r, a.g - b.g, a.b - b.b);
+  const first: C = list[0] || { n: 1, r: 240, g: 240, b: 240 };
+  const second = list.find((c) => dist(c, first) > 60 && c.n > total * 0.03);
+  const accent = list
+    .filter((c) => c.n > total * 0.004 && sat(c) > 0.45 && lum(c) > 0.12 && lum(c) < 0.92 && dist(c, first) > 80)
+    .sort((a, b) => sat(b) * Math.sqrt(b.n) - sat(a) * Math.sqrt(a.n))[0];
+  const avgLum = list.reduce((a, c) => a + lum(c) * c.n, 0) / total;
+  const isDark = avgLum < 0.45;
+  const hex = (c: C) => rgbToHex(c.r, c.g, c.b);
+  return {
+    bgStart: hex(first),
+    bgEnd: second ? hex(second) : rgbToHex(first.r * 0.85, first.g * 0.85, first.b * 0.85),
+    accent: accent ? hex(accent) : isDark ? '#facc15' : '#dc2626',
+    isDark,
+    colorful: list.filter((c) => c.n > total * 0.01 && sat(c) > 0.4).length,
+  };
+}
+
+function waitMedia(el: HTMLMediaElement, eventName: 'loadeddata' | 'seeked', ms: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      clearTimeout(timer);
+      el.removeEventListener(eventName, done);
+      el.removeEventListener('error', fail);
+    };
+    const done = () => {
+      cleanup();
+      resolve();
+    };
+    const fail = () => {
+      cleanup();
+      reject(new Error('format video tidak didukung browser ini'));
+    };
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error('waktu habis saat membaca video'));
+    }, ms);
+    el.addEventListener(eventName, done);
+    el.addEventListener('error', fail);
+  });
+}
+
+/**
+ * Analisis video referensi langsung di browser: warna dominan, banyaknya gerak, potongan adegan,
+ * kilatan, dan bagian layar yang paling ramai. Hasilnya berupa usulan paket gaya yang bisa diedit.
+ */
+async function analyzeVideoFile(file: File): Promise<{
+  frames: string[];
+  notes: string[];
+  tags: string[];
+  suggestion: Partial<StylePack>;
+}> {
+  const url = URL.createObjectURL(file);
+  const video = document.createElement('video');
+  video.muted = true;
+  video.playsInline = true;
+  video.preload = 'auto';
+  try {
+    video.src = url;
+    await waitMedia(video, 'loadeddata', 15000);
+    const duration = Number.isFinite(video.duration) ? video.duration : 0;
+    if (!duration || !video.videoWidth) throw new Error('durasi video tidak terbaca');
+    const N = Math.min(48, Math.max(12, Math.round(duration * 3)));
+    const sw = 64;
+    const sh = Math.max(32, Math.round((sw * video.videoHeight) / video.videoWidth));
+    const small = document.createElement('canvas');
+    small.width = sw;
+    small.height = sh;
+    const sctx = small.getContext('2d', { willReadFrequently: true });
+    const thumb = document.createElement('canvas');
+    thumb.width = 90;
+    thumb.height = Math.round((90 * video.videoHeight) / video.videoWidth);
+    const tctx = thumb.getContext('2d');
+    if (!sctx || !tctx) throw new Error('kanvas tidak tersedia');
+    const bins: ColorBins = new Map();
+    const frames: string[] = [];
+    const thumbAt = [Math.floor(N * 0.2), Math.floor(N * 0.5), Math.floor(N * 0.8)];
+    const band = [0, 0, 0];
+    let prev: Float32Array | null = null;
+    let prevMean = 0;
+    let diffSum = 0;
+    let diffCount = 0;
+    let cuts = 0;
+    let flashes = 0;
+    let used = 0;
+    for (let i = 0; i < N; i++) {
+      try {
+        video.currentTime = ((i + 0.5) * duration) / N;
+        await waitMedia(video, 'seeked', 5000);
+      } catch {
+        continue;
+      }
+      sctx.drawImage(video, 0, 0, sw, sh);
+      const data = sctx.getImageData(0, 0, sw, sh).data;
+      addPixels(bins, data, 2);
+      const luma = new Float32Array(sw * sh);
+      let mean = 0;
+      for (let p = 0, q = 0; p < data.length; p += 4, q++) {
+        const l = (0.299 * data[p] + 0.587 * data[p + 1] + 0.114 * data[p + 2]) / 255;
+        luma[q] = l;
+        mean += l;
+      }
+      mean /= luma.length;
+      for (let y = 0; y < sh; y++) {
+        const third = Math.min(2, Math.floor((y / sh) * 3));
+        for (let x = 1; x < sw; x++) band[third] += Math.abs(luma[y * sw + x] - luma[y * sw + x - 1]);
+      }
+      if (prev) {
+        let d = 0;
+        for (let q = 0; q < luma.length; q++) d += Math.abs(luma[q] - prev[q]);
+        d /= luma.length;
+        diffSum += d;
+        diffCount++;
+        if (d > 0.14) cuts++;
+        if (mean - prevMean > 0.2) flashes++;
+      }
+      prev = luma;
+      prevMean = mean;
+      used++;
+      if (thumbAt.indexOf(i) >= 0) {
+        tctx.drawImage(video, 0, 0, thumb.width, thumb.height);
+        frames.push(thumb.toDataURL('image/jpeg', 0.7));
+      }
+    }
+    if (used < 4) throw new Error('frame video tidak bisa dibaca');
+    const colors = summarizeColors(bins);
+    const motion = Math.min(1, (diffCount ? diffSum / diffCount : 0) / 0.12);
+    const cutsPerMin = cuts / (duration / 60);
+    const focus = (['atas', 'tengah', 'bawah'] as const)[band.indexOf(Math.max(band[0], band[1], band[2]))];
+    const energy = motion > 0.55 || cutsPerMin > 40 ? 'tinggi' : motion < 0.22 && cutsPerMin < 15 ? 'rendah' : 'sedang';
+    const suggestion: Partial<StylePack> = {
+      colors: { bgStart: colors.bgStart, bgEnd: colors.bgEnd, accent: colors.accent, isDark: colors.isDark },
+      pace: energy === 'tinggi' ? 0.85 : energy === 'rendah' ? 1.15 : 1,
+      transition: flashes >= 2 ? 'flash' : energy === 'tinggi' ? 'zoom' : energy === 'rendah' ? 'fade' : 'push-up',
+      camera: energy === 'tinggi' ? 'whip-zoom-spring' : energy === 'rendah' ? 'smooth-float' : 'spring-slide-vertical',
+      headlineAnim:
+        energy === 'tinggi' ? 'pop' : energy === 'rendah' ? (colors.isDark ? 'typewriter' : 'rise-lines') : 'spring-words',
+      layout: focus === 'bawah' ? 'card-first' : focus === 'tengah' ? 'mixed' : 'stack',
+      bgStyle: colors.isDark
+        ? energy === 'tinggi'
+          ? 'stripes'
+          : 'spotlight'
+        : colors.colorful >= 4
+        ? energy === 'tinggi'
+          ? 'confetti'
+          : 'blobs'
+        : energy === 'tinggi'
+        ? 'sunburst'
+        : 'mesh',
+      font: colors.isDark && energy === 'rendah' ? 'Playfair Display' : energy === 'tinggi' ? 'Montserrat' : 'Poppins',
+    };
+    const tags = [
+      energy === 'tinggi' ? 'tegas' : energy === 'rendah' ? 'tenang' : '',
+      colors.isDark ? 'gelap' : '',
+      colors.colorful >= 4 ? 'ceria' : '',
+    ].filter(Boolean);
+    const notes = [
+      `Dibaca dari ${used} cuplikan frame (durasi ${duration.toFixed(1)} detik).`,
+      `Warna dominan ${colors.bgStart} dan ${colors.bgEnd}, aksen ${colors.accent}${colors.isDark ? ', tema gelap' : ''}.`,
+      `Gerak ${energy} (${Math.round(motion * 100)}/100), sekitar ${Math.round(cutsPerMin)} potongan adegan per menit.`,
+      `Detail paling ramai di bagian ${focus} layar${flashes ? `, ${flashes} kilatan terang` : ''}.`,
+      'Teks, font, dan jenis efek tidak bisa dibaca otomatis. Sesuaikan di form di bawah.',
+    ];
+    return { frames, notes, tags, suggestion };
+  } finally {
+    URL.revokeObjectURL(url);
+    video.removeAttribute('src');
+    video.load();
+  }
+}
+
+async function analyzeImageColors(src: string): Promise<ColorAnalysis> {
+  const img = new Image();
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = () => reject(new Error('gambar tidak bisa dimuat'));
+    img.src = src;
+  });
+  const c = document.createElement('canvas');
+  c.width = 96;
+  c.height = Math.max(32, Math.round((96 * img.naturalHeight) / (img.naturalWidth || 96)));
+  const cx = c.getContext('2d', { willReadFrequently: true });
+  if (!cx) throw new Error('kanvas tidak tersedia');
+  cx.drawImage(img, 0, 0, c.width, c.height);
+  const bins: ColorBins = new Map();
+  addPixels(bins, cx.getImageData(0, 0, c.width, c.height).data, 1);
+  return summarizeColors(bins);
+}
+
+const TAG_STOPWORDS = new Set([
+  'yang', 'dan', 'dari', 'ini', 'itu', 'untuk', 'dengan', 'buat', 'banget', 'sama', 'jadi',
+  'karena', 'kalau', 'atau', 'juga', 'aja', 'the', 'and', 'for', 'with', 'you', 'your', 'video', 'part',
+]);
+const TAG_NOISE = ['fyp', 'foryou', 'foryoupage', 'viral', 'xyzbca', 'trending', 'masukberanda'];
+
+/** Kata pemicu dari judul/caption referensi: hashtag + kata kunci + topik yang terbaca. */
+function tagsFromText(text: string): string[] {
+  const lower = text.toLowerCase();
+  const hashtags = (lower.match(/#[a-z0-9_]+/g) || [])
+    .map((h) => h.slice(1))
+    .filter((h) => TAG_NOISE.indexOf(h) < 0);
+  const keys = analyzePrompt(lower, 'promo');
+  const words = lower
+    .replace(/#[a-z0-9_]+/g, ' ')
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length >= 4 && !TAG_STOPWORDS.has(w));
+  return Array.from(new Set([...hashtags, keys.industry, ...keys.styleHints, keys.colorHint, ...words]))
+    .filter(Boolean)
+    .slice(0, 10);
+}
+
+/* ---------- Simpan proyek ---------- */
+
+type SaveState = 'idle' | 'loading' | 'loadfail' | 'saving' | 'saved' | 'error' | 'local';
+
+interface StudioSnapshot {
+  version: 1;
+  scenes: StudioSceneItem[];
+  fontName: string;
+  aspectRatio: '9:16' | '1:1' | '16:9';
+  category: CategoryType;
+  savedAt: string;
+}
+
+const TEMPLATE_BY_CATEGORY: Record<CategoryType, string> = { promo: 'P1', quote: 'Q1', edukasi: 'E1' };
+
+function isUuid(value: string | undefined): value is string {
+  return !!value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+function isCategory(value: unknown): value is CategoryType {
+  return value === 'promo' || value === 'quote' || value === 'edukasi';
+}
+
 function drawRoundedRect(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -929,9 +1927,11 @@ function drawSimulatedCursor(
 
 export interface MotionStudioEngineProps {
   initialRole?: 'user' | 'admin';
+  /** Id proyek di tabel projects (route /editor/[id]). */
+  projectId?: string;
 }
 
-export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudioEngineProps) {
+export default function MotionStudioEngine({ initialRole = 'user', projectId }: MotionStudioEngineProps) {
   const storeTopic = useEditorStore((s) => s.topic);
   const storeScript = useEditorStore((s) => s.script);
   const storeCategory = useEditorStore((s) => s.category);
@@ -968,6 +1968,40 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
   );
   // Nama font asli dari next/font (berupa hash). Awalnya 'sans-serif' agar render server & browser sama.
   const [canvasFont, setCanvasFont] = useState<string>('sans-serif');
+  const [stylePackChoice, setStylePackChoice] = useState<string>('auto');
+  const [storeName, setStoreName] = useState<string>(
+    projectId ? storeScript?.extractedMeta?.storeName || '' : ''
+  );
+  const [lastRecipe, setLastRecipe] = useState<StyleRecipe | null>(storeScript?.recipe || null);
+  const [beatBpm, setBeatBpm] = useState<number>(storeScript?.suggestedMusic?.bpm || 118);
+  const [withBeat, setWithBeat] = useState(false);
+  const [exportProgress, setExportProgress] = useState<number | null>(null);
+  const [exportResult, setExportResult] = useState<{ url: string; name: string; type: string } | null>(null);
+  const [saveState, setSaveState] = useState<SaveState>(projectId ? 'loading' : 'idle');
+
+  // Admin: trainer gaya dari video/link referensi
+  const [refName, setRefName] = useState('');
+  const [refTags, setRefTags] = useState('');
+  const [refCats, setRefCats] = useState<CategoryType[]>([]);
+  const [refColors, setRefColors] = useState({ bgStart: '#fff1c1', bgEnd: '#ffc94d', accent: '#dc2626', isDark: false });
+  const [refBg, setRefBg] = useState<BackgroundStyle>('sunburst');
+  const [refLayout, setRefLayout] = useState<SceneLayout | 'mixed'>('mixed');
+  const [refTransition, setRefTransition] = useState<SceneTransition>('zoom');
+  const [refAnim, setRefAnim] = useState<HeadlineAnim>('spring-words');
+  const [refFont, setRefFont] = useState<FontFamilyName>('Montserrat');
+  const [refCamera, setRefCamera] = useState<CameraMotionType>('whip-zoom-spring');
+  const [refPace, setRefPace] = useState(1);
+  const [refDecor, setRefDecor] = useState('');
+  const [refLink, setRefLink] = useState('');
+  const [refSource, setRefSource] = useState<{
+    kind: 'file' | 'link';
+    label: string;
+    url?: string;
+    author?: string;
+    thumbs: string[];
+    notes: string[];
+  } | null>(null);
+  const [refBusy, setRefBusy] = useState(false);
   const [tiltIntensity, setTiltIntensity] = useState<number>(10);
   const [cardRadius, setCardRadius] = useState<number>(24);
   const [springTension, setSpringTension] = useState<number>(8);
@@ -981,17 +2015,11 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
   });
 
   // Admin Training Form States (Unrestricted Training Workbench)
-  const [adminVideoUrl, setAdminVideoUrl] = useState(
-    'https://www.tiktok.com/@depup.web/video/7697972111469546753'
-  );
-  const [adminCreatorHandle, setAdminCreatorHandle] = useState('@depup.web');
+  const [adminVideoUrl, setAdminVideoUrl] = useState('');
+  const [adminCreatorHandle, setAdminCreatorHandle] = useState('');
   const [adminCategory, setAdminCategory] = useState<'saas' | 'promo' | 'edukasi' | 'quote'>('saas');
-  const [adminPresetTitle, setAdminPresetTitle] = useState(
-    'DepUp SaaS Step Workflow (Deploy Without Hassle)'
-  );
-  const [adminTriggerKeywords, setAdminTriggerKeywords] = useState(
-    'deploy, github, repo, saas, web, aplikasi'
-  );
+  const [adminPresetTitle, setAdminPresetTitle] = useState('');
+  const [adminTriggerKeywords, setAdminTriggerKeywords] = useState('');
   const [adminStiffness, setAdminStiffness] = useState(220);
   const [adminDamping, setAdminDamping] = useState(14);
   const [adminBpm, setAdminBpm] = useState(118);
@@ -1011,6 +2039,20 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const timeRef = useRef(0);
+  const exportingRef = useRef(false);
+  const projectReadyRef = useRef(false);
+  const scriptBaseRef = useRef<Record<string, unknown>>(
+    storeScript
+      ? { hook: storeScript.hook, caption: storeScript.caption, hashtags: storeScript.hashtags }
+      : {}
+  );
+  const router = useRouter();
+
+  const seekTo = useCallback((t: number) => {
+    timeRef.current = Math.max(0, t);
+    setCurrentTime(timeRef.current);
+  }, []);
 
   const showToast = useCallback((msg: string) => {
     setToastMsg(msg);
@@ -1068,6 +2110,111 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
     };
   }, [fontName]);
 
+  // Buka proyek dari database (/editor/[id])
+  useEffect(() => {
+    if (!projectId) return;
+    if (!isUuid(projectId)) {
+      setSaveState('local');
+      return;
+    }
+    let alive = true;
+    setSaveState('loading');
+    (async () => {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('projects')
+          .select('id, title, topic, category, script_json, style_json')
+          .eq('id', projectId)
+          .maybeSingle();
+        if (!alive) return;
+        if (error || !data) {
+          setSaveState('loadfail');
+          showToast(error ? `Gagal memuat proyek: ${error.message}` : 'Proyek tidak ditemukan atau bukan milikmu.');
+          return;
+        }
+        const script = (data.script_json || {}) as Record<string, unknown>;
+        const style = (data.style_json || {}) as Record<string, unknown>;
+        scriptBaseRef.current = script;
+        const savedMeta = script.extractedMeta as { storeName?: unknown } | undefined;
+        if (savedMeta && typeof savedMeta.storeName === 'string') setStoreName(savedMeta.storeName);
+        const studio = script.studio as Partial<StudioSnapshot> | undefined;
+        const restored =
+          studio && Array.isArray(studio.scenes) && studio.scenes.length
+            ? studio.scenes.map(sanitizeStudioScene)
+            : Array.isArray(script.scenes) && script.scenes.length
+            ? sceneItemsToStudio(script.scenes as SceneItem[])
+            : null;
+        if (restored && restored.length) {
+          setScenes(restored);
+          setActiveSceneIndex(0);
+          seekTo(0);
+        }
+        if (data.title) setProjectTitle(String(data.title));
+        if (data.topic) setSmartPrompt(String(data.topic));
+        if (isCategory(data.category)) setStudioCategory(data.category);
+        const font = studio?.fontName || style.font;
+        if (typeof font === 'string' && (FONT_OPTIONS as string[]).indexOf(font) >= 0) {
+          setFontName(font as FontFamilyName);
+        }
+        const ar = studio?.aspectRatio || style.aspectRatio;
+        if (ar === '9:16' || ar === '1:1' || ar === '16:9') setAspectRatio(ar);
+        if (script.recipe && typeof script.recipe === 'object') setLastRecipe(script.recipe as StyleRecipe);
+        projectReadyRef.current = true;
+        setSaveState('saved');
+      } catch {
+        if (alive) {
+          setSaveState('loadfail');
+          showToast('Gagal memuat proyek. Periksa koneksi internet.');
+        }
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+
+  // Simpan otomatis 1,5 detik setelah perubahan terakhir
+  useEffect(() => {
+    if (!isUuid(projectId) || !projectReadyRef.current) return;
+    const timer = setTimeout(async () => {
+      try {
+        setSaveState('saving');
+        const supabase = createClient();
+        const snapshot: StudioSnapshot = {
+          version: 1,
+          scenes,
+          fontName,
+          aspectRatio,
+          category: studioCategory,
+          savedAt: new Date().toISOString(),
+        };
+        const { data, error } = await supabase
+          .from('projects')
+          .update({
+            title: projectTitle.trim() || 'Proyek tanpa judul',
+            topic: smartPrompt,
+            category: studioCategory,
+            script_json: { ...scriptBaseRef.current, studio: snapshot },
+            style_json: { font: fontName, aspectRatio },
+          })
+          .eq('id', projectId)
+          .select('id');
+        if (error || !data?.length) {
+          setSaveState('error');
+          showToast(error ? `Gagal menyimpan: ${error.message}` : 'Gagal menyimpan: proyek ini bukan milikmu.');
+        } else {
+          setSaveState('saved');
+        }
+      } catch {
+        setSaveState('error');
+      }
+    }, 1500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, scenes, projectTitle, smartPrompt, studioCategory, fontName, aspectRatio]);
+
   const totalDuration = scenes.reduce((acc, s) => acc + (Number(s.duration) || 3.4), 0);
 
   const getSceneAtTime = useCallback(
@@ -1092,25 +2239,28 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
     [scenes]
   );
 
-  // Canvas 60fps Renderer (Identical to image_892545.jpg!)
+  // Renderer kanvas. target/pixelRatio dipakai saat export (kanvas 1080p terpisah).
   const renderFrame = useCallback(
-    (timeSec: number) => {
-      const canvas = canvasRef.current;
+    (timeSec: number, target?: HTMLCanvasElement, pixelRatio = 1, forExport = false) => {
+      const canvas = target || canvasRef.current;
       if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
+      const mainCtx = canvas.getContext('2d');
+      if (!mainCtx) return;
+      let ctx: CanvasRenderingContext2D = mainCtx;
+      const ratio = target ? pixelRatio : 1;
 
       const { index, scene, localTime, duration, progress } = getSceneAtTime(timeSec);
       if (!scene) return;
 
-      const W = canvas.width;
-      const H = canvas.height;
-      const pal = palettes[scene.paletteId] || palettes['depup-lavender'];
+      const W = canvas.width / ratio;
+      const H = canvas.height / ratio;
+      const pal = resolvePalette(palettes, scene.paletteId);
       const wType = normalizeWidgetType(scene.widgetType);
       const S = Math.min(W, H);
       const stiffness = 140 + springTension * 14;
       const damping = Math.max(9, 21 - springTension);
 
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
       ctx.save();
       ctx.clearRect(0, 0, W, H);
 
@@ -1149,14 +2299,32 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
       ctx.fillStyle = bottomOrb;
       ctx.fillRect(0, 0, W, H);
 
-      ctx.fillStyle = pal.isDark ? 'rgba(255,255,255,0.045)' : 'rgba(15,23,42,0.035)';
-      const gridStep = 36;
-      const gridScrollY = (timeSec * 18) % gridStep;
-      for (let gx = 24; gx < W; gx += gridStep) {
-        for (let gy = gridScrollY; gy < H; gy += gridStep) {
-          ctx.fillRect(gx, gy, 2, 2);
+      if (!scene.bgStyle || scene.bgStyle === 'mesh') {
+        ctx.fillStyle = pal.isDark ? 'rgba(255,255,255,0.045)' : 'rgba(15,23,42,0.035)';
+        const gridStep = 36;
+        const gridScrollY = (timeSec * 18) % gridStep;
+        for (let gx = 24; gx < W; gx += gridStep) {
+          for (let gy = gridScrollY; gy < H; gy += gridStep) {
+            ctx.fillRect(gx, gy, 2, 2);
+          }
         }
+      } else {
+        drawBackgroundStyle(ctx, scene.bgStyle, W, H, timeSec, pal);
       }
+      drawDecor(ctx, scene.decor, W, H, timeSec, localTime, index);
+
+      // Konten scene digambar di layer terpisah supaya transisi bisa menggerakkan semuanya sekaligus
+      const layer = getLayerCanvas(canvas.width, canvas.height);
+      const layerCtx = layer.getContext('2d');
+      if (!layerCtx) {
+        ctx.restore();
+        return;
+      }
+      layerCtx.setTransform(1, 0, 0, 1, 0, 0);
+      layerCtx.clearRect(0, 0, layer.width, layer.height);
+      layerCtx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      ctx = layerCtx;
+      ctx.save();
 
       const focusWindow =
         smoothStep(0.18, 0.42, progress) * (1 - smoothStep(0.76, 0.94, progress));
@@ -1188,135 +2356,215 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
       ctx.rotate(camRotZ);
       ctx.translate(-W / 2, -H / 2);
 
-      const padX = W * 0.082;
+      const U = Math.min(W, H * 0.75);
+      const landscape = W > H * 1.15;
+      const layout: SceneLayout =
+        scene.layout === 'center-text' ? 'center-text' : landscape ? 'stack' : scene.layout || 'stack';
+      const centered = layout === 'center-text';
+      const padX = landscape ? W * 0.06 : W * 0.082;
+      const textW = landscape && !centered ? W * 0.43 : W - padX * 2;
       const badgeSpring = solveSpring(localTime, { stiffness, damping });
-      const headerTopY = H * 0.115 + (1 - badgeSpring) * 42;
+
+      ctx.font = `700 ${Math.round(U * 0.036)}px ${canvasFont}`;
+      const badgeLabel = scene.stepBadge || `Langkah ${index + 1}`;
+      const pillW = ctx.measureText(badgeLabel).width + U * 0.093;
+      const pillH = Math.round(U * 0.07);
+
+      // Ukur judul; dikecilkan otomatis bila terlalu panjang
+      let titleFontSize = Math.round(U * (centered ? 0.094 : 0.074));
+      let titleLines: Array<{ words: WordBox[]; width: number }> = [];
+      for (;;) {
+        ctx.font = `800 ${titleFontSize}px ${canvasFont}`;
+        titleLines = layoutWords(ctx, String(scene.title || ''), textW);
+        const tooWide = titleLines.some((l) => l.width > textW * 1.02);
+        if ((!tooWide && titleLines.length <= (centered ? 6 : 5)) || titleFontSize <= U * 0.048) break;
+        titleFontSize = Math.round(titleFontSize * 0.9);
+      }
+      const lineHeight = titleFontSize * 1.2;
+      const titleH = titleLines.length * lineHeight;
+
+      const subFontSize = Math.round(U * 0.035);
+      ctx.font = `500 ${subFontSize}px ${canvasFont}`;
+      const subLines = scene.subtext ? wrapText(ctx, String(scene.subtext), textW) : [];
+      const subLH = subFontSize * 1.42;
+      const subH = subLines.length ? subLines.length * subLH + 6 : 0;
+
+      // Posisi blok sesuai layout
+      let badgeY: number;
+      let titleY: number;
+      let cardX = padX;
+      let cardW = W - padX * 2;
+      let cardY0: number;
+      let cardH: number;
+      if (centered) {
+        const blockH = pillH + 18 + titleH + subH;
+        badgeY = Math.max(H * 0.08, (H - blockH) / 2 - H * 0.03);
+        titleY = badgeY + pillH + 18;
+        cardY0 = H;
+        cardH = 0;
+      } else if (landscape) {
+        const blockH = pillH + 18 + titleH + subH;
+        badgeY = Math.max(H * 0.08, (H - blockH) / 2);
+        titleY = badgeY + pillH + 18;
+        cardX = W * 0.53;
+        cardW = W * 0.41;
+        cardY0 = H * 0.16;
+        cardH = H * 0.68;
+      } else if (layout === 'card-first') {
+        badgeY = H * 0.105;
+        cardY0 = badgeY + pillH + 22;
+        cardH = Math.max(H * 0.24, Math.min(H * 0.38, H * 0.89 - cardY0 - titleH - subH - 30));
+        titleY = cardY0 + cardH + 28;
+      } else {
+        badgeY = H * 0.115;
+        titleY = badgeY + pillH + 18;
+        cardY0 = Math.max(titleY + titleH + subH + 30, H * 0.41);
+        cardH = Math.min(H * 0.4, H - cardY0 - H * 0.11);
+      }
+      const headerTopY = badgeY + (1 - badgeSpring) * 42;
+      const pillX = centered ? (W - pillW) / 2 : padX;
 
       // Step Badge Pill
-      ctx.font = `700 ${Math.round(W * 0.036)}px ${canvasFont}`;
-      const badgeLabel = scene.stepBadge || `Langkah ${index + 1}`;
-      const badgeTextWidth = ctx.measureText(badgeLabel).width;
-      const pillW = badgeTextWidth + 50;
-      const pillH = Math.round(W * 0.07);
-
+      ctx.font = `700 ${Math.round(U * 0.036)}px ${canvasFont}`;
       ctx.save();
-      ctx.translate(padX + pillW / 2, headerTopY + pillH / 2);
+      ctx.translate(pillX + pillW / 2, headerTopY + pillH / 2);
       ctx.scale(0.6 + 0.4 * badgeSpring, 0.6 + 0.4 * badgeSpring);
-      ctx.translate(-(padX + pillW / 2), -(headerTopY + pillH / 2));
-
+      ctx.translate(-(pillX + pillW / 2), -(headerTopY + pillH / 2));
       ctx.shadowColor = 'rgba(15, 23, 42, 0.10)';
       ctx.shadowBlur = 18;
       ctx.shadowOffsetY = 6;
       ctx.fillStyle = pal.pillBg;
-      drawRoundedRect(ctx, padX, headerTopY, pillW, pillH, pillH / 2);
+      drawRoundedRect(ctx, pillX, headerTopY, pillW, pillH, pillH / 2);
       ctx.fill();
       ctx.lineWidth = 1.5;
       ctx.strokeStyle = pal.cardBorder;
       ctx.stroke();
       ctx.shadowColor = 'transparent';
-
       ctx.beginPath();
-      ctx.arc(padX + 19, headerTopY + pillH / 2, 4.5, 0, Math.PI * 2);
-      ctx.fillStyle = '#10b981';
+      ctx.arc(pillX + pillH * 0.5, headerTopY + pillH / 2, U * 0.0085, 0, Math.PI * 2);
+      ctx.fillStyle = pal.accent;
       ctx.fill();
-
       ctx.fillStyle = pal.pillText;
+      ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      ctx.fillText(badgeLabel, padX + 32, headerTopY + pillH / 2 + 1);
+      ctx.fillText(badgeLabel, pillX + pillH * 0.85, headerTopY + pillH / 2 + 1);
       ctx.restore();
 
-      // Word-by-word Staggered Headline
-      const titleFontSize = Math.round(W * 0.074);
-      const words = String(scene.title || '')
-        .trim()
-        .split(/\s+/);
+      // Judul dengan animasi sesuai gaya; kata kunci dari prompt diberi warna aksen
+      const anim: HeadlineAnim = scene.headlineAnim || 'spring-words';
+      const emphasisKeys = new Set(
+        String(scene.emphasis || '')
+          .split('|')
+          .map((k) => k.trim().toLowerCase())
+          .filter(Boolean)
+      );
+      const isEmphasis = (w: string) =>
+        emphasisKeys.size > 0 && emphasisKeys.has(w.toLowerCase().replace(/[^a-z0-9%]/g, ''));
+      const totalWords = titleLines.reduce((a, l) => a + l.words.length, 0);
+      const activeWordIdx = Math.floor((localTime * 2.6) % Math.max(1, totalWords));
+      let charsLeft = anim === 'typewriter' ? Math.floor(Math.max(0, localTime - 0.1) * 26) : Infinity;
+      let caret: { x: number; y: number } | null = null;
+      const titleBaseY = titleY + (1 - badgeSpring) * 30;
+      let baseAlpha = 1;
+
+      ctx.save();
       ctx.font = `800 ${titleFontSize}px ${canvasFont}`;
       ctx.textBaseline = 'top';
-      const spaceW = ctx.measureText(' ').width;
-      const lineHeight = titleFontSize * 1.22;
-      let cursorX = padX;
-      let cursorY = headerTopY + pillH + 18;
-      const activeWordIdx = Math.floor((localTime * 2.6) % Math.max(1, words.length));
-
-      words.forEach((word, wIdx) => {
-        const wWidth = ctx.measureText(word).width;
-        if (cursorX + wWidth > W - padX && wIdx > 0) {
-          cursorX = padX;
-          cursorY += lineHeight;
+      ctx.textAlign = 'left';
+      if (anim === 'pop') {
+        const sp = solveSpring(Math.max(0, localTime - 0.05), { stiffness: 260, damping: 11 });
+        const cx0 = centered ? W / 2 : padX + textW / 2;
+        const cy0 = titleBaseY + titleH / 2;
+        baseAlpha = Math.min(1, sp * 1.6);
+        ctx.translate(cx0, cy0);
+        ctx.rotate((1 - sp) * -0.07);
+        const sc = 1.35 - 0.35 * sp;
+        ctx.scale(sc, sc);
+        ctx.translate(-cx0, -cy0);
+      }
+      let wordIdx = 0;
+      titleLines.forEach((line, li) => {
+        const lineX = centered ? (W - line.width) / 2 : padX;
+        const lineY = titleBaseY + li * lineHeight;
+        let lineDy = 0;
+        if (anim === 'rise-lines') {
+          const delay = 0.06 + li * 0.12;
+          const sp = solveSpring(Math.max(0, localTime - delay), { stiffness, damping });
+          lineDy = (1 - sp) * lineHeight;
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(0, lineY - titleFontSize * 0.15, W, lineHeight + titleFontSize * 0.2);
+          ctx.clip();
         }
-        const wordDelay = 0.08 + wIdx * 0.065;
-        const wordSpring = solveSpring(Math.max(0, localTime - wordDelay), {
-          stiffness,
-          damping,
+        line.words.forEach((wd) => {
+          const idx = wordIdx++;
+          let alpha = 1;
+          let dy = lineDy;
+          let scale = 1;
+          let text = wd.text;
+          if (anim === 'spring-words' || anim === 'marker') {
+            const delay = 0.08 + idx * 0.065;
+            const sp = solveSpring(Math.max(0, localTime - delay), { stiffness, damping });
+            alpha = smoothStep(0, 0.22, localTime - delay);
+            dy = (1 - sp) * 28;
+            scale = 0.82 + 0.18 * sp;
+          } else if (anim === 'typewriter') {
+            if (charsLeft <= 0) return;
+            text = wd.text.slice(0, charsLeft);
+            charsLeft -= wd.text.length + 1;
+          }
+          const emph = isEmphasis(wd.text);
+          const kinetic = wType === 'kinetic_showcase_card' && idx === activeWordIdx;
+          ctx.save();
+          ctx.globalAlpha = alpha * baseAlpha;
+          ctx.translate(lineX + wd.x + wd.w / 2, lineY + titleFontSize / 2 + dy);
+          ctx.scale(scale, scale);
+          if (kinetic || (emph && anim === 'marker')) {
+            const grow = kinetic ? 1 : smoothStep(0.25 + idx * 0.065, 0.55 + idx * 0.065, localTime);
+            if (grow > 0) {
+              ctx.fillStyle = pal.accent;
+              drawRoundedRect(ctx, -wd.w / 2 - 7, -titleFontSize / 2 - 2, (wd.w + 14) * grow, titleFontSize + 6, 10);
+              ctx.fill();
+            }
+            ctx.fillStyle = grow > 0.5 ? readableOn(pal.accent) : emph ? pal.accent : pal.titleColor;
+          } else {
+            ctx.fillStyle = emph ? pal.accent : pal.titleColor;
+          }
+          ctx.fillText(text, -wd.w / 2, -titleFontSize / 2);
+          ctx.restore();
+          if (anim === 'typewriter') {
+            caret = { x: lineX + wd.x + ctx.measureText(text).width, y: lineY };
+          }
         });
-        const wordAlpha = smoothStep(0, 0.22, localTime - wordDelay);
-        const yOffset = (1 - wordSpring) * 28;
-        const wordScale = 0.82 + 0.18 * wordSpring;
-
-        ctx.save();
-        ctx.globalAlpha = wordAlpha;
-        ctx.translate(cursorX + wWidth / 2, cursorY + titleFontSize / 2 + yOffset);
-        ctx.scale(wordScale, wordScale);
-
-        const isHighlighted =
-          wType === 'kinetic_showcase_card' && wIdx === activeWordIdx;
-        if (isHighlighted) {
-          ctx.fillStyle = pal.accent;
-          drawRoundedRect(
-            ctx,
-            -wWidth / 2 - 7,
-            -titleFontSize / 2 - 2,
-            wWidth + 14,
-            titleFontSize + 6,
-            10
-          );
-          ctx.fill();
-          ctx.fillStyle = '#ffffff';
-        } else {
-          ctx.fillStyle = pal.titleColor;
-        }
-        ctx.fillText(word, -wWidth / 2, -titleFontSize / 2);
-        ctx.restore();
-        cursorX += wWidth + spaceW;
+        if (anim === 'rise-lines') ctx.restore();
       });
+      const caretPos = caret as { x: number; y: number } | null;
+      if (anim === 'typewriter' && caretPos && Math.floor(timeSec * 2.2) % 2 === 0) {
+        ctx.fillStyle = pal.accent;
+        ctx.fillRect(caretPos.x + 4, caretPos.y + titleFontSize * 0.08, Math.max(2, U * 0.006), titleFontSize * 0.86);
+      }
+      ctx.restore();
 
-      const afterTitleY = cursorY + lineHeight;
       const subSpring = solveSpring(Math.max(0, localTime - 0.18), {
         stiffness: stiffness * 0.9,
         damping,
       });
+      const subY = titleBaseY + titleH + 6 + (1 - subSpring) * 18;
       ctx.save();
       ctx.globalAlpha = smoothStep(0.12, 0.38, localTime);
       ctx.fillStyle = pal.subColor;
-      const subFontSize = Math.round(W * 0.035);
       ctx.font = `500 ${subFontSize}px ${canvasFont}`;
       ctx.textBaseline = 'top';
-
-      const subWords = String(scene.subtext || '').split(' ');
-      let subLine = '';
-      let subY = afterTitleY + 6 + (1 - subSpring) * 18;
-      for (let n = 0; n < subWords.length; n++) {
-        const test = subLine + subWords[n] + ' ';
-        if (ctx.measureText(test).width > W - padX * 2 && n > 0) {
-          ctx.fillText(subLine.trim(), padX, subY);
-          subLine = subWords[n] + ' ';
-          subY += subFontSize * 1.42;
-        } else {
-          subLine = test;
-        }
-      }
-      if (subLine.trim()) ctx.fillText(subLine.trim(), padX, subY);
+      ctx.textAlign = centered ? 'center' : 'left';
+      subLines.forEach((ln, i) => ctx.fillText(ln, centered ? W / 2 : padX, subY + i * subLH));
       ctx.restore();
 
-      // Main Interactive UI Card
+      // Kartu utama
       const cardSpring = solveSpring(Math.max(0, localTime - 0.14), { stiffness, damping });
-      const cardX = padX;
-      const cardW = W - padX * 2;
-      const cardY = Math.max(subY + 34, H * 0.41) + (1 - cardSpring) * 68;
-      const cardH = Math.min(H * 0.4, H - cardY - H * 0.11);
+      const cardY = cardY0 + (1 - cardSpring) * (layout === 'card-first' ? -40 : 68);
       const radius = Number(cardRadius) || 24;
 
-      if (showParticles) {
+      if (showParticles && cardH > 0) {
         ctx.save();
         for (let p = 0; p < 6; p++) {
           const pT = (timeSec * 0.55 + p * 0.17) % 1;
@@ -1367,7 +2615,9 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
         ctx.restore();
       };
 
-      if (wType === 'terminal_build_card') {
+      if (centered) {
+        cursorTarget = null;
+      } else if (wType === 'terminal_build_card') {
         ctx.shadowColor = 'rgba(0, 0, 0, 0.36)';
         ctx.shadowBlur = 34;
         ctx.shadowOffsetY = 16;
@@ -2084,6 +3334,19 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
 
       ctx.restore();
       ctx.restore();
+      ctx.restore();
+      ctx = mainCtx;
+      compositeScene(
+        ctx,
+        layer,
+        W,
+        H,
+        scene.transition || 'fade',
+        localTime,
+        duration,
+        index === scenes.length - 1,
+        timeSec
+      );
 
       const footerY = H - H * 0.058;
       scenes.forEach((_, si) => {
@@ -2099,7 +3362,7 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
         ctx.fill();
       });
 
-      if (showSafeZone) {
+      if (showSafeZone && !forExport) {
         ctx.save();
         ctx.strokeStyle = 'rgba(99, 102, 241, 0.26)';
         ctx.setLineDash([6, 6]);
@@ -2124,29 +3387,42 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
     ]
   );
 
-  // 60fps Animation Loop
+  // Loop animasi: waktu disimpan di ref, React hanya diperbarui ±8x per detik (bukan 60x)
   useEffect(() => {
     let rafId = 0;
     let lastTs = performance.now();
+    let lastUi = 0;
     const step = (now: number) => {
       const dt = Math.min(0.1, (now - lastTs) / 1000);
       lastTs = now;
-      if (isPlaying) {
-        setCurrentTime((prev) => {
-          const next = prev + dt >= totalDuration ? 0 : prev + dt;
-          const { index } = getSceneAtTime(next);
-          setActiveSceneIndex(index);
-          renderFrame(next);
-          return next;
-        });
-      } else {
-        renderFrame(currentTime);
+      if (!exportingRef.current) {
+        if (isPlaying && totalDuration > 0) {
+          let next = timeRef.current + dt;
+          if (next >= totalDuration) next = 0;
+          timeRef.current = next;
+          if (now - lastUi > 120) {
+            lastUi = now;
+            setCurrentTime(next);
+            const { index } = getSceneAtTime(next);
+            setActiveSceneIndex((prev) => (prev === index ? prev : index));
+          }
+        }
+        renderFrame(timeRef.current);
       }
       rafId = requestAnimationFrame(step);
     };
     rafId = requestAnimationFrame(step);
     return () => cancelAnimationFrame(rafId);
-  }, [isPlaying, totalDuration, getSceneAtTime, renderFrame, currentTime]);
+  }, [isPlaying, totalDuration, getSceneAtTime, renderFrame]);
+
+  const sceneStartTime = (i: number) =>
+    scenes.slice(0, Math.max(0, i)).reduce((acc, sc) => acc + (Number(sc.duration) || 3.4), 0);
+
+  const jumpToScene = (i: number) => {
+    const idx = Math.max(0, Math.min(scenes.length - 1, i));
+    setActiveSceneIndex(idx);
+    seekTo(sceneStartTime(idx) + 0.05);
+  };
 
   const activeScene = scenes[activeSceneIndex] || scenes[0];
 
@@ -2162,12 +3438,12 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
       showToast('Tulis topik videonya dulu.');
       return;
     }
-    const storeMeta = useEditorStore.getState().script?.extractedMeta;
     const result = generateScript(topic, studioCategory, {
-      customStoreName: studioCategory === 'promo' ? storeMeta?.storeName || undefined : undefined,
+      customStoreName: studioCategory === 'promo' && storeName.trim() ? storeName.trim() : undefined,
+      stylePackId: stylePackChoice === 'auto' ? undefined : stylePackChoice,
     });
 
-    // Preset simpanan admin dengan kata kunci yang cocok ikut menentukan gaya (kamera & palet).
+    // Template simpanan admin dengan kata kunci yang cocok ikut menentukan palet & kamera
     const lower = topic.toLowerCase();
     const matched = trainedVideos.find(
       (v) =>
@@ -2178,22 +3454,285 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
           .map((k) => k.trim().toLowerCase())
           .some((k) => k.length > 2 && lower.includes(k))
     );
-    const camera: CameraMotionType =
-      cameraChoice !== 'auto'
-        ? cameraChoice
-        : matched?.cameraMotion || suggestCameraMotion(studioCategory);
-    const paletteId =
-      matched && palettes[matched.paletteId] ? matched.paletteId : result.suggestedStyle.paletteId;
-
-    setScenes(sceneItemsToStudio(result.scenes, camera, paletteId));
+    const camera = cameraChoice !== 'auto' ? cameraChoice : undefined;
+    let next = sceneItemsToStudio(result.scenes, camera);
+    if (matched && palettes[matched.paletteId]) {
+      next = next.map((sc) => ({
+        ...sc,
+        paletteId: matched.paletteId,
+        cameraMotion: camera || matched.cameraMotion,
+      }));
+    }
+    setScenes(next);
     setFontName(result.suggestedStyle.font);
+    setBeatBpm(result.suggestedMusic.bpm);
+    setLastRecipe(result.recipe || null);
+    scriptBaseRef.current = {
+      ...scriptBaseRef.current,
+      hook: result.hook,
+      caption: result.caption,
+      hashtags: result.hashtags,
+      recipe: result.recipe,
+      extractedMeta: result.extractedMeta,
+    };
+    const ar = result.recipe?.keys.aspect;
+    if (ar) setAspectRatio(ar);
     setActiveSceneIndex(0);
-    setCurrentTime(0);
+    seekTo(0);
     showToast(
       matched
-        ? `Script baru dibuat dengan gaya preset "${matched.title}".`
-        : 'Script baru dibuat. Klik lagi untuk variasi kalimat lain.'
+        ? `Gaya "${result.recipe?.packName}" + template "${matched.title}". Klik lagi untuk variasi lain.`
+        : `Gaya "${result.recipe?.packName}", ${next.length} scene${ar ? `, rasio ${ar}` : ''}. Klik lagi untuk variasi lain.`
     );
+  };
+
+  /** Ganti gaya visual semua scene (teks tetap). */
+  const handleShuffleStyle = () => {
+    const keys = analyzePrompt(smartPrompt || projectTitle, studioCategory);
+    const current = scenes[0]?.paletteId;
+    const candidates = getStylePacks().filter(
+      (p) =>
+        p.id !== 'preview-admin' &&
+        (!p.categories || p.categories.includes(studioCategory)) &&
+        paletteIdOfPack(p) !== current
+    );
+    const pack = candidates[Math.floor(Math.random() * candidates.length)] || getStylePacks()[0];
+    setScenes((prev) =>
+      prev.map((sc, i) => ({
+        ...sc,
+        ...styleFieldsFor(pack, i, sc.widgetType, true, keys, Math.random, sc.layout === 'center-text' ? 'center-text' : undefined),
+      }))
+    );
+    setFontName(pack.font);
+    setLastRecipe((r) => (r ? { ...r, packId: pack.id, packName: pack.name } : r));
+    showToast(`Gaya diganti ke "${pack.name}". Teks tidak berubah.`);
+  };
+
+  const handleSaveAsProject = async () => {
+    try {
+      const supabase = createClient();
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        showToast('Masuk dulu untuk menyimpan proyek.');
+        return;
+      }
+      setSaveState('saving');
+      const snapshot: StudioSnapshot = {
+        version: 1,
+        scenes,
+        fontName,
+        aspectRatio,
+        category: studioCategory,
+        savedAt: new Date().toISOString(),
+      };
+      const { data, error } = await supabase
+        .from('projects')
+        .insert([
+          {
+            user_id: userData.user.id,
+            title: projectTitle.trim() || 'Proyek tanpa judul',
+            topic: smartPrompt,
+            category: studioCategory,
+            template_id: TEMPLATE_BY_CATEGORY[studioCategory],
+            script_json: { ...scriptBaseRef.current, studio: snapshot },
+            style_json: { font: fontName, aspectRatio },
+            status: 'draft',
+          },
+        ])
+        .select('id')
+        .single();
+      if (error || !data) {
+        setSaveState('error');
+        showToast(`Gagal menyimpan: ${error?.message || 'database tidak mengembalikan data'}`);
+        return;
+      }
+      showToast('Proyek tersimpan. Perubahan berikutnya disimpan otomatis.');
+      router.replace(`/editor/${data.id}`);
+    } catch {
+      setSaveState('error');
+      showToast('Gagal menyimpan. Periksa koneksi atau konfigurasi Supabase.');
+    }
+  };
+
+  /* ---------- Admin: trainer gaya dari referensi ---------- */
+
+  const applyStyleForm = (st: Partial<StylePack>) => {
+    if (st.colors) setRefColors(st.colors);
+    if (st.bgStyle) setRefBg(st.bgStyle);
+    if (st.layout) setRefLayout(st.layout);
+    if (st.transition) setRefTransition(st.transition);
+    if (st.headlineAnim) setRefAnim(st.headlineAnim);
+    if (st.font) setRefFont(st.font);
+    if (st.camera) setRefCamera(st.camera);
+    if (st.pace) setRefPace(st.pace);
+  };
+
+  const refFormPack = () => ({
+    name: refName.trim() || 'Gaya referensi',
+    tags: refTags,
+    categories: refCats,
+    colors: refColors,
+    bgStyle: refBg,
+    layout: refLayout,
+    transition: refTransition,
+    headlineAnim: refAnim,
+    font: refFont,
+    camera: refCamera,
+    pace: refPace,
+    decor: refDecor.trim() || undefined,
+  });
+
+  const handleRefFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > 300 * 1024 * 1024) {
+      showToast('File terlalu besar (maksimal 300 MB).');
+      return;
+    }
+    setRefBusy(true);
+    try {
+      const result = await analyzeVideoFile(file);
+      applyStyleForm(result.suggestion);
+      setRefName((n) => n || file.name.replace(/\.[^.]+$/, '').slice(0, 50));
+      setRefTags((t) => t || result.tags.join(', '));
+      setRefSource({ kind: 'file', label: file.name, thumbs: result.frames, notes: result.notes });
+      showToast('Video dianalisis. Cek dan sesuaikan gayanya sebelum disimpan.');
+    } catch (err) {
+      showToast(`Video tidak bisa dianalisis: ${err instanceof Error ? err.message : 'format tidak didukung'}`);
+    } finally {
+      setRefBusy(false);
+    }
+  };
+
+  const handleRefLink = async () => {
+    const url = refLink.trim();
+    if (!url) return;
+    setRefBusy(true);
+    try {
+      const res = await fetch(`/api/reference?url=${encodeURIComponent(url)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+      const title: string = data.title || '';
+      let colors: ColorAnalysis | null = null;
+      let thumb = '';
+      if (data.thumbnailUrl) {
+        thumb = `/api/reference?thumb=${encodeURIComponent(data.thumbnailUrl)}`;
+        try {
+          colors = await analyzeImageColors(thumb);
+        } catch {
+          colors = null;
+        }
+      }
+      if (colors) {
+        applyStyleForm({
+          colors: { bgStart: colors.bgStart, bgEnd: colors.bgEnd, accent: colors.accent, isDark: colors.isDark },
+          bgStyle: colors.isDark ? 'spotlight' : colors.colorful >= 4 ? 'blobs' : 'mesh',
+        });
+      }
+      setRefName((n) => n || title.replace(/#\S+/g, '').trim().slice(0, 50) || 'Gaya referensi');
+      setRefTags((t) => t || tagsFromText(title).join(', '));
+      setRefSource({
+        kind: 'link',
+        label: `${data.provider} • ${data.author || 'kreator'}`,
+        url,
+        author: data.author || undefined,
+        thumbs: thumb ? [thumb] : [],
+        notes: [
+          title ? `Judul: ${title.slice(0, 140)}` : 'Judul tidak tersedia.',
+          colors
+            ? `Warna dari thumbnail: ${colors.bgStart}, ${colors.bgEnd}, aksen ${colors.accent}.`
+            : 'Warna thumbnail tidak terbaca.',
+          'Gerak, tempo, dan transisi tidak bisa dibaca dari link. Atur manual, atau unggah file videonya.',
+        ],
+      });
+    } catch (err) {
+      showToast(`Link tidak bisa dibaca: ${err instanceof Error ? err.message : 'coba lagi'}`);
+    } finally {
+      setRefBusy(false);
+    }
+  };
+
+  const handlePreviewStyle = () => {
+    const pack = normalizeStylePack(refFormPack(), 'preview-admin', refName || 'Pratinjau');
+    if (!pack) return;
+    addStylePackToEngine(pack);
+    const keys = analyzePrompt(smartPrompt || projectTitle, studioCategory);
+    setScenes((prev) =>
+      prev.map((sc, i) => ({
+        ...sc,
+        ...styleFieldsFor(pack, i, sc.widgetType, true, keys, Math.random, sc.layout === 'center-text' ? 'center-text' : undefined),
+      }))
+    );
+    setFontName(pack.font);
+    showToast('Gaya dicoba di kanvas (belum disimpan).');
+  };
+
+  const handleSaveStyle = async () => {
+    if (!isAdmin) {
+      showToast('Hanya admin yang bisa menyimpan gaya.');
+      return;
+    }
+    if (!refTags.trim()) {
+      showToast('Isi kata pemicu dulu supaya gaya ini bisa dipilih generator.');
+      return;
+    }
+    const form = refFormPack();
+    setRefBusy(true);
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('ai_training_data')
+        .insert([
+          {
+            type: 'video_motion',
+            category: refCats.length === 1 ? refCats[0] : 'all',
+            content_text: form.name,
+            subtext: refTags,
+            video_url: refSource?.url || null,
+            creator_handle: refSource?.author || null,
+            motion_profile: {},
+            metadata_json: {
+              style_pack: form,
+              source: refSource?.kind || 'manual',
+              analysis_notes: refSource?.notes || [],
+            },
+          },
+        ])
+        .select('*')
+        .single();
+      if (error || !data) {
+        showToast(`Gaya gagal disimpan: ${error?.message || 'database tidak mengembalikan data'}`);
+        return;
+      }
+      const row = data as TrainingRow;
+      const pack = normalizeStylePack(form, `db-${row.id}`, form.name);
+      if (pack) addStylePackToEngine(pack);
+      removeStylePackFromEngine('preview-admin');
+      setSupabaseRows((prev) => [row, ...prev]);
+      showToast(`Gaya "${form.name}" tersimpan. Prompt dengan kata pemicunya akan memakai gaya ini.`);
+    } catch (err) {
+      showToast(`Gaya gagal disimpan: ${err instanceof Error ? err.message : 'koneksi bermasalah'}`);
+    } finally {
+      setRefBusy(false);
+    }
+  };
+
+  const handleShareExport = async () => {
+    if (!exportResult) return;
+    try {
+      const blob = await fetch(exportResult.url).then((r) => r.blob());
+      const file = new File([blob], exportResult.name, { type: exportResult.type });
+      const nav = navigator as Navigator & { canShare?: (data: { files: File[] }) => boolean };
+      if (typeof nav.share === 'function' && nav.canShare?.({ files: [file] })) {
+        await nav.share({ files: [file], title: projectTitle });
+        return;
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+    }
+    triggerDownload(exportResult.url, exportResult.name);
+    showToast('Browser ini tidak bisa membagikan file langsung, jadi videonya diunduh.');
   };
 
   // Admin: Save Current Canvas Blueprint as a New Trained Video Preset
@@ -2306,37 +3845,93 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
     }
   };
 
-  const handleExportVideo = () => {
-    const canvas = canvasRef.current;
-    if (!canvas || typeof canvas.captureStream !== 'function') {
-      showToast('Render 60fps aktif di kanvas!');
+  const handleExportVideo = async () => {
+    if (exportingRef.current) return;
+    if (typeof window === 'undefined' || typeof MediaRecorder === 'undefined') {
+      showToast('Browser ini belum bisa merekam video. Pakai Chrome, Edge, atau Safari terbaru.');
       return;
     }
+    const mime = pickRecorderMime();
+    if (!mime) {
+      showToast('Browser ini tidak mendukung perekaman MP4 maupun WebM.');
+      return;
+    }
+    const size = EXPORT_SIZES[aspectRatio];
+    const out = document.createElement('canvas');
+    out.width = size.w;
+    out.height = size.h;
+    if (typeof out.captureStream !== 'function') {
+      showToast('Browser ini belum bisa merekam kanvas.');
+      return;
+    }
+    const ratio = size.w / canvasDims.w;
+    // AudioContext dibuat langsung saat klik (aturan autoplay browser)
+    let audio: AudioContext | null = null;
+    if (withBeat && typeof AudioContext !== 'undefined') audio = new AudioContext();
+    exportingRef.current = true;
+    setIsPlaying(false);
+    setExportProgress(0);
+    if (exportResult) {
+      URL.revokeObjectURL(exportResult.url);
+      setExportResult(null);
+    }
+    showToast('Merekam video… jangan pindah tab sampai selesai.');
     try {
-      const stream = canvas.captureStream(60);
-      const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
-      const chunks: BlobPart[] = [];
-      recorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) chunks.push(e.data);
+      await ensureCanvasFont(fontName);
+      const stream = out.captureStream(30);
+      if (audio) {
+        const dest = audio.createMediaStreamDestination();
+        scheduleBeat(audio, dest, beatBpm, totalDuration);
+        dest.stream.getAudioTracks().forEach((track) => stream.addTrack(track));
+      }
+      const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8_000_000 });
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (ev) => {
+        if (ev.data && ev.data.size > 0) chunks.push(ev.data);
       };
-      recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'video/webm' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${projectTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.webm`;
-        a.click();
-        showToast('Video WebM 60fps berhasil diunduh!');
-      };
-      setCurrentTime(0);
+      const stopped = new Promise<void>((resolve) => {
+        recorder.onstop = () => resolve();
+      });
+      renderFrame(0, out, ratio, true);
+      recorder.start(250);
+      const t0 = performance.now();
+      await new Promise<void>((resolve) => {
+        let lastUi = 0;
+        const tick = (now: number) => {
+          const t = (now - t0) / 1000;
+          renderFrame(Math.min(t, totalDuration - 0.001), out, ratio, true);
+          if (now - lastUi > 200) {
+            lastUi = now;
+            setExportProgress(Math.min(1, t / totalDuration));
+          }
+          if (t >= totalDuration + 0.15) resolve();
+          else requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+      recorder.stop();
+      await stopped;
+      stream.getTracks().forEach((track) => track.stop());
+      const type = mime.split(';')[0];
+      const ext = type === 'video/mp4' ? 'mp4' : 'webm';
+      const blob = new Blob(chunks, { type });
+      if (!blob.size) throw new Error('hasil rekaman kosong');
+      const name = `${slugify(projectTitle) || 'motionku'}-${aspectRatio.replace(':', 'x')}.${ext}`;
+      const url = URL.createObjectURL(blob);
+      setExportResult({ url, name, type });
+      triggerDownload(url, name);
+      showToast(
+        ext === 'mp4'
+          ? `Video MP4 ${size.w}×${size.h} (${totalDuration.toFixed(1)} detik) siap.`
+          : `Video WebM ${size.w}×${size.h} siap. Kalau aplikasi menolak WebM, ubah dulu ke MP4.`
+      );
+    } catch (err) {
+      showToast(`Render gagal: ${err instanceof Error ? err.message : 'kesalahan tidak dikenal'}`);
+    } finally {
+      if (audio) audio.close().catch(() => undefined);
+      exportingRef.current = false;
+      setExportProgress(null);
       setIsPlaying(true);
-      recorder.start();
-      setTimeout(() => {
-        if (recorder.state === 'recording') recorder.stop();
-      }, Math.min(4500, totalDuration * 1000));
-      showToast('Merekam kanvas 60fps ke WebM...');
-    } catch {
-      showToast('Pratinjau 60fps berjalan di kanvas');
     }
   };
 
@@ -2371,11 +3966,25 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
                 className="bg-transparent hover:bg-[#1a1d29] focus:bg-[#1a1d29] focus:outline-none px-2 py-0.5 rounded text-xs font-bold text-white w-56"
               />
               <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-gradient-to-r from-indigo-500/20 to-lime-400/20 text-lime-300 border border-lime-400/30">
-                AI Lab × Motion Skill 5.5
+                {CATEGORY_LABEL[studioCategory]}
               </span>
             </div>
             <div className="text-[10px] text-slate-400 px-2 flex items-center gap-2">
-              <span>MeledakCik/motionid</span>
+              <span
+                className={
+                  saveState === 'error' || saveState === 'loadfail' ? 'text-rose-400' : saveState === 'saved' ? 'text-emerald-400' : ''
+                }
+              >
+                {{
+                  idle: 'Draf, belum disimpan',
+                  loading: 'Memuat proyek…',
+                  loadfail: 'Gagal memuat proyek',
+                  saving: 'Menyimpan…',
+                  saved: 'Tersimpan',
+                  error: 'Gagal menyimpan',
+                  local: 'Belum tersimpan di akun',
+                }[saveState]}
+              </span>
               <span>•</span>
               <span className="text-indigo-400 font-semibold">
                 {trainedVideos.length} preset tersedia
@@ -2419,7 +4028,7 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
 
         {/* Right Controls */}
         <div className="flex items-center gap-2">
-          <div className="hidden sm:flex items-center bg-[#181b26] border border-[#272b3a] rounded-lg p-0.5 text-[11px]">
+          <div className="flex items-center bg-[#181b26] border border-[#272b3a] rounded-lg p-0.5 text-[11px]">
             {(['9:16', '1:1', '16:9'] as const).map((r) => (
               <button
                 key={r}
@@ -2434,16 +4043,60 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
             ))}
           </div>
 
+          {(!projectId || saveState === 'local') && (
+            <button
+              type="button"
+              onClick={handleSaveAsProject}
+              disabled={saveState === 'saving'}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#1d2130] border border-[#2a2f42] text-slate-200 disabled:opacity-50"
+            >
+              Simpan proyek
+            </button>
+          )}
           <button
             type="button"
             onClick={handleExportVideo}
-            className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 hover:from-indigo-400 hover:to-purple-500 text-white shadow-lg flex items-center gap-1.5"
+            disabled={exportProgress !== null}
+            className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 hover:from-indigo-400 hover:to-purple-500 text-white shadow-lg flex items-center gap-1.5 disabled:opacity-80"
           >
             <span>⬇</span>
-            <span>Render Video</span>
+            <span>
+              {exportProgress !== null ? `Merekam ${Math.round(exportProgress * 100)}%` : 'Render Video'}
+            </span>
           </button>
         </div>
       </header>
+
+      {exportResult && (
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2 bg-emerald-500/10 border-b border-emerald-500/30 text-xs">
+          <span className="text-emerald-300 font-semibold">Video siap: {exportResult.name}</span>
+          <button
+            type="button"
+            onClick={() => triggerDownload(exportResult.url, exportResult.name)}
+            className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-semibold"
+          >
+            Unduh lagi
+          </button>
+          <button
+            type="button"
+            onClick={handleShareExport}
+            className="px-2.5 py-1 rounded-lg bg-[#1d2130] border border-[#2a2f42] text-slate-200 font-semibold"
+          >
+            Bagikan ke TikTok / IG / WA
+          </button>
+          <button
+            type="button"
+            aria-label="Tutup"
+            onClick={() => {
+              URL.revokeObjectURL(exportResult.url);
+              setExportResult(null);
+            }}
+            className="ml-auto px-2 text-slate-400"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* MAIN 3-COLUMN STUDIO WORKSPACE (SHARED BY USER & ADMIN) */}
       <main className="flex-1 flex flex-col lg:flex-row overflow-hidden">
@@ -2485,7 +4138,10 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
                           key={opt.value}
                           type="button"
                           aria-pressed={studioCategory === opt.value}
-                          onClick={() => setStudioCategory(opt.value)}
+                          onClick={() => {
+                            setStudioCategory(opt.value);
+                            setStylePackChoice('auto');
+                          }}
                           className={`py-2 rounded-lg text-[11px] font-semibold border transition ${
                             studioCategory === opt.value
                               ? 'bg-indigo-600 border-indigo-500 text-white'
@@ -2511,37 +4167,80 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
                       className="w-full rounded-xl bg-[#090b10] border border-[#282c3e] p-2.5 text-xs text-white placeholder:text-slate-500"
                     />
                     <p className="text-[10px] text-slate-400 leading-relaxed">
-                      {CATEGORY_HINTS[studioCategory].hint}
+                      {CATEGORY_HINTS[studioCategory].hint} Tambahkan suasana, warna, atau platform (mis. &quot;aesthetic
+                      hangat&quot;, &quot;merah tegas&quot;, &quot;buat story WA&quot;) supaya gayanya ikut menyesuaikan.
                     </p>
                   </div>
 
-                  <div className="space-y-1">
-                    <label htmlFor="studio-camera" className="block text-[11px] font-semibold text-slate-300">
-                      Gerak kamera
+                  {studioCategory === 'promo' && (
+                    <label className="block">
+                      <span className="block text-[11px] font-semibold text-slate-300 mb-1">Nama toko (opsional)</span>
+                      <input
+                        value={storeName}
+                        onChange={(e) => setStoreName(e.target.value)}
+                        placeholder="Kedai Kopi Senja"
+                        className={INPUT_CLS}
+                      />
                     </label>
-                    <select
-                      id="studio-camera"
+                  )}
+
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <OptionSelect
+                      label="Gaya visual"
+                      value={stylePackChoice}
+                      options={[
+                        ['auto', 'Otomatis dari prompt'] as [string, string],
+                        ...getStylePacks()
+                          .filter(
+                            (p) => p.id !== 'preview-admin' && (!p.categories || p.categories.includes(studioCategory))
+                          )
+                          .map((p) => [p.id, p.trained ? `${p.name} (admin)` : p.name] as [string, string]),
+                      ]}
+                      onChange={setStylePackChoice}
+                    />
+                    <OptionSelect
+                      label="Gerak kamera"
                       value={cameraChoice}
-                      onChange={(e) => setCameraChoice(e.target.value as 'auto' | CameraMotionType)}
-                      className="w-full bg-[#181b26] border border-[#282c3e] rounded-xl px-2 py-1.5 text-[11px] text-white"
-                    >
-                      {CAMERA_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
+                      options={CAMERA_OPTIONS.map((o) => [o.value, o.label] as ['auto' | CameraMotionType, string])}
+                      onChange={setCameraChoice}
+                    />
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={handleGenerateFromPrompt}
-                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs shadow-lg"
-                  >
-                    Buat script & scene
-                  </button>
+                  <div className="grid grid-cols-[1fr_auto] gap-1.5">
+                    <button
+                      type="button"
+                      onClick={handleGenerateFromPrompt}
+                      className="w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs shadow-lg"
+                    >
+                      Buat script & scene
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleShuffleStyle}
+                      title="Ganti gaya visual, teks tetap"
+                      className="px-3 rounded-xl bg-[#1d2130] border border-[#2a2f42] text-slate-200 font-semibold text-xs"
+                    >
+                      🎲 Acak gaya
+                    </button>
+                  </div>
+
+                  {lastRecipe && (
+                    <div className="rounded-xl border border-[#282c3e] bg-[#0d1017] p-2.5 space-y-1.5">
+                      <div className="text-[10px] font-semibold text-slate-400">Terbaca dari prompt</div>
+                      <div className="flex flex-wrap gap-1">
+                        {recipeChips(lastRecipe).map((chip) => (
+                          <span key={chip} className="px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-200 text-[10px]">
+                            {chip}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="text-[10px] text-slate-300">
+                        Gaya <b>{lastRecipe.packName}</b>, susunan {VARIANT_LABEL[lastRecipe.variant]}
+                      </div>
+                    </div>
+                  )}
                   <p className="text-[10px] text-slate-500 leading-relaxed">
-                    Klik lagi untuk variasi kalimat lain. Semua teks bisa diedit di panel kanan.
+                    Klik lagi untuk variasi kalimat, gaya, dan susunan scene lain. Semua teks bisa diedit di panel kanan.
                   </p>
                 </div>
               )}
@@ -2557,7 +4256,7 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
                         if (vid.category !== 'saas') setStudioCategory(vid.category);
                         setFontName(suggestedFontFor(vid.category));
                         setActiveSceneIndex(0);
-                        setCurrentTime(0);
+                        seekTo(0);
                         showToast(`Template "${vid.title}" diterapkan.`);
                       }}
                       className={`p-3 rounded-xl border cursor-pointer transition ${
@@ -2632,7 +4331,7 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
               <div className="grid grid-cols-4 border-b border-[#222636] bg-[#0c0e14] p-1 gap-1 text-[10px] font-bold">
                 {(
                   [
-                    ['video', '🎬 Video'],
+                    ['video', '🎬 Referensi'],
                     ['blueprint', '🧬 Scene'],
                     ['physics', '🎨 Palet'],
                     ['rules', '📚 Rules'],
@@ -2654,119 +4353,223 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
               </div>
 
               {adminTab === 'video' && (
-                <div className="flex-1 overflow-y-auto p-3 space-y-3 text-xs">
-                  <div className="p-2.5 rounded-xl bg-lime-400/10 border border-lime-400/30">
-                    <div className="font-bold text-lime-300 text-[11px]">
-                      🛡️ Admin Video Motion Trainer
-                    </div>
-                    <p className="text-[10px] text-slate-300 mt-0.5">
-                      Latih preset baru dari URL video TikTok/Reels/MP4 dan atur kata kunci pemicu
-                      otomatis untuk User.
+                <div className="flex-1 overflow-y-auto p-3 space-y-4 text-xs">
+                  <section className="space-y-2">
+                    <h3 className="text-[11px] font-bold text-lime-300">1. Sumber referensi</h3>
+                    <p className="text-[10px] text-slate-400 leading-relaxed">
+                      File video dianalisis langsung di browser: warna, banyaknya gerak, potongan adegan, dan posisi
+                      konten. Dari link YouTube/TikTok hanya judul, kreator, dan warna thumbnail yang bisa dibaca.
                     </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] text-slate-400 mb-1">
-                      URL Video Referensi (TikTok / Reels / MP4)
-                    </label>
-                    <input
-                      type="url"
-                      value={adminVideoUrl}
-                      onChange={(e) => setAdminVideoUrl(e.target.value)}
-                      className="w-full rounded-xl bg-[#181b26] border border-[#2a2f42] px-2.5 py-1.5 text-xs text-indigo-300 font-mono"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-[10px] text-slate-400 mb-1">Kreator</label>
+                    <label className="block">
+                      <span className="block text-[10px] text-slate-400 mb-1">Unggah video referensi (MP4/WebM/MOV)</span>
                       <input
-                        type="text"
-                        value={adminCreatorHandle}
-                        onChange={(e) => setAdminCreatorHandle(e.target.value)}
-                        className="w-full rounded-xl bg-[#181b26] border border-[#2a2f42] px-2.5 py-1.5 text-xs text-white"
+                        type="file"
+                        accept="video/*"
+                        onChange={handleRefFile}
+                        disabled={refBusy}
+                        className="block w-full text-[11px] text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-indigo-600 file:text-white"
+                      />
+                    </label>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="url"
+                        value={refLink}
+                        onChange={(e) => setRefLink(e.target.value)}
+                        placeholder="https://www.tiktok.com/@akun/video/…"
+                        aria-label="Link YouTube atau TikTok"
+                        className={`${INPUT_CLS} flex-1 min-w-0`}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleRefLink}
+                        disabled={refBusy || !refLink.trim()}
+                        className="px-3 rounded-lg bg-indigo-600 text-white font-semibold disabled:opacity-50"
+                      >
+                        Baca link
+                      </button>
+                    </div>
+                    {refBusy && <p className="text-[10px] text-indigo-300">Menganalisis…</p>}
+                    {refSource && (
+                      <div className="rounded-xl border border-[#2a2f42] bg-[#11141c] p-2 space-y-1.5">
+                        <div className="text-[11px] font-semibold text-slate-200 break-all">{refSource.label}</div>
+                        {refSource.thumbs.length > 0 && (
+                          <div className="flex gap-1">
+                            {refSource.thumbs.map((src, i) => (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img key={i} src={src} alt={`Cuplikan ${i + 1}`} className="h-20 rounded-md object-cover" />
+                            ))}
+                          </div>
+                        )}
+                        <ul className="text-[10px] text-slate-400 space-y-0.5">
+                          {refSource.notes.map((n, i) => (
+                            <li key={i}>• {n}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </section>
+
+                  <section className="space-y-2">
+                    <h3 className="text-[11px] font-bold text-lime-300">2. Gaya yang dilatih</h3>
+                    <label className="block">
+                      <span className="block text-[10px] text-slate-400 mb-1">Nama gaya</span>
+                      <input value={refName} onChange={(e) => setRefName(e.target.value)} placeholder="Promo kopi hangat" className={INPUT_CLS} />
+                    </label>
+                    <label className="block">
+                      <span className="block text-[10px] text-slate-400 mb-1">Kata pemicu (pisahkan koma)</span>
+                      <input value={refTags} onChange={(e) => setRefTags(e.target.value)} placeholder="kopi, hangat, aesthetic" className={INPUT_CLS} />
+                    </label>
+                    <div>
+                      <span className="block text-[10px] text-slate-400 mb-1">Kategori (kosongkan untuk semua)</span>
+                      <div className="flex gap-1.5">
+                        {CATEGORY_OPTIONS.map((opt) => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            aria-pressed={refCats.includes(opt.value)}
+                            onClick={() =>
+                              setRefCats((prev) =>
+                                prev.includes(opt.value) ? prev.filter((c) => c !== opt.value) : [...prev, opt.value]
+                              )
+                            }
+                            className={`flex-1 py-1.5 rounded-lg border text-[11px] font-semibold ${
+                              refCats.includes(opt.value)
+                                ? 'bg-lime-400 text-[#0b0d12] border-lime-300'
+                                : 'bg-[#181b26] border-[#2a2f42] text-slate-300'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {(
+                        [
+                          ['bgStart', 'Latar 1'],
+                          ['bgEnd', 'Latar 2'],
+                          ['accent', 'Aksen'],
+                        ] as const
+                      ).map(([key, label]) => (
+                        <label key={key} className="block">
+                          <span className="block text-[10px] text-slate-400 mb-1">{label}</span>
+                          <input
+                            type="color"
+                            value={refColors[key]}
+                            onChange={(e) => setRefColors((c) => ({ ...c, [key]: e.target.value }))}
+                            className="w-full h-8 rounded-lg bg-transparent border border-[#2a2f42]"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                    <label className="flex items-center gap-2 text-[11px] text-slate-300">
+                      <input
+                        type="checkbox"
+                        checked={refColors.isDark}
+                        onChange={(e) => setRefColors((c) => ({ ...c, isDark: e.target.checked }))}
+                      />
+                      Tema gelap
+                    </label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <OptionSelect label="Latar" value={refBg} options={BG_LABELS} onChange={setRefBg} />
+                      <OptionSelect
+                        label="Layout"
+                        value={refLayout}
+                        options={[['mixed', 'Campuran (bervariasi)'], ...(Object.entries(LAYOUT_LABELS) as Array<[SceneLayout, string]>)] as Array<[SceneLayout | 'mixed', string]>}
+                        onChange={setRefLayout}
+                      />
+                      <OptionSelect label="Transisi" value={refTransition} options={TRANSITION_LABELS} onChange={setRefTransition} />
+                      <OptionSelect label="Animasi judul" value={refAnim} options={ANIM_LABELS} onChange={setRefAnim} />
+                      <OptionSelect
+                        label="Font"
+                        value={refFont}
+                        options={FONT_OPTIONS.map((f) => [f, f] as [FontFamilyName, string])}
+                        onChange={setRefFont}
+                      />
+                      <OptionSelect
+                        label="Kamera"
+                        value={refCamera}
+                        options={CAMERA_OPTIONS.filter((o) => o.value !== 'auto').map(
+                          (o) => [o.value, o.label] as [CameraMotionType, string]
+                        )}
+                        onChange={setRefCamera}
                       />
                     </div>
-                    <div>
-                      <label className="block text-[10px] text-slate-400 mb-1">Kategori</label>
-                      <select
-                        value={adminCategory}
-                        onChange={(e) =>
-                          setAdminCategory(
-                            e.target.value as 'saas' | 'promo' | 'edukasi' | 'quote'
-                          )
-                        }
-                        className="w-full rounded-xl bg-[#181b26] border border-[#2a2f42] px-2 py-1.5 text-xs text-white"
-                      >
-                        <option value="saas">SaaS & App</option>
-                        <option value="promo">Promo</option>
-                        <option value="edukasi">Edukasi</option>
-                        <option value="quote">Quote</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] text-slate-400 mb-1">
-                      Nama Preset Hasil Training
+                    <label className="block">
+                      <span className="block text-[10px] text-slate-400 mb-1">
+                        Tempo {refPace.toFixed(2)}× ({refPace < 0.95 ? 'lebih cepat' : refPace > 1.05 ? 'lebih pelan' : 'normal'})
+                      </span>
+                      <input
+                        type="range"
+                        min={0.7}
+                        max={1.4}
+                        step={0.05}
+                        value={refPace}
+                        onChange={(e) => setRefPace(Number(e.target.value))}
+                        className="w-full"
+                      />
                     </label>
+                    <label className="block">
+                      <span className="block text-[10px] text-slate-400 mb-1">Ikon dekorasi (kosongkan = otomatis dari topik)</span>
+                      <input value={refDecor} onChange={(e) => setRefDecor(e.target.value)} placeholder="☕✨" className={INPUT_CLS} />
+                    </label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={handlePreviewStyle}
+                        className="py-2 rounded-xl bg-[#1d2130] border border-[#2a2f42] text-slate-200 font-semibold"
+                      >
+                        Coba di kanvas
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSaveStyle}
+                        disabled={refBusy}
+                        className="py-2 rounded-xl bg-lime-400 text-[#0b0d12] font-bold disabled:opacity-50"
+                      >
+                        Simpan untuk semua user
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-slate-500 leading-relaxed">
+                      Kalau prompt user mengandung kata pemicu, generator memprioritaskan gaya ini.
+                    </p>
+                  </section>
+
+                  <section className="space-y-2 border-t border-[#222636] pt-3">
+                    <h3 className="text-[11px] font-bold text-lime-300">3. Simpan scene sekarang sebagai template</h3>
                     <input
-                      type="text"
                       value={adminPresetTitle}
                       onChange={(e) => setAdminPresetTitle(e.target.value)}
-                      className="w-full rounded-xl bg-[#181b26] border border-[#2a2f42] px-2.5 py-1.5 text-xs text-white"
+                      placeholder="Judul template"
+                      aria-label="Judul template"
+                      className={INPUT_CLS}
                     />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] text-slate-400 mb-1">
-                      Kata Kunci Pemicu Otomatis (Trigger Keywords)
-                    </label>
                     <input
-                      type="text"
                       value={adminTriggerKeywords}
                       onChange={(e) => setAdminTriggerKeywords(e.target.value)}
-                      className="w-full rounded-xl bg-[#181b26] border border-[#2a2f42] px-2.5 py-1.5 text-xs text-lime-300 font-mono"
+                      placeholder="kata kunci, pisahkan koma"
+                      aria-label="Kata kunci template"
+                      className={INPUT_CLS}
                     />
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-1.5">
-                    <div className="bg-[#181b26] p-2 rounded-lg">
-                      <span className="block text-[9px] text-slate-400">Stiffness</span>
-                      <input
-                        type="number"
-                        value={adminStiffness}
-                        onChange={(e) => setAdminStiffness(Number(e.target.value) || 220)}
-                        className="w-full bg-transparent text-xs font-mono text-white"
-                      />
-                    </div>
-                    <div className="bg-[#181b26] p-2 rounded-lg">
-                      <span className="block text-[9px] text-slate-400">Damping</span>
-                      <input
-                        type="number"
-                        value={adminDamping}
-                        onChange={(e) => setAdminDamping(Number(e.target.value) || 14)}
-                        className="w-full bg-transparent text-xs font-mono text-white"
-                      />
-                    </div>
-                    <div className="bg-[#181b26] p-2 rounded-lg">
-                      <span className="block text-[9px] text-slate-400">BPM</span>
-                      <input
-                        type="number"
-                        value={adminBpm}
-                        onChange={(e) => setAdminBpm(Number(e.target.value) || 118)}
-                        className="w-full bg-transparent text-xs font-mono text-lime-300"
-                      />
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleAdminSaveVideoPreset}
-                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs shadow-lg"
-                  >
-                    + Simpan Blueprint Kanvas ke Engine
-                  </button>
+                    <select
+                      value={adminCategory}
+                      onChange={(e) => setAdminCategory(e.target.value as typeof adminCategory)}
+                      aria-label="Kategori template"
+                      className={INPUT_CLS}
+                    >
+                      <option value="promo">Promo</option>
+                      <option value="quote">Quote</option>
+                      <option value="edukasi">Edukasi</option>
+                      <option value="saas">Demo aplikasi</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={handleAdminSaveVideoPreset}
+                      className="w-full py-2 rounded-xl bg-indigo-600 text-white font-semibold"
+                    >
+                      Simpan template
+                    </button>
+                  </section>
                 </div>
               )}
 
@@ -2978,6 +4781,10 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
                 />
                 <span>Safe Guide</span>
               </label>
+              <label className="flex items-center gap-1 text-[11px] text-slate-400 cursor-pointer">
+                <input type="checkbox" checked={withBeat} onChange={(e) => setWithBeat(e.target.checked)} />
+                <span>Ketukan musik saat render</span>
+              </label>
               <div className="flex items-center gap-1 bg-[#161924] border border-[#262a3b] rounded-lg px-2 py-0.5 text-[11px]">
                 <button
                   type="button"
@@ -3001,7 +4808,7 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
           <div className="flex-1 relative flex items-center justify-center p-3 overflow-hidden bg-[#07080c]">
             <div
               className="relative shadow-2xl rounded-2xl overflow-hidden border border-white/15 transition-all duration-200"
-              style={{ width: canvasDims.cssW, height: canvasDims.cssH }}
+              style={{ width: canvasDims.cssW, maxWidth: '100%', aspectRatio: `${canvasDims.w} / ${canvasDims.h}` }}
             >
               <canvas
                 ref={canvasRef}
@@ -3017,10 +4824,8 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
-                onClick={() => {
-                  setActiveSceneIndex((i) => Math.max(0, i - 1));
-                  setCurrentTime(0);
-                }}
+                aria-label="Scene sebelumnya"
+                onClick={() => jumpToScene(activeSceneIndex - 1)}
                 className="p-1.5 rounded-lg bg-[#1a1d28] text-slate-300 text-xs"
               >
                 ⏮
@@ -3034,9 +4839,8 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
               </button>
               <button
                 type="button"
-                onClick={() =>
-                  setActiveSceneIndex((i) => Math.min(scenes.length - 1, i + 1))
-                }
+                aria-label="Scene berikutnya"
+                onClick={() => jumpToScene(activeSceneIndex + 1)}
                 className="p-1.5 rounded-lg bg-[#1a1d28] text-slate-300 text-xs"
               >
                 ⏭
@@ -3088,7 +4892,7 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
                       setActiveSceneIndex(idx);
                       let t = 0;
                       for (let i = 0; i < idx; i++) t += Number(scenes[i].duration) || 3.4;
-                      setCurrentTime(t + 0.1);
+                      seekTo(t + 0.1);
                     }}
                     className={`h-7 px-2.5 rounded-lg text-left text-[11px] font-semibold flex items-center justify-between truncate ${
                       idx === activeSceneIndex
@@ -3232,6 +5036,62 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="text-[11px] font-bold text-slate-400 uppercase">Gaya scene ini</div>
+            <div className="grid grid-cols-2 gap-1.5">
+              <OptionSelect
+                label="Layout"
+                value={activeScene?.layout || 'stack'}
+                options={LAYOUT_LABELS}
+                onChange={(v) => updateActiveScene({ layout: v })}
+              />
+              <OptionSelect
+                label="Transisi masuk"
+                value={activeScene?.transition || 'fade'}
+                options={TRANSITION_LABELS}
+                onChange={(v) => updateActiveScene({ transition: v })}
+              />
+              <OptionSelect
+                label="Latar"
+                value={activeScene?.bgStyle || 'mesh'}
+                options={BG_LABELS}
+                onChange={(v) => updateActiveScene({ bgStyle: v })}
+              />
+              <OptionSelect
+                label="Animasi judul"
+                value={activeScene?.headlineAnim || 'spring-words'}
+                options={ANIM_LABELS}
+                onChange={(v) => updateActiveScene({ headlineAnim: v })}
+              />
+            </div>
+            <label className="block">
+              <span className="block text-[10px] text-slate-400 mb-1">Ikon dekorasi (emoji)</span>
+              <input
+                value={activeScene?.decor || ''}
+                onChange={(e) => updateActiveScene({ decor: e.target.value })}
+                placeholder="☕✨"
+                className={INPUT_CLS}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                const v = {
+                  transition: activeScene?.transition,
+                  bgStyle: activeScene?.bgStyle,
+                  headlineAnim: activeScene?.headlineAnim,
+                  decor: activeScene?.decor,
+                  paletteId: activeScene?.paletteId,
+                };
+                setScenes((prev) => prev.map((sc) => ({ ...sc, ...v, paletteId: v.paletteId || sc.paletteId })));
+                showToast('Latar, transisi, animasi, dan palet scene ini diterapkan ke semua scene.');
+              }}
+              className="w-full py-1.5 rounded-lg bg-[#1d2130] border border-[#2a2f42] text-[11px] text-slate-200"
+            >
+              Terapkan ke semua scene
+            </button>
           </div>
 
           <div className="space-y-1.5">

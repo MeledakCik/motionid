@@ -91,6 +91,28 @@ export type EngineFontName =
   | 'Space Grotesk'
   | 'Anton';
 
+/** Posisi judul & kartu dalam satu scene. */
+export type SceneLayout = 'stack' | 'card-first' | 'center-text';
+/** Efek pergantian antar-scene. */
+export type SceneTransition = 'cut' | 'fade' | 'slide' | 'push-up' | 'zoom' | 'wipe' | 'flash';
+/** Pola latar di atas gradien palet. */
+export type BackgroundStyle =
+  | 'mesh'
+  | 'sunburst'
+  | 'stripes'
+  | 'blobs'
+  | 'spotlight'
+  | 'confetti'
+  | 'waves'
+  | 'grid';
+/** Cara judul muncul. */
+export type HeadlineAnim = 'spring-words' | 'typewriter' | 'rise-lines' | 'pop' | 'marker';
+
+export const SCENE_LAYOUTS: readonly SceneLayout[] = ['stack', 'card-first', 'center-text'];
+export const SCENE_TRANSITIONS: readonly SceneTransition[] = ['cut', 'fade', 'slide', 'push-up', 'zoom', 'wipe', 'flash'];
+export const BACKGROUND_STYLES: readonly BackgroundStyle[] = ['mesh', 'sunburst', 'stripes', 'blobs', 'spotlight', 'confetti', 'waves', 'grid'];
+export const HEADLINE_ANIMS: readonly HeadlineAnim[] = ['spring-words', 'typewriter', 'rise-lines', 'pop', 'marker'];
+
 /** Komponen kartu yang bisa digambar Motion Studio. */
 export type StudioWidgetType =
   | 'price_tag_card'
@@ -210,6 +232,14 @@ export interface SceneItem {
   secondaryInput?: string;
   cameraMotion?: CameraMotionType;
   paletteId?: string;
+  layout?: SceneLayout;
+  transition?: SceneTransition;
+  bgStyle?: BackgroundStyle;
+  headlineAnim?: HeadlineAnim;
+  /** Emoji dekorasi yang melayang di latar, mis. "☕✨". */
+  decor?: string;
+  /** Kata kunci dari prompt yang ditonjolkan di judul, dipisah "|". */
+  emphasis?: string;
 }
 
 export interface ColorPalette {
@@ -284,6 +314,8 @@ export interface GeneratedScriptResult {
   suggestedColor: ColorPalette;
   suggestedStyle: StyleSuggestion;
   extractedMeta: ParsedTopicMeta;
+  /** Gaya yang dipilih dari prompt (paket gaya + kata kunci yang terbaca). */
+  recipe?: StyleRecipe;
 }
 
 export interface GenerateOptions {
@@ -296,6 +328,10 @@ export interface GenerateOptions {
   userImages?: string[];
   /** Isi angka untuk hasil yang selalu sama (deterministik). */
   seed?: number;
+  /** Paksa paket gaya tertentu (id dari STYLE_PACKS). */
+  stylePackId?: string;
+  /** Paksa susunan scene: A = lengkap, B = alternatif, C = ringkas. */
+  variant?: 'A' | 'B' | 'C';
 }
 
 export interface SceneTemplateEntry {
@@ -540,6 +576,13 @@ export const COLOR_PALETTES: ColorPalette[] = [
     accentColor: '#34d399',
     badgeTextColor: '#022c22',
   },
+  { id: 'candy-pop', name: 'Candy Pop', bgPrimary: '#ffe4f1', bgSecondary: '#e9d5ff', textColor: '#18181b', accentColor: '#db2777', badgeTextColor: '#ffffff' },
+  { id: 'ocean-fresh', name: 'Biru Segar', bgPrimary: '#e0f2fe', bgSecondary: '#a5f3fc', textColor: '#18181b', accentColor: '#0369a1', badgeTextColor: '#ffffff' },
+  { id: 'mono-noir', name: 'Hitam Tegas', bgPrimary: '#0a0a0a', bgSecondary: '#262626', textColor: '#f8fafc', accentColor: '#facc15', badgeTextColor: '#111827' },
+  { id: 'royal-gold', name: 'Emas Mewah', bgPrimary: '#0c1a14', bgSecondary: '#1c1917', textColor: '#f8fafc', accentColor: '#d4af37', badgeTextColor: '#111827' },
+  { id: 'sunset-warm', name: 'Senja Hangat', bgPrimary: '#ffedd5', bgSecondary: '#fecdd3', textColor: '#18181b', accentColor: '#ea580c', badgeTextColor: '#ffffff' },
+  { id: 'paper-clean', name: 'Kertas Bersih', bgPrimary: '#fafaf9', bgSecondary: '#e7e5e4', textColor: '#18181b', accentColor: '#1d4ed8', badgeTextColor: '#ffffff' },
+  { id: 'cocoa-cream', name: 'Kopi Krim', bgPrimary: '#f5ebe0', bgSecondary: '#e3d5ca', textColor: '#18181b', accentColor: '#7f4f24', badgeTextColor: '#ffffff' },
 ];
 
 export const MUSIC_TRACKS: MusicTrack[] = [
@@ -623,6 +666,15 @@ const PROMO_HOOKS = [
   'Jangan sampai kehabisan promo {product} di {store}!',
   'Stop scroll! Ada promo spesial hari ini 👀',
 ];
+
+const PROMO_URGENT_HOOKS = [
+  'FLASH SALE! {product} cuma {price} ⚡',
+  'Buruan! Promo {product} terbatas banget',
+  'Diskon {discount}% {product}, jangan sampai kehabisan!',
+  'Cuma sebentar: {product} jadi {price}!',
+];
+
+const PROMO_URGENT_CTA = ['Buruan checkout sebelum kehabisan!', 'Amankan sekarang sebelum promonya habis!'];
 
 const PROMO_HOOK_SUBTEXTS = [
   'Promo terbatas, simak sampai habis.',
@@ -1063,8 +1115,25 @@ const PROMO_FILLER = new Set([
 const TRAILING_FILLER = new Set(['hari', 'ini', 'aja', 'saja', 'sekarang', 'juga', 'nih', 'yuk', 'guys']);
 const LEADING_FILLER = new Set(['yuk', 'ada', 'lagi', 'beli', 'jual']);
 
+// Kata platform & gaya tidak ikut jadi nama produk/judul ("buat story WA", "aesthetic", "nuansa merah")
+const PLATFORM_PHRASE =
+  /\b(?:buat|untuk|di|ke|konten|video)?\s*(?:story|status|sw|whatsapp|wa|tiktok|reels?|instagram|ig|feed|shorts?|youtube|yt|fyp)(?:\s+(?:ig|wa|instagram|tiktok|youtube|yt))?\b/gi;
+const STYLE_PHRASE = /\b(?:nuansa|gaya|tema|suasana|vibes?|style)\s+\S+(?:\s+(?:dan|&)\s+\S+)?/gi;
+const STYLE_WORDS =
+  /\b(?:aesthetic|estetik|minimalis|retro|vintage|futuristik|neon|colorful|warna-warni|pastel|cozy|playful|gemas|kalem|adem|vibes|tegas|bold|ceria)\b/gi;
+
+function stripStyleWords(text: string): string {
+  return text
+    .replace(STYLE_PHRASE, ' ')
+    .replace(PLATFORM_PHRASE, ' ')
+    .replace(STYLE_WORDS, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function stripFiller(s: string): string {
   const tokens = s
+    .replace(/\bhari ini\b|\bflash ?sale\b|\b\d{1,3}\s*%/gi, ' ')
     .split(/\s+/)
     .filter(Boolean)
     .filter((t) => !PROMO_FILLER.has(t.toLowerCase().replace(/[^a-z]/g, '')));
@@ -1127,8 +1196,9 @@ export function parseTopic(
   options?: GenerateOptions,
   category?: CategoryType
 ): ParsedTopicMeta {
-  const cleanTopic = (rawTopic || '').replace(/\s+/g, ' ').trim();
-  const lower = cleanTopic.toLowerCase();
+  const rawClean = (rawTopic || '').replace(/\s+/g, ' ').trim();
+  const cleanTopic = stripStyleWords(rawClean) || rawClean;
+  const lower = rawClean.toLowerCase();
 
   const prices = findPrices(cleanTopic);
   let promoHit: PriceMatch | undefined;
@@ -1144,8 +1214,10 @@ export function parseTopic(
   const originalPriceText = options?.customOriginalPrice?.trim() || originalHit?.display || '';
   const pv = priceToNumber(priceText);
   const ov = priceToNumber(originalPriceText);
-  const discountPercent =
+  let discountPercent =
     pv !== null && ov !== null && pv > 0 && ov > pv ? Math.round((1 - pv / ov) * 100) : null;
+  const pctMatch = category === 'promo' ? cleanTopic.match(/(\d{1,2})\s*%/) : null;
+  if (discountPercent === null && pctMatch) discountPercent = Number(pctMatch[1]);
 
   // Buang teks harga (dari belakang supaya posisi tetap valid)
   let rest = cleanTopic;
@@ -1163,7 +1235,9 @@ export function parseTopic(
       if (!storeName) storeName = handle[1];
       rest = rest.slice(0, handle.index).trim();
     } else {
-      const at = rest.match(/\s+di\s+([^,.!?]{2,40})$/i);
+      const at = rest.match(
+        /\s+di\s+((?:toko|warung|kedai|kafe|cafe|resto|restoran|outlet|butik|gerai|lapak|kios)\b[^,.!?]{0,40})$/i
+      );
       if (at && at.index !== undefined) {
         const store = stripFiller(at[1]);
         if (store) {
@@ -1384,8 +1458,16 @@ function buildPromoScenes(meta: ParsedTopicMeta, rng: Rng, options?: GenerateOpt
   const kind = detectPromoKind(`${meta.cleanTopic} ${product}`.toLowerCase());
   const hasPrice = Boolean(meta.priceText);
 
+  const urgent = /flash ?sale|buruan|terbatas|kilat|gercep|terakhir|habis|hari ini/.test(
+    meta.cleanTopic.toLowerCase()
+  );
   const hook =
-    pickFilled([...PROMO_HOOKS, ...BANK_HOOK.promo], meta, rng, options?.excludeHooks) ||
+    pickFilled(
+      [...(urgent ? PROMO_URGENT_HOOKS : PROMO_HOOKS), ...BANK_HOOK.promo],
+      meta,
+      rng,
+      options?.excludeHooks
+    ) ||
     'Stop scroll! Ada promo spesial hari ini 👀';
   const hookSub = pickFilled(PROMO_HOOK_SUBTEXTS, meta, rng) || 'Promo terbatas, simak sampai habis.';
 
@@ -1408,7 +1490,7 @@ function buildPromoScenes(meta: ParsedTopicMeta, rng: Rng, options?: GenerateOpt
   const sticker = meta.discountPercent ? `Hemat ${meta.discountPercent}%` : 'Promo';
 
   const cta =
-    pickFilled([...PROMO_CTA_TITLES, ...BANK_CTA.promo], meta, rng) || 'Pesan sekarang sebelum promonya habis!';
+    pickFilled([...(urgent ? PROMO_URGENT_CTA : PROMO_CTA_TITLES), ...BANK_CTA.promo], meta, rng) || 'Pesan sekarang sebelum promonya habis!';
   const ctaSub = meta.storeName
     ? `Promo terbatas di ${meta.storeName}.`
     : 'Promo terbatas, jangan sampai kelewatan.';
@@ -1630,6 +1712,450 @@ function buildEdukasiScenes(meta: ParsedTopicMeta, rng: Rng, options?: GenerateO
 /* GENERATOR UTAMA                                                            */
 /* -------------------------------------------------------------------------- */
 
+/* -------------------------------------------------------------------------- */
+/* PEMBACA PROMPT & PAKET GAYA                                                */
+/* -------------------------------------------------------------------------- */
+
+/** Hal-hal yang terbaca dari prompt dan dipakai untuk memilih gaya visual. */
+export interface PromptKeys {
+  category: CategoryType;
+  /** kuliner, kopi, fashion, beauty, tech, keuangan, belajar, sehat, travel, … */
+  industry: string;
+  /** ceria, mewah, tenang, tegas, retro, minimal, neon, hangat */
+  mood: string;
+  energy: 'calm' | 'medium' | 'high';
+  /** merah, pink, biru, hijau, kuning, oranye, ungu, gelap, terang, emas, pastel, coklat */
+  colorHint: string;
+  styleHints: string[];
+  /** tiktok, reels, shorts, youtube, story, atau '' */
+  platform: string;
+  /** Rasio yang disarankan bila prompt menyebut platform. */
+  aspect: '' | '9:16' | '1:1' | '16:9';
+  urgent: boolean;
+  /** Kata yang ditonjolkan di judul (harga, diskon, nama produk, angka). */
+  emphasis: string[];
+  /** Emoji dekorasi sesuai topik. */
+  icons: string;
+  topicLower: string;
+}
+
+export interface StylePack {
+  id: string;
+  name: string;
+  /** Kata pemicu: suasana, industri, warna, gaya, atau kata bebas dari admin. */
+  tags: string[];
+  categories?: CategoryType[];
+  paletteId: string;
+  /** Warna kustom (mis. hasil ekstraksi video referensi). Studio membuat paletnya dengan id `pack-<id>`. */
+  colors?: { bgStart: string; bgEnd: string; accent: string; isDark: boolean };
+  bgStyle: BackgroundStyle;
+  layout: SceneLayout | 'mixed';
+  transition: SceneTransition;
+  headlineAnim: HeadlineAnim;
+  font: EngineFontName;
+  camera: CameraMotionType;
+  /** Pengali durasi scene: < 1 lebih cepat, > 1 lebih pelan. */
+  pace: number;
+  decor?: string;
+  /** true untuk gaya hasil training admin. */
+  trained?: boolean;
+}
+
+export interface StyleRecipe {
+  packId: string;
+  packName: string;
+  variant: 'A' | 'B' | 'C';
+  keys: PromptKeys;
+}
+
+const INDUSTRY_RULES: Array<[string, RegExp, string]> = [
+  ['kopi', /kopi|coffee|cafe|kafe|latte|espresso/, '☕🤎✨'],
+  ['kuliner', /kue|roti|donat|cake|dessert|brownies|cookies/, '🧁🍰✨'],
+  ['kuliner', /makan|nasi|ayam|bakso|\bmie?\b|soto|sate|seblak|sambal|pizza|burger|dimsum|kuliner|resep|masak|snack|cemilan|camilan|keripik|katering|catering/, '🍜🔥😋'],
+  ['kuliner', /teh\b|boba|jus|minuman|\bes\b|susu|smoothie/, '🧋🍹✨'],
+  ['fashion', /sepatu|sneaker|sandal/, '👟⚡✨'],
+  ['fashion', /baju|kaos|kemeja|celana|dress|gamis|hijab|jilbab|jaket|hoodie|\btas\b|outfit|batik|fashion/, '👗🛍️✨'],
+  ['beauty', /skincare|serum|lipstik|parfum|lotion|sunscreen|kosmetik|make ?up|salon|nail|beauty|kecantikan/, '💄🌸✨'],
+  ['tech', /aplikasi|\bapp\b|website|software|laptop|\bhp\b|gadget|coding|ngoding|teknologi|\bai\b|digital|startup/, '📱⚡💡'],
+  ['keuangan', /uang|keuangan|nabung|menabung|gaji|investasi|saham|budget|cicilan|utang|hutang|bisnis|omzet|jualan/, '💰📈🪙'],
+  ['belajar', /belajar|ujian|kuliah|sekolah|skripsi|kursus|\bles\b|bahasa|buku|materi/, '📚✏️💡'],
+  ['sehat', /sehat|olahraga|gym|fitness|diet|tidur|yoga|lari|kesehatan|gizi/, '💪🥗❤️'],
+  ['travel', /travel|wisata|liburan|hotel|villa|pantai|gunung|tiket|trip|staycation/, '✈️🌴📍'],
+  ['otomotif', /motor|mobil|bengkel|otomotif|sparepart|helm/, '🏍️🚗⚡'],
+  ['properti', /rumah|kos|kost|apartemen|properti|kontrakan|ruko|interior|furniture/, '🏠🔑✨'],
+  ['religi', /doa|ramadan|ramadhan|lebaran|idul|ngaji|sedekah|hijrah|islami|syukur|ikhlas|sabar/, '🌙✨🤲'],
+  ['gaming', /game|gaming|gamer|esport|top ?up|diamond/, '🎮🔥⚡'],
+  ['musik', /musik|lagu|konser|band|gitar|podcast/, '🎧🎵✨'],
+  ['anak', /bayi|anak|mainan|parenting|balita/, '🧸🍼💛'],
+  ['hewan', /kucing|anjing|pet\b|hewan|grooming/, '🐱🐾💛'],
+  ['jasa', /jasa|servis|service|laundry|barbershop|desain|fotografi|percetakan|sablon/, '🛠️✅✨'],
+  ['cinta', /cinta|sayang|pasangan|jodoh|rindu|kangen|nikah|wedding|pacar/, '❤️🌹✨'],
+  ['galau', /galau|sedih|patah hati|kecewa|kesepian|capek|lelah|burnout/, '🌧️🌙🤍'],
+  ['semangat', /semangat|motivasi|sukses|mimpi|berjuang|bangkit|produktif|disiplin/, '🔥🚀💪'],
+];
+
+const MOOD_RULES: Array<[string, RegExp]> = [
+  ['mewah', /mewah|elegan|premium|eksklusif|luxury|exclusive|classy|berkelas/],
+  ['tenang', /tenang|kalem|adem|soft|aesthetic|estetik|lembut|healing|santai/],
+  ['tegas', /tegas|bold|garang|keras|berani|maskulin|gahar/],
+  ['retro', /retro|jadul|vintage|klasik|90an|y2k/],
+  ['minimal', /minimalis|minimal|clean|simple|simpel|rapi|profesional/],
+  ['neon', /neon|futuristik|cyber|glow|gaming/],
+  ['ceria', /ceria|fun|lucu|seru|playful|colorful|warna-warni|gemas|imut/],
+  ['hangat', /hangat|cozy|rumahan|homey|keluarga/],
+];
+
+const COLOR_RULES: Array<[string, RegExp]> = [
+  ['merah', /\bmerah\b(?! muda)|\bred\b|maroon/],
+  ['pink', /pink|merah muda|rose\b/],
+  ['biru', /biru|blue|navy|tosca/],
+  ['hijau', /hijau|green|sage|mint/],
+  ['kuning', /kuning|yellow/],
+  ['oranye', /oranye|orange|jingga/],
+  ['ungu', /ungu|purple|lilac|lavender/],
+  ['gelap', /hitam|gelap|dark|black/],
+  ['terang', /putih|terang|cerah|white/],
+  ['emas', /emas|gold/],
+  ['pastel', /pastel/],
+  ['coklat', /coklat|cokelat|brown|earth ?tone|krem|cream/],
+];
+
+const EMPHASIS_WORDS = /^(gratis|diskon|promo|baru|hemat|cuma|terbatas|sale|bonus|rahasia|wajib|penting|mudah|cepat)$/;
+
+function keyOfWord(word: string): string {
+  return word.toLowerCase().replace(/[^a-z0-9%]/g, '');
+}
+
+/** Baca prompt: industri, suasana, warna, platform, tingkat energi, dan kata yang perlu ditonjolkan. */
+export function analyzePrompt(
+  rawTopic: string,
+  category: CategoryType,
+  meta: ParsedTopicMeta = parseTopic(rawTopic, undefined, category)
+): PromptKeys {
+  const topicLower = (rawTopic || '').toLowerCase();
+  const industryHit = INDUSTRY_RULES.find(([, re]) => re.test(topicLower));
+  const industry = industryHit ? industryHit[0] : '';
+  const icons = industryHit
+    ? industryHit[2]
+    : category === 'quote'
+    ? '✨🌙🤍'
+    : category === 'edukasi'
+    ? '💡📌✨'
+    : '🔥✨🛍️';
+
+  const styleHints = MOOD_RULES.filter(([, re]) => re.test(topicLower)).map(([id]) => id);
+  let mood = styleHints[0] || '';
+  if (!mood) {
+    if (category === 'quote') {
+      mood = meta.quoteMood === 'semangat' ? 'tegas' : meta.quoteMood === 'cinta' ? 'hangat' : 'tenang';
+    } else if (category === 'edukasi') {
+      mood = 'minimal';
+    } else {
+      mood = industry === 'kopi' ? 'hangat' : industry === 'beauty' ? 'ceria' : 'ceria';
+    }
+  }
+
+  const colorHint = (COLOR_RULES.find(([, re]) => re.test(topicLower)) || [''])[0];
+  const urgent = /flash ?sale|hari ini|buruan|terbatas|cepat|kilat|gercep|last|terakhir|besok|habis/.test(topicLower);
+  const platform = /story|status|\bsw\b|\bwa\b|whatsapp/.test(topicLower)
+    ? 'story'
+    : /tiktok/.test(topicLower)
+    ? 'tiktok'
+    : /shorts/.test(topicLower)
+    ? 'shorts'
+    : /reels|\big\b|instagram/.test(topicLower)
+    ? 'reels'
+    : /youtube|\byt\b/.test(topicLower)
+    ? 'youtube'
+    : '';
+  const aspect: PromptKeys['aspect'] = /feed|postingan|persegi|square/.test(topicLower)
+    ? '1:1'
+    : platform === 'youtube'
+    ? '16:9'
+    : platform
+    ? '9:16'
+    : '';
+  const energy: PromptKeys['energy'] =
+    urgent || mood === 'tegas' || mood === 'neon' || (category === 'promo' && mood === 'ceria')
+      ? 'high'
+      : category === 'quote' || mood === 'tenang' || mood === 'mewah'
+      ? 'calm'
+      : 'medium';
+
+  const emphasis = new Set<string>();
+  [meta.priceText, meta.discountPercent ? `${meta.discountPercent}%` : ''].forEach((t) => {
+    (t || '').split(/\s+/).forEach((w) => keyOfWord(w) && emphasis.add(keyOfWord(w)));
+  });
+  if (category === 'promo') {
+    (meta.productName || '').split(/\s+/).slice(0, 2).forEach((w) => keyOfWord(w).length > 2 && emphasis.add(keyOfWord(w)));
+  }
+  (rawTopic || '').split(/\s+/).forEach((w) => {
+    const k = keyOfWord(w);
+    if (EMPHASIS_WORDS.test(k) || /^\d+%$/.test(k)) emphasis.add(k);
+  });
+  if (category === 'edukasi' && meta.stepCount) emphasis.add(String(meta.stepCount));
+
+  return {
+    category,
+    industry,
+    mood,
+    energy,
+    colorHint,
+    styleHints,
+    platform,
+    aspect,
+    urgent,
+    emphasis: Array.from(emphasis).slice(0, 8),
+    icons,
+    topicLower,
+  };
+}
+
+/** Paket gaya bawaan. Admin bisa menambah lewat training (addStylePackToEngine). */
+export const STYLE_PACKS: StylePack[] = [
+  { id: 'poster-promo', name: 'Poster Promo', tags: ['ceria', 'kuliner', 'kuning', 'merah', 'umkm', 'diskon'], categories: ['promo'], paletteId: 'promo-pop', bgStyle: 'sunburst', layout: 'mixed', transition: 'zoom', headlineAnim: 'marker', font: 'Montserrat', camera: 'whip-zoom-spring', pace: 0.95 },
+  { id: 'flash-sale', name: 'Flash Sale', tags: ['tegas', 'urgent', 'flash', 'sale', 'gelap', 'neon', 'merah', 'gaming', 'otomotif'], categories: ['promo'], paletteId: 'cyber-sunset', bgStyle: 'stripes', layout: 'mixed', transition: 'flash', headlineAnim: 'pop', font: 'Anton', camera: 'whip-zoom-spring', pace: 0.85 },
+  { id: 'candy', name: 'Candy Pop', tags: ['ceria', 'pink', 'beauty', 'fashion', 'pastel', 'anak', 'hewan'], categories: ['promo', 'edukasi'], paletteId: 'candy-pop', bgStyle: 'blobs', layout: 'mixed', transition: 'push-up', headlineAnim: 'spring-words', font: 'Poppins', camera: 'spring-slide-vertical', pace: 1 },
+  { id: 'luxe', name: 'Emas Mewah', tags: ['mewah', 'emas', 'gelap', 'properti', 'beauty', 'fashion'], categories: ['promo', 'quote'], paletteId: 'royal-gold', bgStyle: 'spotlight', layout: 'mixed', transition: 'fade', headlineAnim: 'rise-lines', font: 'Playfair Display', camera: 'smooth-float', pace: 1.15 },
+  { id: 'confetti-party', name: 'Pesta Konfeti', tags: ['ceria', 'giveaway', 'ulang tahun', 'lebaran', 'pesta', 'grand opening', 'kuning', 'anak'], categories: ['promo'], paletteId: 'promo-pop', bgStyle: 'confetti', layout: 'mixed', transition: 'zoom', headlineAnim: 'pop', font: 'Montserrat', camera: 'whip-zoom-spring', pace: 0.9 },
+  { id: 'cocoa', name: 'Kopi Krim', tags: ['kopi', 'coklat', 'hangat', 'kuliner', 'retro', 'cinta'], categories: ['promo', 'quote'], paletteId: 'cocoa-cream', bgStyle: 'spotlight', layout: 'mixed', transition: 'slide', headlineAnim: 'spring-words', font: 'Playfair Display', camera: 'smooth-float', pace: 1.05 },
+  { id: 'clean-paper', name: 'Kertas Bersih', tags: ['minimal', 'terang', 'jasa', 'tech', 'keuangan', 'properti'], categories: ['edukasi', 'promo'], paletteId: 'paper-clean', bgStyle: 'grid', layout: 'mixed', transition: 'slide', headlineAnim: 'rise-lines', font: 'Space Grotesk', camera: 'spring-slide-vertical', pace: 1 },
+  { id: 'mint-study', name: 'Mint Belajar', tags: ['tenang', 'hijau', 'belajar', 'sehat', 'keuangan', 'minimal'], categories: ['edukasi'], paletteId: 'aurora-mint', bgStyle: 'waves', layout: 'mixed', transition: 'push-up', headlineAnim: 'spring-words', font: 'Poppins', camera: 'spring-slide-vertical', pace: 1 },
+  { id: 'ocean', name: 'Biru Segar', tags: ['biru', 'tech', 'travel', 'jasa', 'sehat', 'minimal'], categories: ['edukasi', 'promo'], paletteId: 'ocean-fresh', bgStyle: 'waves', layout: 'mixed', transition: 'wipe', headlineAnim: 'marker', font: 'Montserrat', camera: 'perspective-tilt-3d', pace: 1 },
+  { id: 'lavender-app', name: 'Lavender', tags: ['ungu', 'pastel', 'tech', 'belajar', 'tenang'], categories: ['edukasi', 'promo'], paletteId: 'depup-lavender', bgStyle: 'mesh', layout: 'mixed', transition: 'slide', headlineAnim: 'spring-words', font: 'Space Grotesk', camera: 'spring-slide-vertical', pace: 1 },
+  { id: 'noir-bold', name: 'Hitam Tegas', tags: ['tegas', 'gelap', 'semangat', 'gaming', 'otomotif', 'sehat', 'kuning'], categories: ['quote', 'edukasi', 'promo'], paletteId: 'mono-noir', bgStyle: 'stripes', layout: 'mixed', transition: 'flash', headlineAnim: 'pop', font: 'Bebas Neue', camera: 'whip-zoom-spring', pace: 0.9 },
+  { id: 'neon-night', name: 'Neon Malam', tags: ['neon', 'gaming', 'musik', 'gelap', 'ungu', 'tech'], categories: ['promo', 'edukasi', 'quote'], paletteId: 'midnight-indigo', bgStyle: 'grid', layout: 'mixed', transition: 'wipe', headlineAnim: 'typewriter', font: 'Space Grotesk', camera: 'perspective-tilt-3d', pace: 0.95 },
+  { id: 'ink-quote', name: 'Tinta Malam', tags: ['tenang', 'galau', 'gelap', 'ungu', 'musik'], categories: ['quote'], paletteId: 'quote-ink', bgStyle: 'spotlight', layout: 'mixed', transition: 'fade', headlineAnim: 'typewriter', font: 'Playfair Display', camera: 'smooth-float', pace: 1.15 },
+  { id: 'sunset-soft', name: 'Senja Hangat', tags: ['hangat', 'cinta', 'oranye', 'pink', 'travel', 'tenang'], categories: ['quote', 'promo'], paletteId: 'sunset-warm', bgStyle: 'blobs', layout: 'mixed', transition: 'fade', headlineAnim: 'rise-lines', font: 'Playfair Display', camera: 'smooth-float', pace: 1.1 },
+  { id: 'emerald-calm', name: 'Emerald Teduh', tags: ['religi', 'hijau', 'tenang', 'mewah'], categories: ['quote'], paletteId: 'emerald-luxury', bgStyle: 'spotlight', layout: 'mixed', transition: 'fade', headlineAnim: 'rise-lines', font: 'Playfair Display', camera: 'smooth-float', pace: 1.15 },
+];
+
+export function getStylePacks(): StylePack[] {
+  return STYLE_PACKS;
+}
+
+const FONT_NAMES: readonly EngineFontName[] = ['Poppins', 'Montserrat', 'Bebas Neue', 'Playfair Display', 'Space Grotesk', 'Anton'];
+const CAMERA_NAMES: readonly CameraMotionType[] = ['spring-slide-vertical', 'perspective-tilt-3d', 'whip-zoom-spring', 'smooth-float'];
+const isHex = (v: unknown): v is string => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
+const oneOf = <T extends string>(list: readonly T[], v: unknown, fallback: T): T =>
+  typeof v === 'string' && (list as readonly string[]).includes(v) ? (v as T) : fallback;
+
+/** Validasi paket gaya dari database (hasil training admin). null bila tidak layak pakai. */
+export function normalizeStylePack(raw: unknown, id: string, fallbackName = 'Gaya admin'): StylePack | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const tags = (Array.isArray(r.tags) ? r.tags : String(r.tags || '').split(','))
+    .map((t) => String(t).trim().toLowerCase())
+    .filter(Boolean)
+    .slice(0, 24);
+  const c = (r.colors || null) as Record<string, unknown> | null;
+  const colors =
+    c && isHex(c.bgStart) && isHex(c.bgEnd) && isHex(c.accent)
+      ? { bgStart: c.bgStart, bgEnd: c.bgEnd, accent: c.accent, isDark: Boolean(c.isDark) }
+      : undefined;
+  const cats = (Array.isArray(r.categories) ? r.categories : []).filter(
+    (x): x is CategoryType => x === 'promo' || x === 'quote' || x === 'edukasi'
+  );
+  return {
+    id,
+    name: String(r.name || fallbackName).slice(0, 60),
+    tags,
+    categories: cats.length ? cats : undefined,
+    paletteId: typeof r.paletteId === 'string' && r.paletteId ? r.paletteId : 'promo-pop',
+    colors,
+    bgStyle: oneOf(BACKGROUND_STYLES, r.bgStyle, 'mesh'),
+    layout: r.layout === 'mixed' ? 'mixed' : oneOf(SCENE_LAYOUTS, r.layout, 'stack'),
+    transition: oneOf(SCENE_TRANSITIONS, r.transition, 'fade'),
+    headlineAnim: oneOf(HEADLINE_ANIMS, r.headlineAnim, 'spring-words'),
+    font: oneOf(FONT_NAMES, r.font, 'Poppins'),
+    camera: oneOf(CAMERA_NAMES, r.camera, 'spring-slide-vertical'),
+    pace: Math.min(1.4, Math.max(0.7, Number(r.pace) || 1)),
+    decor: typeof r.decor === 'string' ? r.decor.slice(0, 16) : undefined,
+    trained: true,
+  };
+}
+
+export function addStylePackToEngine(pack: StylePack): void {
+  const idx = STYLE_PACKS.findIndex((p) => p.id === pack.id);
+  if (idx >= 0) STYLE_PACKS[idx] = pack;
+  else STYLE_PACKS.push(pack);
+}
+
+export function removeStylePackFromEngine(id: string): void {
+  const idx = STYLE_PACKS.findIndex((p) => p.id === id && p.trained);
+  if (idx >= 0) STYLE_PACKS.splice(idx, 1);
+}
+
+/** Id palet yang dipakai sebuah paket gaya di studio. */
+export function paletteIdOfPack(pack: StylePack): string {
+  return pack.colors ? `pack-${pack.id}` : pack.paletteId;
+}
+
+/**
+ * Pilih paket gaya yang paling cocok dengan prompt. Ada unsur acak di antara 3 kandidat teratas
+ * supaya hasil tidak selalu sama, tapi tetap searah dengan nuansa prompt.
+ */
+export function pickStylePack(keys: PromptKeys, rng: Rng = Math.random): StylePack {
+  const explicit = new Set(keys.styleHints);
+  const scored = STYLE_PACKS.filter((p) => !p.categories || p.categories.includes(keys.category))
+    .map((p) => {
+      let score = 0;
+      for (const tag of p.tags) {
+        if (explicit.has(tag)) score += 5;
+        else if (tag === keys.mood) score += 1.5;
+        if (keys.colorHint && tag === keys.colorHint) score += 6;
+        if (keys.industry && tag === keys.industry) score += 3;
+        if (keys.urgent && tag === 'urgent') score += 5;
+        if (keys.platform && tag === keys.platform) score += 2;
+        if (tag.length > 2 && !explicit.has(tag) && tag !== keys.industry && keys.topicLower.includes(tag)) {
+          score += p.trained ? 6 : 3;
+        }
+      }
+      return { p, score: score + rng() * 2 };
+    })
+    .sort((a, b) => b.score - a.score);
+  if (!scored.length) return STYLE_PACKS[0];
+  // Biasanya gaya terbaik, sesekali kandidat ke-2/ke-3 supaya tidak monoton
+  // Prompt dengan sinyal kuat → hampir selalu gaya terbaik; prompt samar → lebih bervariasi
+  const strong = scored.length > 1 && scored[0].score - scored[1].score >= 4;
+  const r = rng();
+  const idx = strong ? (r < 0.9 ? 0 : 1) : r < 0.7 ? 0 : r < 0.92 ? 1 : 2;
+  return scored[Math.min(idx, scored.length - 1)].p;
+}
+
+/** Atribut visual satu scene berdasarkan paket gaya. Dipakai generator dan tombol "Acak gaya". */
+export function styleFieldsFor(
+  pack: StylePack,
+  sceneIndex: number,
+  widgetType: string | undefined,
+  hasPriceOrText: boolean,
+  keys: Pick<PromptKeys, 'icons' | 'emphasis'> & Partial<Pick<PromptKeys, 'energy'>>,
+  rng: Rng = Math.random,
+  fixedLayout?: SceneLayout
+): Required<Pick<SceneItem, 'cameraMotion' | 'paletteId' | 'layout' | 'transition' | 'bgStyle' | 'headlineAnim' | 'decor' | 'emphasis'>> {
+  let layout: SceneLayout = fixedLayout || (pack.layout === 'mixed' ? 'stack' : pack.layout);
+  if (!fixedLayout && pack.layout === 'mixed') {
+    const r = rng();
+    if (widgetType === 'cta_button_card' && r < 0.4) layout = 'card-first';
+    else if (widgetType === 'price_tag_card' && sceneIndex === 0 && !hasPriceOrText && r < 0.4) layout = 'center-text';
+    else if (widgetType === 'quote_card' && r < 0.25) layout = 'card-first';
+    else if (widgetType === 'checklist_card' && r < 0.2) layout = 'card-first';
+  }
+  return {
+    cameraMotion: pack.camera,
+    paletteId: paletteIdOfPack(pack),
+    layout,
+    transition: pack.transition,
+    bgStyle: pack.bgStyle,
+    headlineAnim:
+      sceneIndex === 0 && keys.energy === 'high' && pack.headlineAnim !== 'typewriter'
+        ? 'pop'
+        : pack.headlineAnim,
+    decor: pack.decor || keys.icons,
+    emphasis: keys.emphasis.join('|'),
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* VARIASI SUSUNAN SCENE                                                      */
+/* -------------------------------------------------------------------------- */
+
+function chooseVariant(
+  category: CategoryType,
+  drafts: SceneDraft[],
+  meta: ParsedTopicMeta,
+  keys: PromptKeys,
+  rng: Rng
+): 'A' | 'B' | 'C' {
+  const r = rng();
+  if (category === 'promo') {
+    if (keys.platform === 'story') return r < 0.6 ? 'C' : 'A';
+    if (meta.priceText && r < 0.3) return 'B';
+    return r < 0.8 ? 'A' : 'C';
+  }
+  if (category === 'quote') return r < 0.45 ? 'A' : r < 0.75 ? 'B' : 'C';
+  const stepCount = (drafts[1]?.secondaryInput || '').split('|').filter((x) => x.trim()).length;
+  if (stepCount <= 4 && r < 0.35) return 'B';
+  return r < 0.75 ? 'A' : 'C';
+}
+
+/** A = susunan lengkap. B = susunan alternatif. C = versi ringkas (cocok untuk story/status). */
+function varyStructure(
+  category: CategoryType,
+  drafts: SceneDraft[],
+  meta: ParsedTopicMeta,
+  variant: 'A' | 'B' | 'C',
+  rng: Rng
+): SceneDraft[] {
+  if (variant === 'A' || drafts.length < 4) return drafts;
+  const [hook, second, third, cta] = drafts;
+
+  if (category === 'promo') {
+    if (variant === 'C') return [{ ...hook, layout: 'center-text' }, third, cta];
+    if (!meta.priceText) return drafts;
+    return [
+      {
+        ...third,
+        role: 'Hook / Masalah',
+        text: `${meta.productName || 'Promo spesial'} sekarang cuma ${meta.priceText}!`,
+        stepBadge: 'Harga spesial',
+        emoji: '🏷️',
+      },
+      second,
+      {
+        role: 'Isi / Solusi',
+        text: pick(['Promonya terbatas!', 'Jangan sampai kehabisan!'], rng, 'Promonya terbatas!'),
+        subtext: 'Selama persediaan masih ada.',
+        emoji: '⏰',
+        duration: 3,
+        animation: 'zoom',
+        stepBadge: 'Terbatas',
+        widgetType: 'step_number_card',
+        primaryInput: '⏰',
+        secondaryInput: 'Promo terbatas | Pesan sebelum kehabisan',
+      },
+      cta,
+    ];
+  }
+
+  if (category === 'quote') {
+    if (variant === 'C') return [hook, second, cta];
+    // B: pembuka berupa teks besar tanpa kartu, lalu kutipan satu per satu
+    return [
+      { ...hook, layout: 'center-text', duration: 3 },
+      { ...second, primaryInput: hook.primaryInput },
+      { ...third, primaryInput: second.primaryInput },
+      cta,
+    ];
+  }
+
+  // edukasi
+  if (variant === 'C') return [hook, second, cta];
+  const steps = (second.secondaryInput || '')
+    .split('|')
+    .map((x) => x.trim().replace(/^\d{1,2}[.)]\s*/, ''))
+    .filter(Boolean);
+  if (!steps.length || steps.length > 4) return drafts;
+  return [
+    hook,
+    ...steps.map(
+      (step, i): SceneDraft => ({
+        role: 'Langkah',
+        text: `${sentenceCase(meta.stepNoun || 'cara')} ke-${i + 1}`,
+        subtext: '',
+        emoji: '📝',
+        duration: 2.8,
+        animation: 'slide-up',
+        stepBadge: `${i + 1} dari ${steps.length}`,
+        widgetType: 'step_number_card',
+        primaryInput: String(i + 1),
+        secondaryInput: step,
+      })
+    ),
+    cta,
+  ];
+}
+
 function normalizeHashtag(tag: string): string {
   const body = tag.replace(/^#/, '').toLowerCase().replace(/[^a-z0-9_]/g, '');
   return body.length >= 2 ? `#${body}` : '';
@@ -1693,23 +2219,52 @@ export function generateScript(
   const meta = parseTopic(rawTopic, options, category);
   const style = suggestStyle(rawTopic, category, options?.forceRandomPalette, rng);
 
-  const drafts =
+  const baseDrafts =
     category === 'quote'
       ? buildQuoteScenes(meta, rng, options)
       : category === 'edukasi'
       ? buildEdukasiScenes(meta, rng, options)
       : buildPromoScenes(meta, rng, options);
 
-  const camera = suggestCameraMotion(category);
+  // Gaya visual & susunan scene mengikuti isi prompt
+  const keys = analyzePrompt(rawTopic, category, meta);
+  const forcedPack = options?.stylePackId
+    ? STYLE_PACKS.find((p) => p.id === options.stylePackId)
+    : undefined;
+  const pack = forcedPack || pickStylePack(keys, rng);
+  const variant = options?.variant || chooseVariant(category, baseDrafts, meta, keys, rng);
+  const drafts = varyStructure(category, baseDrafts, meta, variant, rng);
+
+  if (!options?.forceRandomPalette) {
+    const packPalette = COLOR_PALETTES.find((p) => p.id === pack.paletteId);
+    style.paletteId = paletteIdOfPack(pack);
+    if (packPalette && !pack.colors) style.colors = packPalette;
+    style.gradientPreset = style.paletteId;
+    style.font = pack.font;
+    style.moodLabel = `${pack.name} • ${style.music.bpm} BPM`;
+  }
+
   const fallbackImage = CUSTOM_IMAGE_ASSETS.find((a) => a.category === category)?.url;
-  const scenes: SceneItem[] = drafts.map((draft, i) => ({
-    id: `scene-${i + 1}`,
-    sceneNumber: i + 1,
-    ...draft,
-    imageUrl: options?.userImages?.[i] || fallbackImage,
-    cameraMotion: camera,
-    paletteId: style.paletteId,
-  }));
+  const scenes: SceneItem[] = drafts.map((draft, i) => {
+    const visual = styleFieldsFor(
+      pack,
+      i,
+      draft.widgetType,
+      Boolean(meta.priceText),
+      keys,
+      rng,
+      draft.layout
+    );
+    return {
+      id: `scene-${i + 1}`,
+      sceneNumber: i + 1,
+      ...draft,
+      duration: Math.round(draft.duration * pack.pace * 10) / 10,
+      imageUrl: options?.userImages?.[i] || fallbackImage,
+      ...visual,
+      paletteId: options?.forceRandomPalette ? style.paletteId : visual.paletteId,
+    };
+  });
 
   const { caption, hashtags } = generateCaptionAndHashtags(rawTopic, category, scenes, meta);
 
@@ -1722,6 +2277,7 @@ export function generateScript(
     suggestedColor: style.colors,
     suggestedStyle: style,
     extractedMeta: meta,
+    recipe: { packId: pack.id, packName: pack.name, variant, keys },
   };
 }
 

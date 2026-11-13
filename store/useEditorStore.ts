@@ -76,6 +76,8 @@ const initialScript = generateScript(DEFAULT_TOPIC, 'promo', {
   customProductName: 'Kopi Susu Gula Aren',
   customStoreName: 'Kopi Senja Kita',
   seed: 7,
+  stylePackId: 'poster-promo',
+  variant: 'A',
 });
 
 export const useEditorStore = create<EditorState>((set, get) => ({
