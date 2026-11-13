@@ -18,6 +18,13 @@ export async function middleware(request: NextRequest) {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
+    // Tanpa konfigurasi Supabase, identitas user tidak bisa dicek: halaman admin ditutup.
+    if (request.nextUrl.pathname.startsWith('/admin')) {
+      const homeUrl = request.nextUrl.clone();
+      homeUrl.pathname = '/';
+      homeUrl.search = '';
+      return NextResponse.redirect(homeUrl);
+    }
     return supabaseResponse;
   }
 

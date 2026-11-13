@@ -5,12 +5,35 @@ import { useRouter } from 'next/navigation';
 import {
   CategoryType,
   GeneratedScriptResult,
+  SceneItem,
   generateScript,
 } from '@/lib/smart-engine';
 import { TemplateId, useEditorStore } from '@/store/useEditorStore';
 import { createClient } from '@/lib/supabase/client';
 import { loadTrainingIntoEngine } from '@/lib/training';
 import { Sparkles, ArrowRight, CheckCircle2, Loader2 } from 'lucide-react';
+
+/** Ringkasan isi kartu scene untuk preview: kutipan, daftar langkah, harga, atau teks tombol. */
+function sceneDetail(scene: SceneItem): string {
+  const items = (scene.secondaryInput || '')
+    .split('|')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  switch (scene.widgetType) {
+    case 'quote_card':
+      return scene.primaryInput ? `“${scene.primaryInput}”` : '';
+    case 'checklist_card':
+      return items.join(' • ');
+    case 'price_tag_card':
+      return [scene.primaryInput, ...items].filter(Boolean).join(' • ');
+    case 'step_number_card':
+      return [scene.primaryInput === '!' ? '' : scene.primaryInput, ...items].filter(Boolean).join(' ');
+    case 'cta_button_card':
+      return scene.primaryInput ? `Tombol: ${scene.primaryInput}` : '';
+    default:
+      return '';
+  }
+}
 
 /**
  * Halaman Create Flow (/create) — TANPA AI API
@@ -286,6 +309,9 @@ export default function CreatePage() {
                       <p className="font-semibold text-slate-100">
                         {scene.emoji} {scene.text}
                       </p>
+                      {sceneDetail(scene) && (
+                        <p className="text-slate-400">{sceneDetail(scene)}</p>
+                      )}
                     </div>
                   ))}
                 </div>

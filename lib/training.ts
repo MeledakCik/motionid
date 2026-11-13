@@ -59,8 +59,8 @@ function splitList(val: string): string[] {
 }
 
 /**
- * Ekstraksi otomatis telemetri motion graphic dari URL video referensi kreator
- * (TikTok / Reels / Shorts / MP4) untuk melatih mesin template secara dinamis.
+ * Memilih profil gerak (kamera, palet, urutan widget) berdasarkan kata kunci di URL/judul
+ * video referensi. Catatan: fungsi ini TIDAK membuka atau menganalisis isi videonya.
  */
 export function analyzeCreatorVideoReference(
   videoUrl: string,
@@ -152,7 +152,7 @@ export function applyTrainingRow(row: TrainingRow): boolean {
         creatorHandle: row.creator_handle || profile.creatorHandle || '@depup.web',
         profile,
       });
-      cats.forEach((c) => addCustomHookToEngine(c, row.content_text));
+      // Judul preset bukan kalimat hook, jadi tidak dimasukkan ke bank hook.
       return true;
     }
     case 'hook':
@@ -169,7 +169,7 @@ export function applyTrainingRow(row: TrainingRow): boolean {
       );
       return true;
     case 'cta':
-      addCustomCtaToEngine(row.content_text);
+      cats.forEach((c) => addCustomCtaToEngine(row.content_text, c));
       return true;
     case 'image_asset':
       if (!row.image_url) return false;

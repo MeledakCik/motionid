@@ -24,12 +24,18 @@ Aplikasi web fullstack **Next.js 14+ (App Router) + TypeScript + Tailwind CSS + 
 ### 2. Copy & Jalankan `supabase/migration.sql`
 1. Buka menu **SQL Editor** di dashboard Supabase Anda.
 2. Salin seluruh isi file `supabase/migration.sql` lalu klik **Run**.
-3. Script tersebut akan otomatis membuat:
-   - Tabel `public.profiles` (beserta trigger otomatis yang memberikan role `admin` untuk `kakangkasyaf@gmail.com`)
-   - Tabel `public.templates` (beserta seed 9 template Q1–Q3, P1–P3, E1–E3 dengan preview `picsum.photos`)
-   - Tabel `public.projects` (dilengkapi RLS CRUD per user dan kolom `user_images`)
-   - Tabel `public.ai_training_data` (dilengkapi RLS khusus `kakangkasyaf@gmail.com`)
-   - Storage bucket publik `project-backgrounds`
+3. Script tersebut aman dijalankan berulang kali (juga di atas skema lama) dan akan menyiapkan:
+   - Tabel `public.projects` dengan RLS: setiap user hanya bisa melihat, mengubah, dan menghapus proyeknya sendiri.
+   - Tabel `public.ai_training_data` dengan RLS: user yang login boleh membaca, hanya admin yang boleh menulis.
+   - Tabel `public.app_admins` + fungsi `public.is_admin()`: daftar email admin (email harus sudah terverifikasi).
+4. Buka **Advisors ➔ Security Advisor**: tidak boleh ada peringatan "RLS disabled" untuk tabel di atas.
+
+#### Menambah admin
+Jalankan di SQL Editor, lalu isi juga `NEXT_PUBLIC_ADMIN_EMAIL` agar menu admin tampil:
+
+```sql
+insert into public.app_admins (email) values ('email.admin@contoh.com');
+```
 
 ### 3. Setting Auth Google Provider
 1. Di dashboard Supabase, buka menu **Authentication ➔ Providers ➔ Google** lalu aktifkan **Enable Sign in with Google**.

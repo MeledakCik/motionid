@@ -69,10 +69,13 @@ export interface EditorState {
 }
 
 const DEFAULT_TOPIC = 'Promo Kopi Susu Gula Aren 18rb';
+// seed tetap → isi awal sama di server & browser (tidak ada hydration mismatch)
 const initialScript = generateScript(DEFAULT_TOPIC, 'promo', {
-  customPrice: 'Rp 18rb',
+  customPrice: 'Rp18rb',
+  customOriginalPrice: 'Rp25rb',
   customProductName: 'Kopi Susu Gula Aren',
   customStoreName: 'Kopi Senja Kita',
+  seed: 7,
 });
 
 export const useEditorStore = create<EditorState>((set, get) => ({

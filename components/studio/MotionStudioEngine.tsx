@@ -3,9 +3,17 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Link from 'next/link';
 import {
-  COLOR_PALETTES,
+  CategoryType,
+  SceneItem,
+  StudioWidgetType,
+  CameraMotionType as EngineCameraMotionType,
+  generateScript,
+  normalizeWidgetType,
+  priceToNumber,
   solveSpring,
   smoothStep,
+  suggestCameraMotion,
+  suggestedFontFor,
 } from '@/lib/smart-engine';
 import {
   TrainingRow,
@@ -14,20 +22,13 @@ import {
   loadTrainingIntoEngine,
 } from '@/lib/training';
 import { createClient } from '@/lib/supabase/client';
-import { useEditorStore } from '@/store/useEditorStore';
+import { useEditorStore, type FontFamilyName } from '@/store/useEditorStore';
+import { ensureCanvasFont, resolveCanvasFamily } from '@/components/templates/fonts';
 
-export type WidgetRigType =
-  | 'repo_input_card'
-  | 'repo_scanner_card'
-  | 'terminal_build_card'
-  | 'bento_metrics_grid'
-  | 'kinetic_showcase_card';
+export type WidgetRigType = StudioWidgetType;
+export type CameraMotionType = EngineCameraMotionType;
 
-export type CameraMotionType =
-  | 'spring-slide-vertical'
-  | 'perspective-tilt-3d'
-  | 'whip-zoom-spring'
-  | 'smooth-float';
+const ADMIN_EMAIL = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'kakangkasyaf@gmail.com').toLowerCase();
 
 export interface StudioSceneItem {
   stepBadge: string;
@@ -56,6 +57,8 @@ export interface TrainedVideoPresetItem {
   badges: string[];
   summary: string;
   scenesBlueprint: StudioSceneItem[];
+  /** true untuk preset hasil simpanan admin (dari database). */
+  isTrained?: boolean;
 }
 
 export interface PaletteThemeConfig {
@@ -78,8 +81,44 @@ export interface PaletteThemeConfig {
 }
 
 export const DEFAULT_PALETTE_THEMES: Record<string, PaletteThemeConfig> = {
+  'promo-pop': {
+    name: 'Kuning Promo',
+    bgStart: '#fff1c1',
+    bgMid: '#ffe08a',
+    bgEnd: '#ffc94d',
+    orbPrimary: 'rgba(239, 68, 68, 0.32)',
+    orbSecondary: 'rgba(255, 255, 255, 0.55)',
+    titleColor: '#1c1206',
+    subColor: '#5b4310',
+    pillBg: 'rgba(255, 255, 255, 0.92)',
+    pillText: '#b91c1c',
+    cardBg: 'rgba(255, 255, 255, 0.97)',
+    cardBorder: 'rgba(185, 28, 28, 0.18)',
+    cardText: '#1c1206',
+    accent: '#dc2626',
+    accentSoft: 'rgba(220, 38, 38, 0.12)',
+    isDark: false,
+  },
+  'quote-ink': {
+    name: 'Tinta Malam',
+    bgStart: '#0b1026',
+    bgMid: '#151a3a',
+    bgEnd: '#241a3d',
+    orbPrimary: 'rgba(244, 194, 122, 0.22)',
+    orbSecondary: 'rgba(129, 140, 248, 0.2)',
+    titleColor: '#f8f5ee',
+    subColor: '#c7c2d6',
+    pillBg: 'rgba(30, 27, 60, 0.85)',
+    pillText: '#f4c27a',
+    cardBg: 'rgba(250, 247, 240, 0.97)',
+    cardBorder: 'rgba(244, 194, 122, 0.35)',
+    cardText: '#1f1b2e',
+    accent: '#c08a3e',
+    accentSoft: 'rgba(192, 138, 62, 0.16)',
+    isDark: true,
+  },
   'depup-lavender': {
-    name: 'DepUp Lavender Pastel',
+    name: 'Lavender Pastel',
     bgStart: '#d6cff6',
     bgMid: '#ebe6ff',
     bgEnd: '#f7f5ff',
@@ -97,7 +136,7 @@ export const DEFAULT_PALETTE_THEMES: Record<string, PaletteThemeConfig> = {
     isDark: false,
   },
   'midnight-indigo': {
-    name: 'Linear Dark Indigo',
+    name: 'Indigo Malam',
     bgStart: '#080b12',
     bgMid: '#111827',
     bgEnd: '#1e1b4b',
@@ -115,7 +154,7 @@ export const DEFAULT_PALETTE_THEMES: Record<string, PaletteThemeConfig> = {
     isDark: true,
   },
   'aurora-mint': {
-    name: 'Aurora Mint Fresh',
+    name: 'Mint Segar',
     bgStart: '#d1fae5',
     bgMid: '#ecfeff',
     bgEnd: '#f0fdf4',
@@ -133,7 +172,7 @@ export const DEFAULT_PALETTE_THEMES: Record<string, PaletteThemeConfig> = {
     isDark: false,
   },
   'cyber-sunset': {
-    name: 'Cyber Sunset Pulse',
+    name: 'Sunset Neon',
     bgStart: '#18181b',
     bgMid: '#2e1065',
     bgEnd: '#4c0519',
@@ -155,7 +194,7 @@ export const DEFAULT_PALETTE_THEMES: Record<string, PaletteThemeConfig> = {
 export const INITIAL_TRAINED_VIDEOS: TrainedVideoPresetItem[] = [
   {
     id: 'vid-depup-7697972111469546753',
-    title: 'DepUp SaaS Step Workflow (Deploy Without Hassle)',
+    title: 'Demo aplikasi: 3 langkah deploy',
     creatorHandle: '@depup.web',
     category: 'saas',
     videoUrl: 'https://www.tiktok.com/@depup.web/video/7697972111469546753',
@@ -207,7 +246,7 @@ export const INITIAL_TRAINED_VIDEOS: TrainedVideoPresetItem[] = [
   },
   {
     id: 'vid-linear-bento',
-    title: 'Opus 5.5 Isometric 3D Bento Release',
+    title: 'Demo aplikasi: rilis fitur 3D',
     creatorHandle: '@linear.motion',
     category: 'saas',
     videoUrl: 'https://www.tiktok.com/@linear.motion/video/7410029384712',
@@ -259,7 +298,7 @@ export const INITIAL_TRAINED_VIDEOS: TrainedVideoPresetItem[] = [
   },
   {
     id: 'vid-capcut-kinetic',
-    title: 'CapCut AI Lab Kinetic Word-Tracker',
+    title: 'Promo produk digital',
     creatorHandle: '@capcut.creator',
     category: 'promo',
     videoUrl: 'https://www.tiktok.com/@capcut.creator/video/7582910293811',
@@ -271,7 +310,7 @@ export const INITIAL_TRAINED_VIDEOS: TrainedVideoPresetItem[] = [
     triggerKeywords: 'promo, diskon, jualan, murah, flash sale, produk, kopi',
     badges: ['🔥 Flash Drop', '⚡ Fitur Utama', '🛒 Checkout'],
     summary:
-      'Sorotan kata demi kata bergaya CapCut AI Lab dengan lencana pop-up melayang, kursor klik otomatis, dan whip-zoom cepat.',
+      'Sorotan kata demi kata dengan lencana pop-up melayang, kursor klik otomatis, dan whip-zoom cepat.',
     scenesBlueprint: [
       {
         stepBadge: '🔥 Flash Drop',
@@ -310,7 +349,7 @@ export const INITIAL_TRAINED_VIDEOS: TrainedVideoPresetItem[] = [
   },
   {
     id: 'vid-edukasi-mint',
-    title: 'Clean EdTech Step-by-Step Microlearning',
+    title: 'Edukasi teknologi singkat',
     creatorHandle: '@devmicro.id',
     category: 'edukasi',
     videoUrl: 'https://www.tiktok.com/@devmicro.id/video/7619283746510',
@@ -360,6 +399,440 @@ export const INITIAL_TRAINED_VIDEOS: TrainedVideoPresetItem[] = [
     ],
   },
 ];
+
+const CATEGORY_LABEL: Record<TrainedVideoPresetItem['category'], string> = {
+  promo: 'Promo',
+  quote: 'Quote',
+  edukasi: 'Edukasi',
+  saas: 'Demo aplikasi',
+};
+
+const CATEGORY_OPTIONS: Array<{ value: CategoryType; label: string }> = [
+  { value: 'promo', label: 'Promo' },
+  { value: 'quote', label: 'Quote' },
+  { value: 'edukasi', label: 'Edukasi' },
+];
+
+const CATEGORY_HINTS: Record<CategoryType, { placeholder: string; hint: string }> = {
+  promo: {
+    placeholder: 'promo kopi susu gula aren dari 25rb jadi 18rb',
+    hint: 'Sebut produk dan harganya. Tulis "dari … jadi …" supaya muncul harga coret.',
+  },
+  quote: {
+    placeholder: 'kata-kata buat yang lagi capek kerja',
+    hint: 'Sebut suasananya: capek, galau, semangat, cinta, atau syukur.',
+  },
+  edukasi: {
+    placeholder: '3 cara mengatur keuangan di usia 20an',
+    hint: 'Awali dengan angka ("3 cara …") supaya jadi daftar langkah bernomor.',
+  },
+};
+
+const CAMERA_OPTIONS: Array<{ value: 'auto' | CameraMotionType; label: string }> = [
+  { value: 'auto', label: 'Otomatis (sesuai kategori)' },
+  { value: 'spring-slide-vertical', label: 'Geser pegas' },
+  { value: 'whip-zoom-spring', label: 'Zoom cepat' },
+  { value: 'perspective-tilt-3d', label: 'Miring 3D' },
+  { value: 'smooth-float', label: 'Melayang tenang' },
+];
+
+const CAMERA_MOTIONS: CameraMotionType[] = [
+  'spring-slide-vertical',
+  'perspective-tilt-3d',
+  'whip-zoom-spring',
+  'smooth-float',
+];
+
+function isCameraMotion(value: unknown): value is CameraMotionType {
+  return typeof value === 'string' && (CAMERA_MOTIONS as string[]).includes(value);
+}
+
+const WIDGET_OPTIONS: Array<{ value: StudioWidgetType; icon: string; label: string }> = [
+  { value: 'price_tag_card', icon: '🏷️', label: 'Kartu harga & diskon' },
+  { value: 'checklist_card', icon: '✓', label: 'Daftar poin / langkah' },
+  { value: 'step_number_card', icon: '3', label: 'Angka besar + keterangan' },
+  { value: 'quote_card', icon: '❝', label: 'Kartu kutipan' },
+  { value: 'cta_button_card', icon: '👆', label: 'Tombol ajakan (CTA)' },
+  { value: 'kinetic_showcase_card', icon: '✨', label: 'Sorot kata di judul' },
+  { value: 'repo_input_card', icon: '⌘', label: 'Demo aplikasi: input + klik' },
+  { value: 'repo_scanner_card', icon: '⚡', label: 'Demo aplikasi: kartu analisis' },
+  { value: 'terminal_build_card', icon: '>_', label: 'Demo aplikasi: terminal' },
+  { value: 'bento_metrics_grid', icon: '⊞', label: 'Demo aplikasi: grid metrik' },
+];
+
+const WIDGET_FIELDS: Record<
+  StudioWidgetType,
+  { primary: string; secondary: string; primaryHint: string; secondaryHint: string }
+> = {
+  price_tag_card: {
+    primary: 'Nama produk',
+    secondary: 'Harga promo | harga normal | label stiker | nama toko',
+    primaryHint: 'Kopi Susu Gula Aren',
+    secondaryHint: 'Rp18rb | Rp25rb | Hemat 28% | Kopi Senja',
+  },
+  checklist_card: {
+    primary: 'Judul daftar (opsional)',
+    secondary: 'Poin-poin, pisahkan dengan |',
+    primaryHint: 'Kenapa harus ini?',
+    secondaryHint: '1. Langkah pertama | 2. Langkah kedua',
+  },
+  step_number_card: {
+    primary: 'Angka atau simbol besar',
+    secondary: 'Keterangan (baris pertama tebal), pisahkan dengan |',
+    primaryHint: '3',
+    secondaryHint: 'cara | mengatur keuangan',
+  },
+  quote_card: {
+    primary: 'Isi kutipan',
+    secondary: 'Tanda tangan (opsional)',
+    primaryHint: 'Pelan-pelan saja, yang penting tidak berhenti.',
+    secondaryHint: '@akunmu',
+  },
+  cta_button_card: {
+    primary: 'Teks tombol',
+    secondary: 'Info tambahan, pisahkan dengan |',
+    primaryHint: 'Pesan Sekarang',
+    secondaryHint: 'Kopi Senja | Link di bio',
+  },
+  kinetic_showcase_card: {
+    primary: 'Teks yang diketik',
+    secondary: 'Label tambahan, pisahkan dengan koma',
+    primaryHint: 'contoh.com/promo',
+    secondaryHint: 'Label 1, Label 2',
+  },
+  repo_input_card: {
+    primary: 'Teks yang diketik (URL/input)',
+    secondary: 'Label tambahan, pisahkan dengan koma',
+    primaryHint: 'github.com/nama/repo',
+    secondaryHint: 'Label 1, Label 2',
+  },
+  repo_scanner_card: {
+    primary: 'Judul kartu',
+    secondary: 'Isi kotak metrik, pisahkan dengan koma',
+    primaryHint: 'Analisis otomatis',
+    secondaryHint: 'Metrik 1, Metrik 2, Metrik 3',
+  },
+  terminal_build_card: {
+    primary: 'Judul terminal / URL hasil',
+    secondary: 'Baris terminal, pisahkan dengan koma',
+    primaryHint: 'https://aplikasimu.id',
+    secondaryHint: '$ npm run build, ✓ Selesai',
+  },
+  bento_metrics_grid: {
+    primary: 'Judul kartu',
+    secondary: 'Isi kotak metrik, pisahkan dengan koma',
+    primaryHint: 'Performa minggu ini',
+    secondaryHint: 'Metrik 1, Metrik 2, Metrik 3',
+  },
+};
+
+const FONT_OPTIONS: FontFamilyName[] = [
+  'Poppins',
+  'Montserrat',
+  'Playfair Display',
+  'Space Grotesk',
+  'Bebas Neue',
+  'Anton',
+];
+
+/** Ubah scene hasil generator (SceneItem) menjadi scene studio. */
+function sceneItemsToStudio(
+  items: SceneItem[],
+  camera?: CameraMotionType,
+  paletteId?: string
+): StudioSceneItem[] {
+  return items.map((sc, idx) => ({
+    stepBadge: sc.stepBadge || `Scene ${idx + 1}`,
+    title: sc.text || '',
+    subtext: sc.subtext || '',
+    widgetType: normalizeWidgetType(sc.widgetType),
+    primaryInput: sc.primaryInput || '',
+    secondaryInput: sc.secondaryInput || '',
+    duration: Number(sc.duration) || 3.4,
+    cameraMotion: camera || sc.cameraMotion || 'spring-slide-vertical',
+    paletteId: paletteId || sc.paletteId || 'depup-lavender',
+  }));
+}
+
+// Contoh bawaan per kategori. seed tetap → isi sama di server & browser.
+const CATEGORY_PRESET_SOURCES: Array<{
+  id: string;
+  category: CategoryType;
+  title: string;
+  summary: string;
+  topic: string;
+  store?: string;
+  seed: number;
+}> = [
+  {
+    id: 'preset-promo-harga-coret',
+    category: 'promo',
+    title: 'Promo UMKM dengan harga coret',
+    summary: 'Produk, keunggulan, harga promo dengan harga coret, lalu tombol pesan.',
+    topic: 'promo kopi susu gula aren dari 25rb jadi 18rb',
+    store: 'Kopi Senja Kita',
+    seed: 11,
+  },
+  {
+    id: 'preset-quote-pengingat',
+    category: 'quote',
+    title: 'Quote pengingat yang menenangkan',
+    summary: 'Tiga kartu kutipan serif yang muncul pelan, ditutup ajakan simpan.',
+    topic: 'kata-kata buat yang lagi capek kerja',
+    seed: 5,
+  },
+  {
+    id: 'preset-edukasi-langkah',
+    category: 'edukasi',
+    title: 'Edukasi langkah bernomor',
+    summary: 'Angka besar sebagai pembuka, daftar langkah bercentang, tips penting, ajakan simpan.',
+    topic: '3 cara mengatur keuangan di usia 20an',
+    seed: 3,
+  },
+];
+
+export const CATEGORY_PRESETS: TrainedVideoPresetItem[] = CATEGORY_PRESET_SOURCES.map((src) => {
+  const result = generateScript(src.topic, src.category, {
+    seed: src.seed,
+    customStoreName: src.store,
+  });
+  const blueprint = sceneItemsToStudio(
+    result.scenes,
+    suggestCameraMotion(src.category),
+    result.suggestedStyle.paletteId
+  );
+  return {
+    id: src.id,
+    title: src.title,
+    creatorHandle: '',
+    category: src.category,
+    videoUrl: '',
+    cameraMotion: blueprint[0].cameraMotion,
+    paletteId: result.suggestedStyle.paletteId,
+    bpm: result.suggestedMusic.bpm,
+    stiffness: 220,
+    damping: 14,
+    triggerKeywords: '',
+    badges: blueprint.map((b) => b.stepBadge),
+    summary: src.summary,
+    scenesBlueprint: blueprint,
+  };
+});
+
+const BUILT_IN_PRESETS: TrainedVideoPresetItem[] = [...CATEGORY_PRESETS, ...INITIAL_TRAINED_VIDEOS];
+
+/** Baris ai_training_data (type video_motion/ui_blueprint) → preset yang bisa dipakai semua user. */
+function rowToPreset(row: TrainingRow): TrainedVideoPresetItem | null {
+  if (row.type !== 'video_motion' && row.type !== 'ui_blueprint') return null;
+  const meta = (row.metadata_json || {}) as Record<string, unknown>;
+  const rawScenes = Array.isArray(meta.scenes_blueprint)
+    ? (meta.scenes_blueprint as Array<Partial<StudioSceneItem>>)
+    : [];
+  if (!rawScenes.length) return null;
+  const blueprint: StudioSceneItem[] = rawScenes.map((sc, i) => ({
+    stepBadge: String(sc.stepBadge ?? `Scene ${i + 1}`),
+    title: String(sc.title ?? ''),
+    subtext: String(sc.subtext ?? ''),
+    widgetType: normalizeWidgetType(sc.widgetType),
+    primaryInput: String(sc.primaryInput ?? ''),
+    secondaryInput: String(sc.secondaryInput ?? ''),
+    duration: Number(sc.duration) || 3.4,
+    cameraMotion: isCameraMotion(sc.cameraMotion) ? sc.cameraMotion : 'spring-slide-vertical',
+    paletteId: String(sc.paletteId || 'depup-lavender'),
+  }));
+  const rawCategory = String(meta.preset_category || row.category || 'saas');
+  const category: TrainedVideoPresetItem['category'] =
+    rawCategory === 'promo' || rawCategory === 'quote' || rawCategory === 'edukasi'
+      ? rawCategory
+      : 'saas';
+  return {
+    id: `db-${row.id}`,
+    title: row.content_text || 'Preset admin',
+    creatorHandle: row.creator_handle || '',
+    category,
+    videoUrl: row.video_url || '',
+    cameraMotion: blueprint[0].cameraMotion,
+    paletteId: blueprint[0].paletteId,
+    bpm: Number(row.motion_profile?.bpm) || Number(meta.bpm) || 120,
+    stiffness: Number(meta.stiffness) || 220,
+    damping: Number(meta.damping) || 14,
+    triggerKeywords: String(meta.trigger_keywords ?? row.subtext ?? ''),
+    badges: blueprint.map((b) => b.stepBadge),
+    summary: `Preset dari admin, ${blueprint.length} scene`,
+    scenesBlueprint: blueprint,
+    isTrained: true,
+  };
+}
+
+/* ---------- Helper teks & gambar kanvas ---------- */
+
+/** "a | b | c" → [a, b, c]. Tanpa "|", dipisah koma (kecuali koma desimal seperti 1,5jt). */
+function splitItems(raw: string | undefined): string[] {
+  const text = String(raw || '').trim();
+  if (!text) return [];
+  const parts = text.includes('|') ? text.split('|') : text.split(/,(?!\d)/);
+  return parts.map((p) => p.trim()).filter(Boolean);
+}
+
+function isPriceText(value: string): boolean {
+  const t = value.trim();
+  return /^rp\.?\s*\d/i.test(t) || /^\d[\d.,]*\s*(rb|ribu|k|jt|juta)?$/i.test(t);
+}
+
+function breakLongWord(ctx: CanvasRenderingContext2D, word: string, maxWidth: number): string[] {
+  const out: string[] = [];
+  let chunk = '';
+  for (const ch of Array.from(word)) {
+    if (chunk && ctx.measureText(chunk + ch).width > maxWidth) {
+      out.push(chunk);
+      chunk = ch;
+    } else {
+      chunk += ch;
+    }
+  }
+  if (chunk) out.push(chunk);
+  return out;
+}
+
+function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const lines: string[] = [];
+  let line = '';
+  for (const raw of String(text).split(/\s+/).filter(Boolean)) {
+    const pieces = ctx.measureText(raw).width > maxWidth ? breakLongWord(ctx, raw, maxWidth) : [raw];
+    for (const word of pieces) {
+      const test = line ? `${line} ${word}` : word;
+      if (line && ctx.measureText(test).width > maxWidth) {
+        lines.push(line);
+        line = word;
+      } else {
+        line = test;
+      }
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+function ellipsize(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
+  if (ctx.measureText(text).width <= maxWidth) return text;
+  let t = text;
+  while (t.length > 1 && ctx.measureText(`${t}…`).width > maxWidth) t = t.slice(0, -1);
+  return `${t.trimEnd()}…`;
+}
+
+/** Bungkus teks; kecilkan font sampai muat di maxLines (sisanya diberi elipsis). Mengatur ctx.font. */
+function fitText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+  maxLines: number,
+  startSize: number,
+  minSize: number,
+  weight: number,
+  family: string
+): { lines: string[]; size: number } {
+  let size = Math.max(minSize, startSize);
+  for (;;) {
+    ctx.font = `${weight} ${Math.round(size)}px ${family}`;
+    const width = Math.max(10, maxWidth);
+    const lines = wrapText(ctx, text, width);
+    const wordTooLong = String(text)
+      .split(/\s+/)
+      .some((w) => w && ctx.measureText(w).width > width);
+    if (lines.length <= maxLines && (!wordTooLong || size <= minSize)) {
+      return { lines: lines.length ? lines : [''], size };
+    }
+    if (size <= minSize) {
+      const kept = lines.slice(0, maxLines);
+      kept[kept.length - 1] = ellipsize(ctx, `${kept[kept.length - 1]}…`, maxWidth);
+      return { lines: kept, size };
+    }
+    size = Math.max(minSize, size * 0.9);
+  }
+}
+
+/** Warna teks yang terbaca di atas warna latar (hex). */
+function readableOn(color: string): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(color.trim());
+  if (!m) return '#ffffff';
+  const n = parseInt(m[1], 16);
+  const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+  return lum > 0.62 ? '#111827' : '#ffffff';
+}
+
+function drawCheck(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  size: number,
+  color: string,
+  progress: number
+) {
+  const k = Math.max(0, Math.min(1, progress));
+  const p1 = { x: cx - size * 0.42, y: cy + size * 0.02 };
+  const p2 = { x: cx - size * 0.12, y: cy + size * 0.32 };
+  const p3 = { x: cx + size * 0.44, y: cy - size * 0.3 };
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(2, size * 0.17);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(p1.x, p1.y);
+  if (k < 0.4) {
+    const u = k / 0.4;
+    ctx.lineTo(lerp(p1.x, p2.x, u), lerp(p1.y, p2.y, u));
+  } else {
+    const u = (k - 0.4) / 0.6;
+    ctx.lineTo(p2.x, p2.y);
+    ctx.lineTo(lerp(p2.x, p3.x, u), lerp(p2.y, p3.y, u));
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Stiker diskon bergerigi (gaya poster promo). */
+function drawSticker(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  r: number,
+  text: string,
+  color: string,
+  family: string,
+  pop: number,
+  timeSec: number
+) {
+  if (pop <= 0.001 || r <= 4) return;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(-0.22 + Math.sin(timeSec * 3) * 0.04);
+  const sc = (0.3 + 0.7 * pop) * (1 + Math.sin(timeSec * 5) * 0.025);
+  ctx.scale(sc, sc);
+  ctx.globalAlpha = Math.min(1, pop * 1.6);
+  const spikes = 14;
+  ctx.beginPath();
+  for (let i = 0; i < spikes * 2; i++) {
+    const rr = i % 2 === 0 ? r : r * 0.84;
+    const a = (Math.PI * i) / spikes;
+    if (i === 0) ctx.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
+    else ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+  }
+  ctx.closePath();
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.18)';
+  ctx.shadowBlur = 12;
+  ctx.shadowOffsetY = 4;
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+  const fit = fitText(ctx, text, r * 1.45, 2, r * 0.4, r * 0.2, 900, family);
+  ctx.fillStyle = readableOn(color);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const lh = fit.size * 1.05;
+  fit.lines.forEach((ln, i) => ctx.fillText(ln, 0, -((fit.lines.length - 1) * lh) / 2 + i * lh));
+  ctx.restore();
+}
 
 function drawRoundedRect(
   ctx: CanvasRenderingContext2D,
@@ -451,15 +924,6 @@ function drawSimulatedCursor(
   ctx.strokeStyle = '#ffffff';
   ctx.stroke();
 
-  ctx.shadowBlur = 6;
-  ctx.fillStyle = accentColor;
-  drawRoundedRect(ctx, 14, 18, 64, 20, 10);
-  ctx.fill();
-  ctx.fillStyle = '#ffffff';
-  ctx.font = '700 10px "Inter", sans-serif';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('AI Agent', 23, 28);
-
   ctx.restore();
 }
 
@@ -470,14 +934,17 @@ export interface MotionStudioEngineProps {
 export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudioEngineProps) {
   const storeTopic = useEditorStore((s) => s.topic);
   const storeScript = useEditorStore((s) => s.script);
+  const storeCategory = useEditorStore((s) => s.category);
 
-  const [roleMode, setRoleMode] = useState<'user' | 'admin'>(initialRole);
+  // Mode admin hanya untuk akun admin. Route /admin sudah dijaga middleware dan dicek ulang di sini;
+  // izin tulis yang sebenarnya ditegakkan RLS di database (lihat supabase/migration.sql).
+  const [isAdmin, setIsAdmin] = useState(initialRole === 'admin');
+  const [roleModeState, setRoleMode] = useState<'user' | 'admin'>(initialRole);
+  const roleMode: 'user' | 'admin' = isAdmin ? roleModeState : 'user';
   const [leftTab, setLeftTab] = useState<'prompt' | 'templates' | 'widgets' | 'layers'>('prompt');
   const [adminTab, setAdminTab] = useState<'video' | 'blueprint' | 'physics' | 'rules'>('video');
 
-  const [projectTitle, setProjectTitle] = useState(
-    storeTopic || 'DepUp SaaS Launch — Deploy Without Hassle'
-  );
+  const [projectTitle, setProjectTitle] = useState(storeTopic || 'Proyek tanpa judul');
   const [aspectRatio, setAspectRatio] = useState<'9:16' | '1:1' | '16:9'>('9:16');
   const [zoom, setZoom] = useState(1.0);
   const [showSafeZone, setShowSafeZone] = useState(true);
@@ -490,45 +957,27 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
   const [palettes, setPalettes] = useState<Record<string, PaletteThemeConfig>>(
     DEFAULT_PALETTE_THEMES
   );
-  const [trainedVideos, setTrainedVideos] = useState<TrainedVideoPresetItem[]>(
-    INITIAL_TRAINED_VIDEOS
-  );
+  const [trainedVideos, setTrainedVideos] = useState<TrainedVideoPresetItem[]>(BUILT_IN_PRESETS);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(
-    INITIAL_TRAINED_VIDEOS[0].id
+    (CATEGORY_PRESETS.find((p) => p.category === storeCategory) || CATEGORY_PRESETS[0]).id
   );
-  const [motionSkillMode, setMotionSkillMode] = useState<string>('depup-cursor-flow');
-  const [fontFamily, setFontFamily] = useState<string>('Plus Jakarta Sans');
+  const [studioCategory, setStudioCategory] = useState<CategoryType>(storeCategory);
+  const [cameraChoice, setCameraChoice] = useState<'auto' | CameraMotionType>('auto');
+  const [fontName, setFontName] = useState<FontFamilyName>(
+    storeScript?.suggestedStyle?.font || suggestedFontFor(storeCategory)
+  );
+  // Nama font asli dari next/font (berupa hash). Awalnya 'sans-serif' agar render server & browser sama.
+  const [canvasFont, setCanvasFont] = useState<string>('sans-serif');
   const [tiltIntensity, setTiltIntensity] = useState<number>(10);
   const [cardRadius, setCardRadius] = useState<number>(24);
   const [springTension, setSpringTension] = useState<number>(8);
-  const [smartPrompt, setSmartPrompt] = useState<string>(
-    storeTopic || 'Deploy aplikasi web otomatis langsung dari GitHub repo tanpa ribet'
-  );
+  const [smartPrompt, setSmartPrompt] = useState<string>(storeTopic || '');
 
-  // Convert storeScript scenes if user came from /create, otherwise use @depup.web blueprint
+  // Scene awal: dari script hasil /create (atau contoh bawaan store), sesuai kategorinya.
   const [scenes, setScenes] = useState<StudioSceneItem[]>(() => {
-    if (storeScript?.scenes?.length) {
-      return storeScript.scenes.slice(0, 4).map((sc, idx) => ({
-        stepBadge: sc.stepBadge || `${idx + 1} Langkah`,
-        title: sc.text || 'Tempel link repo',
-        subtext: sc.subtext || 'Progres tampil langsung tanpa setup rumit.',
-        widgetType:
-          (sc.widgetType as WidgetRigType) ||
-          (idx === 0
-            ? 'repo_input_card'
-            : idx === 1
-            ? 'repo_scanner_card'
-            : 'terminal_build_card'),
-        primaryInput: sc.primaryInput || 'github.com/dimas/api',
-        secondaryInput:
-          sc.secondaryInput ||
-          'Next.js 14 App, Node 20 LTS, ✓ Live at depup.id 🚀',
-        duration: sc.duration || 3.4,
-        cameraMotion: sc.cameraMotion || 'spring-slide-vertical',
-        paletteId: sc.paletteId || 'depup-lavender',
-      }));
-    }
-    return JSON.parse(JSON.stringify(INITIAL_TRAINED_VIDEOS[0].scenesBlueprint));
+    if (storeScript?.scenes?.length) return sceneItemsToStudio(storeScript.scenes);
+    const preset = CATEGORY_PRESETS.find((p) => p.category === storeCategory) || CATEGORY_PRESETS[0];
+    return JSON.parse(JSON.stringify(preset.scenesBlueprint));
   });
 
   // Admin Training Form States (Unrestricted Training Workbench)
@@ -557,12 +1006,8 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
   const [supabaseRows, setSupabaseRows] = useState<TrainingRow[]>([]);
   const [ruleType, setRuleType] = useState<TrainingRow['type']>('hook');
   const [ruleCategory, setRuleCategory] = useState<TrainingRow['category']>('promo');
-  const [ruleContent, setRuleContent] = useState(
-    'Deploy & jalankan {product} cuma {price} di {store} tanpa ribet! 🚀'
-  );
-  const [ruleSubtext, setRuleSubtext] = useState(
-    'Progres tampil langsung secara real-time dalam hitungan detik.'
-  );
+  const [ruleContent, setRuleContent] = useState('Promo {product} cuma {price} di {store}! 🔥');
+  const [ruleSubtext, setRuleSubtext] = useState('Selama persediaan masih ada.');
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -576,28 +1021,52 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
 
   useEffect(() => {
     loadTrainingIntoEngine();
-    try {
-      const saved = localStorage.getItem('motionid_v45_trained_presets');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setTrainedVideos(parsed);
-        }
-      }
-    } catch {}
-    // Also fetch Supabase rows if available
+    let alive = true;
     (async () => {
       try {
         const supabase = createClient();
-        const { data } = await supabase
-          .from('ai_training_data')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(30);
-        if (data) setSupabaseRows(data as TrainingRow[]);
-      } catch {}
+        const [{ data: userData }, { data }] = await Promise.all([
+          supabase.auth.getUser(),
+          supabase
+            .from('ai_training_data')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(50),
+        ]);
+        if (!alive) return;
+        const email = (userData.user?.email || '').toLowerCase();
+        setIsAdmin(email !== '' && email === ADMIN_EMAIL);
+        if (data) {
+          const rows = data as TrainingRow[];
+          setSupabaseRows(rows);
+          // Preset simpanan admin (database) tersedia untuk semua user.
+          const fromDb = rows
+            .map(rowToPreset)
+            .filter((p): p is TrainedVideoPresetItem => p !== null);
+          if (fromDb.length) {
+            setTrainedVideos([...CATEGORY_PRESETS, ...fromDb, ...INITIAL_TRAINED_VIDEOS]);
+          }
+        }
+      } catch {
+        if (alive) setIsAdmin(false);
+      }
     })();
+    return () => {
+      alive = false;
+    };
   }, []);
+
+  // Font kanvas memakai font yang benar-benar dimuat next/font (lihat components/templates/fonts.ts).
+  useEffect(() => {
+    let alive = true;
+    setCanvasFont(resolveCanvasFamily(fontName));
+    ensureCanvasFont(fontName).then(() => {
+      if (alive) setCanvasFont(resolveCanvasFamily(fontName));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [fontName]);
 
   const totalDuration = scenes.reduce((acc, s) => acc + (Number(s.duration) || 3.4), 0);
 
@@ -637,6 +1106,8 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
       const W = canvas.width;
       const H = canvas.height;
       const pal = palettes[scene.paletteId] || palettes['depup-lavender'];
+      const wType = normalizeWidgetType(scene.widgetType);
+      const S = Math.min(W, H);
       const stiffness = 140 + springTension * 14;
       const damping = Math.max(9, 21 - springTension);
 
@@ -722,7 +1193,7 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
       const headerTopY = H * 0.115 + (1 - badgeSpring) * 42;
 
       // Step Badge Pill
-      ctx.font = `700 ${Math.round(W * 0.036)}px "${fontFamily}", sans-serif`;
+      ctx.font = `700 ${Math.round(W * 0.036)}px ${canvasFont}`;
       const badgeLabel = scene.stepBadge || `Langkah ${index + 1}`;
       const badgeTextWidth = ctx.measureText(badgeLabel).width;
       const pillW = badgeTextWidth + 50;
@@ -756,10 +1227,10 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
 
       // Word-by-word Staggered Headline
       const titleFontSize = Math.round(W * 0.074);
-      const words = String(scene.title || 'Tempel link repo')
+      const words = String(scene.title || '')
         .trim()
         .split(/\s+/);
-      ctx.font = `800 ${titleFontSize}px "${fontFamily}", sans-serif`;
+      ctx.font = `800 ${titleFontSize}px ${canvasFont}`;
       ctx.textBaseline = 'top';
       const spaceW = ctx.measureText(' ').width;
       const lineHeight = titleFontSize * 1.22;
@@ -788,7 +1259,7 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
         ctx.scale(wordScale, wordScale);
 
         const isHighlighted =
-          scene.widgetType === 'kinetic_showcase_card' && wIdx === activeWordIdx;
+          wType === 'kinetic_showcase_card' && wIdx === activeWordIdx;
         if (isHighlighted) {
           ctx.fillStyle = pal.accent;
           drawRoundedRect(
@@ -818,7 +1289,7 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
       ctx.globalAlpha = smoothStep(0.12, 0.38, localTime);
       ctx.fillStyle = pal.subColor;
       const subFontSize = Math.round(W * 0.035);
-      ctx.font = `500 ${subFontSize}px "${fontFamily}", sans-serif`;
+      ctx.font = `500 ${subFontSize}px ${canvasFont}`;
       ctx.textBaseline = 'top';
 
       const subWords = String(scene.subtext || '').split(' ');
@@ -872,19 +1343,31 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
       ctx.transform(1, dynamicSkew * 0.35, -dynamicSkew, 1, 0, 0);
       ctx.translate(-(cardX + cardW / 2), -(cardY + cardH / 2));
 
-      const secondaryItems = String(scene.secondaryInput || '')
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
+      const secondaryItems = splitItems(scene.secondaryInput);
 
-      let cursorTarget = {
+      let cursorTarget: { x: number; y: number; isPressed: boolean; ripple: number } | null = {
         x: cardX + cardW * 0.72,
         y: cardY + cardH * 0.48,
         isPressed: false,
         ripple: 0,
       };
 
-      if (scene.widgetType === 'terminal_build_card') {
+      const paintCard = () => {
+        ctx.save();
+        ctx.shadowColor = 'rgba(15, 23, 42, 0.15)';
+        ctx.shadowBlur = 30;
+        ctx.shadowOffsetY = 14;
+        ctx.fillStyle = pal.cardBg;
+        drawRoundedRect(ctx, cardX, cardY, cardW, cardH, radius);
+        ctx.fill();
+        ctx.shadowColor = 'transparent';
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = pal.cardBorder;
+        ctx.stroke();
+        ctx.restore();
+      };
+
+      if (wType === 'terminal_build_card') {
         ctx.shadowColor = 'rgba(0, 0, 0, 0.36)';
         ctx.shadowBlur = 34;
         ctx.shadowOffsetY = 16;
@@ -959,17 +1442,14 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
 
           ctx.fillStyle = '#0f172a';
           ctx.textBaseline = 'middle';
-          ctx.font = `800 ${Math.round(W * 0.028)}px "${fontFamily}", sans-serif`;
+          ctx.font = `800 ${Math.round(W * 0.028)}px ${canvasFont}`;
           ctx.fillText('🚀 Deploy Berhasil • 200 OK', popX + 20, popY + 24);
           ctx.fillStyle = '#4f46e5';
           ctx.font = `600 ${Math.round(W * 0.024)}px "JetBrains Mono", monospace`;
           ctx.fillText(scene.primaryInput || 'https://api.depup.id', popX + 20, popY + 46);
           ctx.restore();
         }
-      } else if (
-        scene.widgetType === 'repo_scanner_card' ||
-        scene.widgetType === 'bento_metrics_grid'
-      ) {
+      } else if (wType === 'repo_scanner_card' || wType === 'bento_metrics_grid') {
         ctx.shadowColor = 'rgba(15, 23, 42, 0.15)';
         ctx.shadowBlur = 30;
         ctx.shadowOffsetY = 14;
@@ -982,7 +1462,7 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
         ctx.shadowColor = 'transparent';
 
         ctx.fillStyle = pal.cardText;
-        ctx.font = `800 ${Math.round(W * 0.034)}px "${fontFamily}", sans-serif`;
+        ctx.font = `800 ${Math.round(W * 0.034)}px ${canvasFont}`;
         ctx.textBaseline = 'middle';
         ctx.fillText(scene.primaryInput || 'Analisa Stack Otomatis', cardX + 22, cardY + 32);
 
@@ -1046,12 +1526,12 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
 
           ctx.fillStyle = pal.cardText;
           ctx.textBaseline = 'top';
-          ctx.font = `700 ${Math.round(W * 0.027)}px "${fontFamily}", sans-serif`;
+          ctx.font = `700 ${Math.round(W * 0.027)}px ${canvasFont}`;
           const wds = item.split(' ');
           ctx.fillText(wds.slice(0, 2).join(' '), bx + 10, by + 28);
           if (wds.length > 2) {
             ctx.fillStyle = pal.subColor;
-            ctx.font = `600 ${Math.round(W * 0.023)}px "${fontFamily}", sans-serif`;
+            ctx.font = `600 ${Math.round(W * 0.023)}px ${canvasFont}`;
             ctx.fillText(wds.slice(2).join(' '), bx + 10, by + 48);
           }
         });
@@ -1062,6 +1542,458 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
           isPressed: progress > 0.54 && progress < 0.62,
           ripple: smoothStep(0.54, 0.76, progress),
         };
+      } else if (wType === 'price_tag_card') {
+        // Promo: nama produk, harga normal dicoret, harga promo besar, stiker diskon
+        cursorTarget = null;
+        if (cardH > S * 0.12) {
+          paintCard();
+          const items = splitItems(scene.secondaryInput);
+          const priceItems = items
+            .filter(isPriceText)
+            .map((t) => ({ t, v: priceToNumber(t) ?? Number.NaN }));
+          const labels = items.filter((t) => !isPriceText(t));
+          let promoPrice = '';
+          let normalPrice = '';
+          if (priceItems.length >= 2) {
+            const sorted = [...priceItems].sort((a, b) =>
+              Number.isNaN(a.v) ? 1 : Number.isNaN(b.v) ? -1 : a.v - b.v
+            );
+            promoPrice = sorted[0].t;
+            const top = sorted[sorted.length - 1];
+            if (top.v > sorted[0].v) normalPrice = top.t;
+          } else if (priceItems.length === 1) {
+            promoPrice = priceItems[0].t;
+          }
+          const pv = priceToNumber(promoPrice);
+          const nv = priceToNumber(normalPrice);
+          const pct = pv && nv && nv > pv ? Math.round((1 - pv / nv) * 100) : null;
+          const stickerText = labels[0] || (pct ? `Hemat ${pct}%` : 'Promo');
+          const footnote = labels[1] || '';
+          const padIn = S * 0.05;
+          const innerX = cardX + padIn;
+          const innerW = cardW - padIn * 2;
+          const stickerR = Math.min(S * 0.095, cardH * 0.26);
+          const reserve = promoPrice ? stickerR * 2 + S * 0.02 : 0;
+          const bottom = cardY + cardH - padIn;
+          let y = cardY + padIn;
+
+          ctx.save();
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'top';
+          if (footnote) {
+            ctx.globalAlpha = 0.65 * smoothStep(0.02, 0.2, progress);
+            ctx.fillStyle = pal.cardText;
+            ctx.font = `600 ${Math.round(S * 0.027)}px ${canvasFont}`;
+            ctx.fillText(ellipsize(ctx, `🏪 ${footnote}`, innerW - reserve), innerX, y);
+            y += S * 0.05;
+          }
+          const prod = fitText(
+            ctx,
+            scene.primaryInput || 'Promo spesial',
+            innerW - reserve,
+            2,
+            S * 0.058,
+            S * 0.036,
+            800,
+            canvasFont
+          );
+          ctx.globalAlpha = smoothStep(0.04, 0.22, progress);
+          ctx.fillStyle = pal.cardText;
+          prod.lines.forEach((ln, li) => ctx.fillText(ln, innerX, y + li * prod.size * 1.18));
+          y += prod.lines.length * prod.size * 1.18 + S * 0.03;
+          ctx.restore();
+
+          if (promoPrice) {
+            if (normalPrice) {
+              const nSize = S * 0.042;
+              ctx.save();
+              ctx.textBaseline = 'top';
+              ctx.globalAlpha = 0.6 * smoothStep(0.1, 0.28, progress);
+              ctx.fillStyle = pal.cardText;
+              ctx.font = `600 ${Math.round(nSize)}px ${canvasFont}`;
+              ctx.fillText(normalPrice, innerX, y);
+              const nW = ctx.measureText(normalPrice).width;
+              const strike = smoothStep(0.28, 0.46, progress);
+              if (strike > 0) {
+                ctx.globalAlpha = 0.9;
+                ctx.strokeStyle = pal.accent;
+                ctx.lineWidth = Math.max(2, S * 0.006);
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(innerX - 4, y + nSize * 0.55);
+                ctx.lineTo(innerX - 4 + (nW + 8) * strike, y + nSize * 0.5);
+                ctx.stroke();
+              }
+              ctx.restore();
+              y += nSize * 1.4;
+            }
+            const pop = solveSpring(Math.max(0, localTime - duration * 0.38), {
+              stiffness: 260,
+              damping: 13,
+            });
+            const maxSize = Math.max(S * 0.06, Math.min(S * 0.15, (bottom - y) * 0.95));
+            const pf = fitText(ctx, promoPrice, innerW, 1, maxSize, S * 0.05, 900, canvasFont);
+            if (pop > 0.001) {
+              const pw = ctx.measureText(pf.lines[0]).width;
+              ctx.save();
+              ctx.textAlign = 'left';
+              ctx.textBaseline = 'top';
+              ctx.translate(innerX + pw / 2, y + pf.size / 2);
+              const ps = 0.4 + 0.6 * pop;
+              ctx.scale(ps, ps);
+              ctx.globalAlpha = Math.min(1, pop * 1.5);
+              ctx.fillStyle = pal.accent;
+              ctx.fillText(pf.lines[0], -pw / 2, -pf.size / 2);
+              ctx.restore();
+            }
+            drawSticker(
+              ctx,
+              cardX + cardW - padIn - stickerR,
+              cardY + padIn + stickerR,
+              stickerR,
+              stickerText,
+              pal.accent,
+              canvasFont,
+              solveSpring(Math.max(0, localTime - duration * 0.5), { stiffness: 240, damping: 12 }),
+              timeSec
+            );
+          } else {
+            // Tanpa harga: label besar sebagai pemancing ("Promo spesial")
+            const avail = bottom - y;
+            if (avail > S * 0.06) {
+              const pop = solveSpring(Math.max(0, localTime - 0.25), { stiffness: 240, damping: 12 });
+              const tf = fitText(
+                ctx,
+                stickerText,
+                innerW - S * 0.1,
+                2,
+                Math.min(S * 0.075, avail * 0.38),
+                S * 0.04,
+                900,
+                canvasFont
+              );
+              const lh = tf.size * 1.12;
+              const boxH = Math.min(avail, tf.lines.length * lh + S * 0.06);
+              const boxW = Math.min(
+                innerW,
+                Math.max(...tf.lines.map((l) => ctx.measureText(l).width)) + S * 0.1
+              );
+              const by = y + (avail - boxH) / 2;
+              const pulse = 1 + Math.sin(timeSec * 4) * 0.02 * pop;
+              ctx.save();
+              ctx.translate(innerX + boxW / 2, by + boxH / 2);
+              ctx.rotate(-0.04 * pop);
+              ctx.scale((0.6 + 0.4 * pop) * pulse, (0.6 + 0.4 * pop) * pulse);
+              ctx.globalAlpha = Math.min(1, pop * 1.5);
+              ctx.fillStyle = pal.accent;
+              drawRoundedRect(ctx, -boxW / 2, -boxH / 2, boxW, boxH, Math.min(boxH / 2, S * 0.05));
+              ctx.fill();
+              ctx.fillStyle = readableOn(pal.accent);
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.font = `900 ${Math.round(tf.size)}px ${canvasFont}`;
+              tf.lines.forEach((ln, li) =>
+                ctx.fillText(ln, 0, -((tf.lines.length - 1) * lh) / 2 + li * lh)
+              );
+              ctx.restore();
+            }
+          }
+        }
+      } else if (wType === 'checklist_card') {
+        // Daftar poin: muncul satu per satu lalu dicentang. "1. teks" → bulatan bernomor.
+        cursorTarget = null;
+        if (cardH > S * 0.12) {
+          paintCard();
+          const raw = splitItems(scene.secondaryInput).slice(0, 6);
+          const items = raw.length ? raw : ['Tulis poin pertama', 'Tulis poin kedua', 'Tulis poin ketiga'];
+          const padIn = S * 0.045;
+          let top = cardY + padIn;
+          const header = (scene.primaryInput || '').trim();
+          if (header) {
+            const hf = fitText(ctx, header, cardW - padIn * 2, 1, S * 0.038, S * 0.028, 800, canvasFont);
+            ctx.save();
+            ctx.fillStyle = pal.cardText;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText(hf.lines[0], cardX + padIn, top);
+            ctx.restore();
+            top += hf.size * 1.6;
+          }
+          const n = items.length;
+          const rowH = Math.max(S * 0.06, Math.min(S * 0.16, (cardY + cardH - padIn - top) / n));
+          top += Math.max(0, (cardY + cardH - padIn - top - rowH * n) / 2);
+          const badgeR = Math.min(S * 0.034, rowH * 0.32);
+          const textX = cardX + padIn + badgeR * 2 + S * 0.03;
+          const textW = cardX + cardW - padIn - textX;
+          const span = 0.55 / n;
+          items.forEach((item, i) => {
+            const m = item.match(/^(\d{1,2})[.)]\s*(.*)$/);
+            const num = m ? m[1] : '';
+            const label = m ? m[2] : item;
+            const start = 0.08 + i * span;
+            const appear = smoothStep(start, start + 0.1, progress);
+            if (appear <= 0) return;
+            const tick = smoothStep(start + 0.06, start + 0.16, progress);
+            const rowY = top + i * rowH;
+            const cy = rowY + rowH / 2;
+            ctx.save();
+            ctx.globalAlpha = appear;
+            ctx.translate((1 - appear) * S * 0.05, 0);
+            if (progress >= start && progress < start + span + 0.08) {
+              ctx.fillStyle = pal.accentSoft;
+              drawRoundedRect(
+                ctx,
+                cardX + padIn * 0.5,
+                rowY + rowH * 0.08,
+                cardW - padIn,
+                rowH * 0.84,
+                Math.min(14, rowH * 0.3)
+              );
+              ctx.fill();
+            }
+            const bx = cardX + padIn + badgeR;
+            ctx.beginPath();
+            ctx.arc(bx, cy, badgeR, 0, Math.PI * 2);
+            ctx.fillStyle = tick > 0.5 ? pal.accent : pal.accentSoft;
+            ctx.fill();
+            const ink = tick > 0.5 ? readableOn(pal.accent) : pal.accent;
+            if (num) {
+              ctx.fillStyle = ink;
+              ctx.font = `800 ${Math.round(badgeR * 1.05)}px ${canvasFont}`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(num, bx, cy + 1);
+            } else {
+              drawCheck(ctx, bx, cy, badgeR * 1.15, ink, Math.max(0.15, tick));
+            }
+            const tf = fitText(ctx, label, textW, 2, Math.min(S * 0.04, rowH * 0.36), S * 0.024, 700, canvasFont);
+            ctx.fillStyle = pal.cardText;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            const lh = tf.size * 1.22;
+            tf.lines.forEach((ln, li) =>
+              ctx.fillText(ln, textX, cy - ((tf.lines.length - 1) * lh) / 2 + li * lh)
+            );
+            ctx.restore();
+          });
+        }
+      } else if (wType === 'step_number_card') {
+        // Angka/simbol besar (mis. "3" atau "!") dengan keterangan di sampingnya
+        cursorTarget = null;
+        if (cardH > S * 0.12) {
+          paintCard();
+          const glyph = (scene.primaryInput || '').trim() || String(index + 1);
+          const lines = splitItems(scene.secondaryInput);
+          const padIn = S * 0.05;
+          const hasText = lines.length > 0;
+          const circR = Math.min(
+            (hasText ? cardW * 0.36 : cardW - padIn * 2) / 2,
+            (cardH - padIn * 2) / 2
+          );
+          const gcx = hasText ? cardX + padIn + circR : cardX + cardW / 2;
+          const gcy = cardY + cardH / 2;
+          const pop = solveSpring(Math.max(0, localTime - 0.12), { stiffness: 200, damping: 12 });
+          ctx.save();
+          ctx.globalAlpha = Math.min(1, pop * 1.4);
+          ctx.beginPath();
+          ctx.arc(gcx, gcy, circR * (0.55 + 0.45 * pop), 0, Math.PI * 2);
+          ctx.fillStyle = pal.accentSoft;
+          ctx.fill();
+          const gf = fitText(ctx, glyph, circR * 1.6, 1, circR * 1.35, S * 0.05, 900, canvasFont);
+          ctx.translate(gcx, gcy);
+          ctx.rotate((1 - pop) * -0.3);
+          ctx.scale(0.5 + 0.5 * pop, 0.5 + 0.5 * pop);
+          ctx.fillStyle = pal.accent;
+          ctx.font = `900 ${Math.round(gf.size)}px ${canvasFont}`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(gf.lines[0], 0, gf.size * 0.04);
+          ctx.restore();
+          if (hasText) {
+            const tx = gcx + circR + S * 0.04;
+            const tw = cardX + cardW - padIn - tx;
+            const appear = smoothStep(0.16, 0.38, progress);
+            if (appear > 0 && tw > S * 0.1) {
+              const first = fitText(ctx, lines[0], tw, lines.length > 1 ? 2 : 5, S * 0.052, S * 0.03, 800, canvasFont);
+              const restText = lines.slice(1).join(' ');
+              const rest = restText ? fitText(ctx, restText, tw, 4, S * 0.034, S * 0.024, 500, canvasFont) : null;
+              const firstLH = first.size * 1.18;
+              const restLH = rest ? rest.size * 1.35 : 0;
+              const totalH =
+                first.lines.length * firstLH + (rest ? S * 0.015 + rest.lines.length * restLH : 0);
+              let ty = gcy - totalH / 2;
+              ctx.save();
+              ctx.globalAlpha = appear;
+              ctx.translate((1 - appear) * S * 0.04, 0);
+              ctx.textAlign = 'left';
+              ctx.textBaseline = 'top';
+              ctx.fillStyle = pal.cardText;
+              ctx.font = `800 ${Math.round(first.size)}px ${canvasFont}`;
+              first.lines.forEach((ln) => {
+                ctx.fillText(ln, tx, ty);
+                ty += firstLH;
+              });
+              if (rest) {
+                ty += S * 0.015;
+                ctx.globalAlpha = appear * 0.72;
+                ctx.font = `500 ${Math.round(rest.size)}px ${canvasFont}`;
+                rest.lines.forEach((ln) => {
+                  ctx.fillText(ln, tx, ty);
+                  ty += restLH;
+                });
+              }
+              ctx.restore();
+            }
+          }
+        }
+      } else if (wType === 'quote_card') {
+        // Kutipan: tanda kutip besar, teks muncul seperti diketik, lalu digaris bawahi
+        cursorTarget = null;
+        if (cardH > S * 0.12) {
+          paintCard();
+          const quote = (scene.primaryInput || '').trim() || 'Tulis kutipanmu di sini.';
+          const signature = splitItems(scene.secondaryInput)[0] || '';
+          const padIn = S * 0.06;
+          const glyphSize = Math.min(S * 0.2, cardH * 0.36);
+          ctx.save();
+          ctx.globalAlpha = 0.85 * smoothStep(0, 0.14, progress);
+          ctx.fillStyle = pal.accent;
+          ctx.font = `700 ${Math.round(glyphSize)}px Georgia, 'Times New Roman', serif`;
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'top';
+          ctx.fillText('“', cardX + padIn * 0.7, cardY + padIn * 0.25);
+          ctx.restore();
+          const qTop = cardY + padIn * 0.25 + glyphSize * 0.62;
+          const sigH = signature ? S * 0.06 : 0;
+          const qAvail = cardY + cardH - padIn * 0.8 - sigH - qTop;
+          if (qAvail > S * 0.04) {
+            const maxLines = Math.max(1, Math.min(6, Math.floor(qAvail / (S * 0.034 * 1.32))));
+            const qf = fitText(ctx, quote, cardW - padIn * 2, maxLines, S * 0.056, S * 0.03, 700, canvasFont);
+            const lh = qf.size * 1.32;
+            const y0 = qTop + Math.max(0, (qAvail - qf.lines.length * lh) / 2);
+            const total = qf.lines.reduce((acc, l) => acc + l.length, 0);
+            let remaining = Math.floor(total * smoothStep(0.05, 0.52, progress));
+            ctx.save();
+            ctx.fillStyle = pal.cardText;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.font = `700 ${Math.round(qf.size)}px ${canvasFont}`;
+            qf.lines.forEach((ln, li) => {
+              if (remaining <= 0) return;
+              ctx.fillText(ln.slice(0, remaining), cardX + padIn, y0 + li * lh);
+              remaining -= ln.length;
+            });
+            const ul = smoothStep(0.55, 0.75, progress);
+            if (ul > 0) {
+              const last = qf.lines[qf.lines.length - 1];
+              const lw = ctx.measureText(last).width;
+              const uy = y0 + (qf.lines.length - 1) * lh + qf.size * 1.1;
+              ctx.strokeStyle = pal.accent;
+              ctx.lineWidth = Math.max(3, S * 0.007);
+              ctx.lineCap = 'round';
+              ctx.beginPath();
+              ctx.moveTo(cardX + padIn, uy);
+              ctx.lineTo(cardX + padIn + lw * ul, uy);
+              ctx.stroke();
+            }
+            ctx.restore();
+          }
+          if (signature) {
+            ctx.save();
+            ctx.globalAlpha = 0.7 * smoothStep(0.58, 0.78, progress);
+            ctx.fillStyle = pal.cardText;
+            ctx.font = `600 ${Math.round(S * 0.03)}px ${canvasFont}`;
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(`— ${signature}`, cardX + cardW - padIn, cardY + cardH - padIn * 0.7);
+            ctx.restore();
+          }
+        }
+      } else if (wType === 'cta_button_card') {
+        // Tombol ajakan yang diklik kursor, plus chip info (nama toko, link di bio, dll.)
+        cursorTarget = null;
+        if (cardH > S * 0.12) {
+          paintCard();
+          const label = (scene.primaryInput || '').trim() || 'Pesan Sekarang';
+          const chips = splitItems(scene.secondaryInput).slice(0, 4);
+          const padIn = S * 0.05;
+          const chipH = S * 0.058;
+          const chipGap = S * 0.035;
+          const btnH = Math.min(S * 0.13, (cardH - padIn * 2 - (chips.length ? chipH + chipGap : 0)) * 0.9);
+          const btnW = Math.min(cardW - padIn * 2, Math.max(S * 0.45, cardW * 0.78));
+          const btnX = cardX + (cardW - btnW) / 2;
+          const blockH = btnH + (chips.length ? chipGap + chipH : 0);
+          const btnY = cardY + (cardH - blockH) / 2;
+          const clicked = progress >= 0.58;
+          const pressed = progress > 0.54 && progress < 0.63;
+          const enter = solveSpring(Math.max(0, localTime - 0.1), { stiffness: 220, damping: 14 });
+          if (btnH > S * 0.04) {
+            if (!clicked) {
+              const pulse = (Math.sin(timeSec * 5) + 1) / 2;
+              const g = S * 0.012 + pulse * S * 0.012;
+              ctx.save();
+              ctx.globalAlpha = (0.14 + 0.16 * pulse) * enter;
+              ctx.fillStyle = pal.accent;
+              drawRoundedRect(ctx, btnX - g, btnY - g, btnW + g * 2, btnH + g * 2, (btnH + g * 2) / 2);
+              ctx.fill();
+              ctx.restore();
+            }
+            ctx.save();
+            ctx.translate(btnX + btnW / 2, btnY + btnH / 2);
+            const bs = (pressed ? 0.95 : 1) * (0.7 + 0.3 * enter);
+            ctx.scale(bs, bs);
+            ctx.globalAlpha = Math.min(1, enter * 1.4);
+            const fillCol = clicked ? '#10b981' : pal.accent;
+            ctx.fillStyle = fillCol;
+            drawRoundedRect(ctx, -btnW / 2, -btnH / 2, btnW, btnH, btnH / 2);
+            ctx.fill();
+            const bf = fitText(ctx, clicked ? `✓ ${label}` : label, btnW - btnH * 0.7, 1, btnH * 0.36, btnH * 0.22, 800, canvasFont);
+            ctx.fillStyle = readableOn(fillCol);
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(bf.lines[0], 0, 1);
+            ctx.restore();
+          }
+          if (chips.length) {
+            ctx.save();
+            ctx.font = `600 ${Math.round(S * 0.027)}px ${canvasFont}`;
+            const maxRow = cardW - padIn * 2;
+            const widths = chips.map((c) => Math.min(ctx.measureText(c).width + S * 0.05, maxRow));
+            const rowWidth = (k: number) =>
+              widths.slice(0, k).reduce((a, b) => a + b, 0) + S * 0.02 * (k - 1);
+            let count = chips.length;
+            while (count > 1 && rowWidth(count) > maxRow) count--;
+            let cx0 = cardX + (cardW - rowWidth(count)) / 2;
+            const cy0 = btnY + btnH + chipGap;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            for (let i = 0; i < count; i++) {
+              const a = smoothStep(0.18 + i * 0.08, 0.34 + i * 0.08, progress);
+              const dy = (1 - a) * S * 0.02;
+              ctx.globalAlpha = a;
+              ctx.fillStyle = pal.accentSoft;
+              drawRoundedRect(ctx, cx0, cy0 + dy, widths[i], chipH, chipH / 2);
+              ctx.fill();
+              ctx.fillStyle = pal.cardText;
+              ctx.fillText(
+                ellipsize(ctx, chips[i], widths[i] - S * 0.04),
+                cx0 + widths[i] / 2,
+                cy0 + chipH / 2 + dy
+              );
+              cx0 += widths[i] + S * 0.02;
+            }
+            ctx.restore();
+          }
+          const moveT = smoothStep(0.3, 0.54, progress);
+          const startPos = { x: btnX + btnW * 0.92, y: btnY + btnH + S * 0.16 };
+          const endPos = { x: btnX + btnW * 0.6, y: btnY + btnH * 0.62 };
+          cursorTarget = {
+            x: lerp(startPos.x, endPos.x, moveT),
+            y: lerp(startPos.y, endPos.y, moveT) - Math.sin(moveT * Math.PI) * 18,
+            isPressed: pressed,
+            ripple: smoothStep(0.55, 0.78, progress),
+          };
+        }
       } else {
         ctx.shadowColor = 'rgba(15, 23, 42, 0.15)';
         ctx.shadowBlur = 32;
@@ -1125,7 +2057,7 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
         drawRoundedRect(ctx, btnX, btnY, btnW, btnH, 10);
         ctx.fill();
         ctx.fillStyle = '#ffffff';
-        ctx.font = `700 ${Math.round(W * 0.024)}px "${fontFamily}", sans-serif`;
+        ctx.font = `700 ${Math.round(W * 0.024)}px ${canvasFont}`;
         ctx.fillText(isClickedPhase ? '✓ Siap' : 'Tempel', btnX + 13, btnY + btnH / 2);
 
         const moveT = smoothStep(0.38, 0.55, progress);
@@ -1139,7 +2071,7 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
         };
       }
 
-      if (showCursorSim) {
+      if (showCursorSim && cursorTarget) {
         drawSimulatedCursor(
           ctx,
           cursorTarget.x,
@@ -1183,7 +2115,7 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
       palettes,
       springTension,
       tiltIntensity,
-      fontFamily,
+      canvasFont,
       cardRadius,
       showParticles,
       showCursorSim,
@@ -1225,124 +2157,91 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
   };
 
   const handleGenerateFromPrompt = () => {
-    const lower = smartPrompt.toLowerCase();
-    // Auto-match trained preset by triggerKeywords!
-    const matchedPreset =
-      trainedVideos.find((v) =>
+    const topic = smartPrompt.trim();
+    if (!topic) {
+      showToast('Tulis topik videonya dulu.');
+      return;
+    }
+    const storeMeta = useEditorStore.getState().script?.extractedMeta;
+    const result = generateScript(topic, studioCategory, {
+      customStoreName: studioCategory === 'promo' ? storeMeta?.storeName || undefined : undefined,
+    });
+
+    // Preset simpanan admin dengan kata kunci yang cocok ikut menentukan gaya (kamera & palet).
+    const lower = topic.toLowerCase();
+    const matched = trainedVideos.find(
+      (v) =>
+        v.isTrained &&
+        (v.category === studioCategory || v.category === 'saas') &&
         v.triggerKeywords
           .split(',')
           .map((k) => k.trim().toLowerCase())
-          .some((k) => k && lower.includes(k))
-      ) ||
-      trainedVideos.find((v) => v.id === selectedTemplateId) ||
-      trainedVideos[0];
+          .some((k) => k.length > 2 && lower.includes(k))
+    );
+    const camera: CameraMotionType =
+      cameraChoice !== 'auto'
+        ? cameraChoice
+        : matched?.cameraMotion || suggestCameraMotion(studioCategory);
+    const paletteId =
+      matched && palettes[matched.paletteId] ? matched.paletteId : result.suggestedStyle.paletteId;
 
-    const clean = smartPrompt.trim() || 'Deploy Aplikasi Web Tanpa Ribet';
-    const slug =
-      clean
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '')
-        .slice(0, 20) || 'app';
-
-    setScenes([
-      {
-        stepBadge: matchedPreset.badges[0] || '1 Tempel',
-        title: clean.length > 32 ? clean.slice(0, 32) : 'Tempel link repo',
-        subtext: 'Repo private pun bisa, cukup tambahkan GitHub Token otomatis.',
-        widgetType:
-          motionSkillMode === 'capcut-kinetic-pop'
-            ? 'kinetic_showcase_card'
-            : 'repo_input_card',
-        primaryInput: `github.com/dimas/${slug}`,
-        secondaryInput: 'GitHub Token Active, Private Repo OK, Auto-Branch',
-        duration: 3.4,
-        cameraMotion: matchedPreset.cameraMotion,
-        paletteId: matchedPreset.paletteId,
-      },
-      {
-        stepBadge: matchedPreset.badges[1] || '2 Periksa',
-        title: 'Periksa repo dulu',
-        subtext: 'Tahu platform mana yang paling pas buat aplikasi kamu.',
-        widgetType:
-          motionSkillMode === 'opus-isometric-3d'
-            ? 'bento_metrics_grid'
-            : 'repo_scanner_card',
-        primaryInput: `Analisa AI: ${clean.slice(0, 22)}`,
-        secondaryInput: 'Next.js 14 App, Node 20 Edge, 99% Cloud Match',
-        duration: 3.4,
-        cameraMotion: matchedPreset.cameraMotion,
-        paletteId: matchedPreset.paletteId,
-      },
-      {
-        stepBadge: matchedPreset.badges[2] || '3 Deploy',
-        title: 'Deploy dan pantau',
-        subtext: 'Progres tampil langsung di terminal tanpa setup rumit.',
-        widgetType: 'terminal_build_card',
-        primaryInput: `https://${slug}.depup.id`,
-        secondaryInput: `$ git clone https://github.com/dimas/${slug}, $ npm install --production, ✓ Build selesai (1.4s) — Live 🚀`,
-        duration: 3.6,
-        cameraMotion: matchedPreset.cameraMotion,
-        paletteId: matchedPreset.paletteId,
-      },
-    ]);
+    setScenes(sceneItemsToStudio(result.scenes, camera, paletteId));
+    setFontName(result.suggestedStyle.font);
     setActiveSceneIndex(0);
     setCurrentTime(0);
-    showToast(`Koreografi disusun otomatis dengan gaya "${matchedPreset.title}"!`);
+    showToast(
+      matched
+        ? `Script baru dibuat dengan gaya preset "${matched.title}".`
+        : 'Script baru dibuat. Klik lagi untuk variasi kalimat lain.'
+    );
   };
 
   // Admin: Save Current Canvas Blueprint as a New Trained Video Preset
   const handleAdminSaveVideoPreset = async () => {
-    const newPreset: TrainedVideoPresetItem = {
-      id: 'vid-trained-' + Date.now(),
-      title: adminPresetTitle.trim() || 'Custom Creator Motion Preset',
-      creatorHandle: adminCreatorHandle.trim() || '@creator',
-      category: adminCategory,
-      videoUrl: adminVideoUrl.trim(),
-      cameraMotion: activeScene.cameraMotion,
-      paletteId: activeScene.paletteId,
-      bpm: adminBpm,
-      stiffness: adminStiffness,
-      damping: adminDamping,
-      triggerKeywords: adminTriggerKeywords,
-      badges: scenes.map((s) => s.stepBadge),
-      summary: `Dilatih oleh Admin dari ${adminCreatorHandle} (${scenes.length} Scene, k=${adminStiffness}, d=${adminDamping}).`,
-      scenesBlueprint: JSON.parse(JSON.stringify(scenes)),
-    };
-
-    const nextList = [newPreset, ...trainedVideos];
-    setTrainedVideos(nextList);
+    if (!isAdmin) {
+      showToast('Hanya admin yang bisa menyimpan preset.');
+      return;
+    }
+    const title = adminPresetTitle.trim() || 'Preset tanpa judul';
+    const profile = analyzeCreatorVideoReference(adminVideoUrl, adminPresetTitle, adminCreatorHandle);
     try {
-      localStorage.setItem('motionid_v45_trained_presets', JSON.stringify(nextList));
-    } catch {}
-
-    try {
-      const profile = analyzeCreatorVideoReference(
-        adminVideoUrl,
-        adminPresetTitle,
-        adminCreatorHandle
-      );
       const supabase = createClient();
-      await supabase.from('ai_training_data').insert([
-        {
-          type: 'video_motion',
-          category: adminCategory === 'saas' ? 'edukasi' : adminCategory,
-          content_text: adminPresetTitle,
-          subtext: adminTriggerKeywords,
-          video_url: adminVideoUrl,
-          creator_handle: adminCreatorHandle,
-          motion_profile: profile,
-          metadata_json: {
+      const { data, error } = await supabase
+        .from('ai_training_data')
+        .insert([
+          {
+            type: 'video_motion',
+            // 'saas' disimpan sebagai 'all' agar lolos constraint kategori skema lama
+            category: adminCategory === 'saas' ? 'all' : adminCategory,
+            content_text: title,
+            subtext: adminTriggerKeywords,
+            video_url: adminVideoUrl.trim() || null,
+            creator_handle: adminCreatorHandle.trim() || null,
             motion_profile: profile,
-            scenes_blueprint: scenes,
-            trigger_keywords: adminTriggerKeywords,
+            metadata_json: {
+              preset_category: adminCategory,
+              scenes_blueprint: scenes,
+              trigger_keywords: adminTriggerKeywords,
+              stiffness: adminStiffness,
+              damping: adminDamping,
+              bpm: adminBpm,
+            },
           },
-        },
-      ]);
-      await loadTrainingIntoEngine();
-    } catch {}
-
-    showToast(`Preset Video "${newPreset.title}" berhasil dilatih & aktif untuk semua User!`);
+        ])
+        .select('*')
+        .single();
+      if (error || !data) {
+        showToast(`Preset gagal disimpan: ${error?.message || 'database tidak mengembalikan data'}`);
+        return;
+      }
+      const row = data as TrainingRow;
+      const preset = rowToPreset(row);
+      setSupabaseRows((prev) => [row, ...prev]);
+      if (preset) setTrainedVideos((prev) => [preset, ...prev.filter((p) => p.id !== preset.id)]);
+      showToast(`Preset "${title}" tersimpan dan tersedia untuk semua user.`);
+    } catch (err) {
+      showToast(`Preset gagal disimpan: ${err instanceof Error ? err.message : 'koneksi bermasalah'}`);
+    }
   };
 
   const handleAdminAddPalette = () => {
@@ -1373,6 +2272,14 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
   };
 
   const handleAdminSaveRule = async () => {
+    if (!isAdmin) {
+      showToast('Hanya admin yang bisa menyimpan aturan.');
+      return;
+    }
+    if (!ruleContent.trim()) {
+      showToast('Isi teks aturannya dulu.');
+      return;
+    }
     try {
       const supabase = createClient();
       const { data, error } = await supabase
@@ -1381,21 +2288,21 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
           {
             type: ruleType,
             category: ruleCategory,
-            content_text: ruleContent,
-            subtext: ruleSubtext,
-            emoji: '🚀',
+            content_text: ruleContent.trim(),
+            subtext: ruleSubtext.trim() || null,
+            emoji: '✨',
           },
         ])
         .select('*');
-      if (!error && data) {
-        setSupabaseRows((prev) => [...(data as TrainingRow[]), ...prev]);
-        await loadTrainingIntoEngine();
-        showToast('Aturan teks/keyword berhasil disimpan ke Supabase!');
-      } else {
-        showToast('Aturan disimpan ke Smart Engine lokal!');
+      if (error || !data) {
+        showToast(`Aturan gagal disimpan: ${error?.message || 'database tidak mengembalikan data'}`);
+        return;
       }
-    } catch {
-      showToast('Aturan disimpan ke Smart Engine lokal!');
+      setSupabaseRows((prev) => [...(data as TrainingRow[]), ...prev]);
+      await loadTrainingIntoEngine();
+      showToast('Aturan tersimpan dan langsung dipakai generator.');
+    } catch (err) {
+      showToast(`Aturan gagal disimpan: ${err instanceof Error ? err.message : 'koneksi bermasalah'}`);
     }
   };
 
@@ -1440,6 +2347,8 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
       ? { w: 960, h: 540, cssW: 520 * zoom, cssH: 292 * zoom }
       : { w: 540, h: 960, cssW: 315 * zoom, cssH: 560 * zoom };
 
+  const widgetFields = WIDGET_FIELDS[normalizeWidgetType(activeScene?.widgetType)];
+
   return (
     <div className="min-h-screen flex flex-col bg-[#090a0f] text-slate-100 select-none font-sans">
       {/* TOP BAR (IDENTICAL TO IMAGE_892545.JPG) */}
@@ -1469,13 +2378,14 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
               <span>MeledakCik/motionid</span>
               <span>•</span>
               <span className="text-indigo-400 font-semibold">
-                {trainedVideos.length} Video Kreator Terlatih Aktif
+                {trainedVideos.length} preset tersedia
               </span>
             </div>
           </div>
         </div>
 
-        {/* Center Switcher: User Studio vs Admin Training Workbench */}
+        {/* Center Switcher: hanya tampil untuk akun admin */}
+        {isAdmin && (
         <div className="flex items-center bg-[#090b10] p-1 rounded-xl border border-[#222636]">
           <button
             type="button"
@@ -1505,6 +2415,7 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
             </span>
           </button>
         </div>
+        )}
 
         {/* Right Controls */}
         <div className="flex items-center gap-2">
@@ -1543,9 +2454,9 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
               <div className="grid grid-cols-4 border-b border-[#222636] bg-[#0c0e14] p-1 gap-1 text-[11px] font-semibold">
                 {(
                   [
-                    ['prompt', 'Smart AI'],
+                    ['prompt', 'Generator'],
                     ['templates', 'Template'],
-                    ['widgets', 'UI Komponen'],
+                    ['widgets', 'Komponen'],
                     ['layers', 'Layer'],
                   ] as const
                 ).map(([key, label]) => (
@@ -1566,65 +2477,60 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
 
               {leftTab === 'prompt' && (
                 <div className="flex-1 overflow-y-auto p-3 space-y-3">
-                  <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/30 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-extrabold text-white">
-                        🧠 Claude Motion Skill 5.5 Director
-                      </span>
-                      <span className="px-1.5 py-0.5 text-[9px] font-mono rounded bg-lime-400/20 text-lime-300">
-                        Auto-Rig
-                      </span>
+                  <div className="space-y-1.5">
+                    <div className="text-[11px] font-semibold text-slate-300">Kategori video</div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {CATEGORY_OPTIONS.map((opt) => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          aria-pressed={studioCategory === opt.value}
+                          onClick={() => setStudioCategory(opt.value)}
+                          className={`py-2 rounded-lg text-[11px] font-semibold border transition ${
+                            studioCategory === opt.value
+                              ? 'bg-indigo-600 border-indigo-500 text-white'
+                              : 'bg-[#181b26] border-[#282c3e] text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
                     </div>
-                    <p className="text-[10px] text-slate-300 leading-relaxed">
-                      Menyusun koreografi kamera 3D, simulasi kursor klik otomatis, ketikan URL
-                      real-time, pop-out kartu, & fisika pegas Hooke.
+                  </div>
+
+                  <div className="space-y-1">
+                    <label htmlFor="studio-topic" className="block text-[11px] font-semibold text-slate-300">
+                      Topik video
+                    </label>
+                    <textarea
+                      id="studio-topic"
+                      rows={3}
+                      value={smartPrompt}
+                      onChange={(e) => setSmartPrompt(e.target.value)}
+                      placeholder={CATEGORY_HINTS[studioCategory].placeholder}
+                      className="w-full rounded-xl bg-[#090b10] border border-[#282c3e] p-2.5 text-xs text-white placeholder:text-slate-500"
+                    />
+                    <p className="text-[10px] text-slate-400 leading-relaxed">
+                      {CATEGORY_HINTS[studioCategory].hint}
                     </p>
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[11px] font-semibold text-slate-300">
-                      Prompt Cerita / Produk / SaaS:
+                    <label htmlFor="studio-camera" className="block text-[11px] font-semibold text-slate-300">
+                      Gerak kamera
                     </label>
-                    <textarea
-                      rows={3}
-                      value={smartPrompt}
-                      onChange={(e) => setSmartPrompt(e.target.value)}
-                      className="w-full rounded-xl bg-[#090b10] border border-[#282c3e] p-2.5 text-xs text-white"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-[10px] font-semibold text-slate-400 mb-1">
-                        Preset Video Kreator
-                      </label>
-                      <select
-                        value={selectedTemplateId}
-                        onChange={(e) => setSelectedTemplateId(e.target.value)}
-                        className="w-full bg-[#181b26] border border-[#282c3e] rounded-xl px-2 py-1.5 text-[11px] text-white"
-                      >
-                        {trainedVideos.map((v) => (
-                          <option key={v.id} value={v.id}>
-                            {v.title}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-semibold text-slate-400 mb-1">
-                        Mode Koreografi AI
-                      </label>
-                      <select
-                        value={motionSkillMode}
-                        onChange={(e) => setMotionSkillMode(e.target.value)}
-                        className="w-full bg-[#181b26] border border-[#282c3e] rounded-xl px-2 py-1.5 text-[11px] text-lime-300 font-semibold"
-                      >
-                        <option value="depup-cursor-flow">@depup.web Cursor + UI Flow</option>
-                        <option value="capcut-kinetic-pop">CapCut Lab Kinetic Word-Pop</option>
-                        <option value="opus-isometric-3d">Opus 5.5 Isometric 3D Camera</option>
-                        <option value="apple-bento-morph">Apple Keynote Spring Morph</option>
-                      </select>
-                    </div>
+                    <select
+                      id="studio-camera"
+                      value={cameraChoice}
+                      onChange={(e) => setCameraChoice(e.target.value as 'auto' | CameraMotionType)}
+                      className="w-full bg-[#181b26] border border-[#282c3e] rounded-xl px-2 py-1.5 text-[11px] text-white"
+                    >
+                      {CAMERA_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <button
@@ -1632,8 +2538,11 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
                     onClick={handleGenerateFromPrompt}
                     className="w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs shadow-lg"
                   >
-                    ⚡ Generate Rangkaian Motion Scene
+                    Buat script & scene
                   </button>
+                  <p className="text-[10px] text-slate-500 leading-relaxed">
+                    Klik lagi untuk variasi kalimat lain. Semua teks bisa diedit di panel kanan.
+                  </p>
                 </div>
               )}
 
@@ -1645,9 +2554,11 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
                       onClick={() => {
                         setSelectedTemplateId(vid.id);
                         setScenes(JSON.parse(JSON.stringify(vid.scenesBlueprint)));
+                        if (vid.category !== 'saas') setStudioCategory(vid.category);
+                        setFontName(suggestedFontFor(vid.category));
                         setActiveSceneIndex(0);
                         setCurrentTime(0);
-                        showToast(`Template "${vid.title}" diterapkan!`);
+                        showToast(`Template "${vid.title}" diterapkan.`);
                       }}
                       className={`p-3 rounded-xl border cursor-pointer transition ${
                         selectedTemplateId === vid.id
@@ -1656,10 +2567,12 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
                       }`}
                     >
                       <div className="flex items-center justify-between text-[10px] mb-1">
-                        <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-mono">
-                          {vid.creatorHandle}
+                        <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-semibold">
+                          {CATEGORY_LABEL[vid.category]}
                         </span>
-                        <span className="text-emerald-400 font-mono">{vid.bpm} BPM</span>
+                        <span className="text-emerald-400 font-mono">
+                          {vid.scenesBlueprint.length} scene
+                        </span>
                       </div>
                       <div className="text-xs font-bold text-white">{vid.title}</div>
                       <p className="text-[11px] text-slate-400 mt-1">{vid.summary}</p>
@@ -1672,11 +2585,16 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
                 <div className="flex-1 overflow-y-auto p-3 space-y-2">
                   {(
                     [
-                      ['repo_input_card', '⌘', 'SaaS Repo URL + Cursor Click'],
-                      ['repo_scanner_card', '⚡', 'AI Stack Scanner + Radar Gauge'],
-                      ['terminal_build_card', '>_', 'Live Terminal + Pop-Out App'],
-                      ['bento_metrics_grid', '⊞', '3D Bento Metric Cards'],
-                      ['kinetic_showcase_card', '✨', 'CapCut Kinetic Word-Tracker'],
+                      ['price_tag_card', '🏷️', 'Kartu harga & diskon'],
+                      ['checklist_card', '✓', 'Daftar poin / langkah'],
+                      ['step_number_card', '3', 'Angka besar + keterangan'],
+                      ['quote_card', '❝', 'Kartu kutipan'],
+                      ['cta_button_card', '👆', 'Tombol ajakan (CTA)'],
+                      ['kinetic_showcase_card', '✨', 'Sorot kata di judul'],
+                      ['repo_input_card', '⌘', 'Demo aplikasi: input + klik'],
+                      ['repo_scanner_card', '⚡', 'Demo aplikasi: kartu analisis'],
+                      ['terminal_build_card', '>_', 'Demo aplikasi: terminal'],
+                      ['bento_metrics_grid', '⊞', 'Demo aplikasi: grid metrik'],
                     ] as const
                   ).map(([wType, icon, title]) => (
                     <button
@@ -2140,7 +3058,7 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
                     ...prev,
                     {
                       ...activeScene,
-                      stepBadge: `${prev.length + 1} Scale`,
+                      stepBadge: `Scene ${prev.length + 1}`,
                       title: `Langkah ke-${prev.length + 1}`,
                     },
                   ])
@@ -2255,28 +3173,27 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
 
           <div className="space-y-2.5 pb-3 border-b border-[#222634]">
             <div>
-              <label className="block text-[10px] text-slate-400 mb-1">Tipe Rig Komponen UI</label>
+              <label className="block text-[10px] text-slate-400 mb-1">Komponen di kartu</label>
               <select
-                value={activeScene?.widgetType || 'repo_input_card'}
+                value={normalizeWidgetType(activeScene?.widgetType)}
                 onChange={(e) =>
                   updateActiveScene({ widgetType: e.target.value as WidgetRigType })
                 }
                 className="w-full bg-[#181b26] border border-[#2a2f42] rounded-lg px-2.5 py-1.5 text-xs text-white"
               >
-                <option value="repo_input_card">1. SaaS Repo URL + Cursor Click</option>
-                <option value="repo_scanner_card">2. AI Stack Scanner + Radar Gauge</option>
-                <option value="terminal_build_card">3. Live Terminal + Pop-Out App</option>
-                <option value="bento_metrics_grid">4. 3D Bento Grid + Spline Chart</option>
-                <option value="kinetic_showcase_card">5. CapCut Kinetic Word-Tracker</option>
+                {WIDGET_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
               </select>
             </div>
 
             <div>
-              <label className="block text-[10px] text-slate-400 mb-1">
-                Teks Ketikan Otomatis / URL / Header
-              </label>
+              <label className="block text-[10px] text-slate-400 mb-1">{widgetFields.primary}</label>
               <input
                 type="text"
+                placeholder={widgetFields.primaryHint}
                 value={activeScene?.primaryInput || ''}
                 onChange={(e) => updateActiveScene({ primaryInput: e.target.value })}
                 className="w-full bg-[#181b26] border border-[#2a2f42] rounded-lg px-2.5 py-1.5 text-xs font-mono text-indigo-300"
@@ -2284,11 +3201,10 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
             </div>
 
             <div>
-              <label className="block text-[10px] text-slate-400 mb-1">
-                Sub-Layer / Baris Terminal (Koma)
-              </label>
+              <label className="block text-[10px] text-slate-400 mb-1">{widgetFields.secondary}</label>
               <input
                 type="text"
+                placeholder={widgetFields.secondaryHint}
                 value={activeScene?.secondaryInput || ''}
                 onChange={(e) => updateActiveScene({ secondaryInput: e.target.value })}
                 className="w-full bg-[#181b26] border border-[#2a2f42] rounded-lg px-2.5 py-1.5 text-xs text-slate-300"
@@ -2318,6 +3234,24 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
             </div>
           </div>
 
+          <div className="space-y-1.5">
+            <label htmlFor="studio-font" className="block text-[11px] font-bold text-slate-400 uppercase">
+              Font
+            </label>
+            <select
+              id="studio-font"
+              value={fontName}
+              onChange={(e) => setFontName(e.target.value as FontFamilyName)}
+              className="w-full bg-[#181b26] border border-[#2a2f42] rounded-lg px-2.5 py-1.5 text-xs text-white"
+            >
+              {FONT_OPTIONS.map((f) => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {roleMode === 'admin' && supabaseRows.length > 0 && (
             <div className="pt-3 border-t border-[#222634] space-y-2">
               <div className="text-[11px] font-bold text-lime-300 uppercase">
@@ -2333,10 +3267,21 @@ export default function MotionStudioEngine({ initialRole = 'user' }: MotionStudi
                     <button
                       type="button"
                       onClick={async () => {
+                        if (!window.confirm(`Hapus "${r.content_text}" dari data training?`)) return;
                         const supabase = createClient();
-                        await supabase.from('ai_training_data').delete().eq('id', r.id);
+                        const { data: deleted, error } = await supabase
+                          .from('ai_training_data')
+                          .delete()
+                          .eq('id', r.id)
+                          .select('id');
+                        if (error || !deleted?.length) {
+                          showToast(`Gagal menghapus: ${error?.message || 'tidak punya izin admin'}`);
+                          return;
+                        }
                         forgetTrainingRow(r.id);
                         setSupabaseRows((prev) => prev.filter((x) => x.id !== r.id));
+                        setTrainedVideos((prev) => prev.filter((p) => p.id !== `db-${r.id}`));
+                        showToast('Data training dihapus.');
                       }}
                       className="text-[10px] text-rose-400 shrink-0"
                     >

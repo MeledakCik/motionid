@@ -1,16 +1,20 @@
 /**
- * MotionID Smart Engine v4.5 (100% Backward-Compatible + Video Motion Skill Choreographer)
- * Mendukung seluruh export asli untuk app/create, app/editor, store/useEditorStore,
- * components/templates/*, lib/canvas-scene, dan lib/video-exporter, sekaligus
- * menyertakan sistem Video Motion Training (@depup.web style) & Spring Physics Solver.
+ * MotionKu Smart Engine — generator script video berbasis aturan (tanpa API AI eksternal).
+ *
+ * Isi video dibuat sesuai kategori:
+ * - promo   : produk → keunggulan → harga (dengan harga coret bila ada) → ajakan order
+ * - quote   : kalimat renungan sesuai suasana (capek, galau, semangat, cinta, syukur)
+ * - edukasi : angka besar → daftar langkah → tips penting → ajakan simpan
+ *
+ * Kalimat dipilih acak supaya setiap klik "Buat" menghasilkan variasi. Isi `seed` untuk hasil
+ * yang selalu sama (dipakai untuk data awal yang ikut dirender di server, agar tidak terjadi
+ * hydration mismatch). Kalimat hasil training admin ikut masuk ke kumpulan kandidat, tetapi
+ * tidak menggeser kalimat bawaan.
  */
 
-/**
- * MotionID v4.5 — Claude Opus 5.5 Motion Skill & CapCut AI Lab Choreographer
- * Mengimplementasikan Hooke's Law Damped Spring Solver (F = -kx - cv),
- * simulasi kursor otomatis (Bezier Pointer Path + Shockwave Ripple),
- * serta Virtual 3D Camera Focus Zoom & Staggered Word Reveal.
- */
+/* -------------------------------------------------------------------------- */
+/* FISIKA PEGAS & KURSOR                                                      */
+/* -------------------------------------------------------------------------- */
 
 export interface SpringConfig {
   stiffness?: number;
@@ -63,34 +67,85 @@ export function computeCursorChoreography(
   };
 }
 
+/* -------------------------------------------------------------------------- */
+/* TIPE DATA                                                                  */
+/* -------------------------------------------------------------------------- */
 
 export type CategoryType = 'quote' | 'promo' | 'edukasi';
 
-export type AnimationType =
-  | 'pop'
-  | 'slide-up'
-  | 'typewriter'
-  | 'bounce'
-  | 'fade'
-  | 'zoom';
+export type AnimationType = 'pop' | 'slide-up' | 'typewriter' | 'bounce' | 'fade' | 'zoom';
 
 export type AspectRatioType = '9:16' | '1:1' | '16:9';
 
-export type WidgetBlueprintType =
+export type CameraMotionType =
+  | 'spring-slide-vertical'
+  | 'perspective-tilt-3d'
+  | 'whip-zoom-spring'
+  | 'smooth-float';
+
+export type EngineFontName =
+  | 'Poppins'
+  | 'Montserrat'
+  | 'Bebas Neue'
+  | 'Playfair Display'
+  | 'Space Grotesk'
+  | 'Anton';
+
+/** Komponen kartu yang bisa digambar Motion Studio. */
+export type StudioWidgetType =
+  | 'price_tag_card'
+  | 'checklist_card'
+  | 'step_number_card'
+  | 'quote_card'
+  | 'cta_button_card'
   | 'repo_input_card'
   | 'repo_scanner_card'
   | 'terminal_build_card'
   | 'bento_metrics_grid'
+  | 'kinetic_showcase_card';
+
+/** Termasuk nama lama dari profil training versi sebelumnya (dinormalisasi saat dirender). */
+export type WidgetBlueprintType =
+  | StudioWidgetType
   | 'feature_spotlight_card'
   | 'kinetic_hook_card'
   | 'cta_dock_card';
+
+export const STUDIO_WIDGET_TYPES: readonly StudioWidgetType[] = [
+  'price_tag_card',
+  'checklist_card',
+  'step_number_card',
+  'quote_card',
+  'cta_button_card',
+  'repo_input_card',
+  'repo_scanner_card',
+  'terminal_build_card',
+  'bento_metrics_grid',
+  'kinetic_showcase_card',
+];
+
+const LEGACY_WIDGET_MAP: Record<string, StudioWidgetType> = {
+  feature_spotlight_card: 'checklist_card',
+  kinetic_hook_card: 'kinetic_showcase_card',
+  cta_dock_card: 'cta_button_card',
+};
+
+/** Ubah nama widget apa pun (termasuk nama lama) menjadi widget yang pasti bisa digambar. */
+export function normalizeWidgetType(
+  value: unknown,
+  fallback: StudioWidgetType = 'checklist_card'
+): StudioWidgetType {
+  if (typeof value !== 'string') return fallback;
+  if ((STUDIO_WIDGET_TYPES as readonly string[]).includes(value)) return value as StudioWidgetType;
+  return LEGACY_WIDGET_MAP[value] || fallback;
+}
 
 export interface MotionTelemetryProfile {
   presetId: string;
   creatorHandle: string;
   sourceUrl: string;
   easing: string;
-  cameraMotion: 'spring-slide-vertical' | 'perspective-tilt-3d' | 'whip-zoom-spring' | 'smooth-float';
+  cameraMotion: CameraMotionType;
   bpm: number;
   paletteId: string;
   widgetSequence: WidgetBlueprintType[];
@@ -128,22 +183,32 @@ export interface GeneratedMotionScene {
   easing: string;
 }
 
+export type SceneRole =
+  | 'Hook / Masalah'
+  | 'Isi / Solusi'
+  | 'Bukti / Harga'
+  | 'CTA Akhir'
+  | 'Langkah'
+  | 'Tips Penting'
+  | 'Renungan';
+
 export interface SceneItem {
   id: string;
   sceneNumber: number;
-  role: 'Hook / Masalah' | 'Isi / Solusi' | 'Bukti / Harga' | 'CTA Akhir';
+  role: SceneRole;
   text: string;
   subtext: string;
   emoji: string;
   duration: number;
   animation: AnimationType;
   imageUrl?: string;
-  // Properti opsional tambahan untuk Motion Skill v4.5
   stepBadge?: string;
   widgetType?: WidgetBlueprintType;
+  /** Isi utama kartu: nama produk, isi kutipan, angka besar, atau teks tombol. */
   primaryInput?: string;
+  /** Isi tambahan kartu, dipisah "|" (contoh: "Rp18rb | Rp25rb | Hemat 28%"). */
   secondaryInput?: string;
-  cameraMotion?: 'spring-slide-vertical' | 'perspective-tilt-3d' | 'whip-zoom-spring' | 'smooth-float';
+  cameraMotion?: CameraMotionType;
   paletteId?: string;
 }
 
@@ -177,7 +242,7 @@ export interface CustomImageAsset {
 export interface StyleSuggestion {
   paletteId: string;
   colors: ColorPalette;
-  font: 'Poppins' | 'Montserrat' | 'Bebas Neue' | 'Playfair Display' | 'Space Grotesk' | 'Anton';
+  font: EngineFontName;
   musicId: string;
   music: MusicTrack;
   backgroundType: 'solid' | 'gradient' | 'image';
@@ -185,14 +250,29 @@ export interface StyleSuggestion {
   moodLabel: string;
 }
 
+export type QuoteMood = 'capek' | 'galau' | 'semangat' | 'cinta' | 'syukur' | 'netral';
+
 export interface ParsedTopicMeta {
   cleanTopic: string;
   productName: string;
+  /** Harga promo, '' bila tidak ada. */
   priceText: string;
+  /** Harga normal (untuk harga coret), '' bila tidak ada. */
   originalPriceText: string;
+  /** Nama toko, '' bila tidak ada. */
   storeName: string;
   emotionKeyword: string;
   detectedMood: 'galau' | 'promo' | 'edukasi' | 'netral';
+  discountPercent?: number | null;
+  /** Edukasi: topik tanpa awalan "3 cara …". */
+  subject?: string;
+  /** Edukasi: jumlah langkah yang diminta (dibatasi 2–6). */
+  stepCount?: number | null;
+  /** Edukasi: true bila angka di topik tidak perlu dibatasi. */
+  stepCountExact?: boolean;
+  /** Edukasi: kata benda setelah angka ("cara", "tips", "langkah", …). */
+  stepNoun?: string;
+  quoteMood?: QuoteMood;
 }
 
 export interface GeneratedScriptResult {
@@ -208,11 +288,14 @@ export interface GeneratedScriptResult {
 
 export interface GenerateOptions {
   customPrice?: string;
+  customOriginalPrice?: string;
   customProductName?: string;
   customStoreName?: string;
   excludeHooks?: string[];
   forceRandomPalette?: boolean;
   userImages?: string[];
+  /** Isi angka untuk hasil yang selalu sama (deterministik). */
+  seed?: number;
 }
 
 export interface SceneTemplateEntry {
@@ -222,34 +305,208 @@ export interface SceneTemplateEntry {
 }
 
 /* -------------------------------------------------------------------------- */
-/* BUILT-IN DATASETS & PRESETS                                                */
+/* ACAK & TEKS                                                                */
+/* -------------------------------------------------------------------------- */
+
+type Rng = () => number;
+
+function createRng(seed?: number): Rng {
+  if (typeof seed !== 'number' || !Number.isFinite(seed)) return Math.random;
+  let state = Math.floor(seed) >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function pick<T>(list: readonly T[], rng: Rng, fallback: T): T {
+  if (!list.length) return fallback;
+  return list[Math.floor(rng() * list.length)] ?? fallback;
+}
+
+function shuffle<T>(list: readonly T[], rng: Rng): T[] {
+  const out = [...list];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+/** Ambil n item berbeda secara acak. */
+function pickSome<T>(list: readonly T[], n: number, rng: Rng): T[] {
+  return shuffle(Array.from(new Set(list)), rng).slice(0, n);
+}
+
+/** Ambil n item secara acak tapi urutannya tetap seperti daftar aslinya. */
+function pickOrdered<T>(list: readonly T[], n: number, rng: Rng): T[] {
+  if (n >= list.length) return [...list];
+  const idx = shuffle(
+    list.map((_, i) => i),
+    rng
+  )
+    .slice(0, n)
+    .sort((a, b) => a - b);
+  return idx.map((i) => list[i]);
+}
+
+function cleanSpaces(s: string): string {
+  return s
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([,.!?:;])/g, '$1')
+    .trim();
+}
+
+function sentenceCase(s: string): string {
+  const t = s.trim();
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
+}
+
+const SMALL_WORDS = new Set(['di', 'ke', 'dari', 'dan', 'atau', 'yang', 'untuk', 'dengan', 'pada', '&']);
+
+function titleCase(s: string): string {
+  return s
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w, i) => {
+      if (/[A-Z]/.test(w.slice(1)) || /\d/.test(w) || w.startsWith('@')) return w;
+      const lw = w.toLowerCase();
+      if (i > 0 && SMALL_WORDS.has(lw)) return lw;
+      return lw.charAt(0).toUpperCase() + lw.slice(1);
+    })
+    .join(' ');
+}
+
+function shortenAtWord(s: string, max: number): string {
+  if (s.length <= max) return s;
+  const cut = s.slice(0, max);
+  const lastSpace = cut.lastIndexOf(' ');
+  return `${(lastSpace > max * 0.5 ? cut.slice(0, lastSpace) : cut).trim()}…`;
+}
+
+/* -------------------------------------------------------------------------- */
+/* HARGA                                                                      */
+/* -------------------------------------------------------------------------- */
+
+export interface PriceMatch {
+  text: string;
+  display: string;
+  value: number;
+  start: number;
+  end: number;
+}
+
+// Angka dianggap harga hanya jika ada "Rp", satuan (rb/k/jt), atau pemisah ribuan.
+// Satuan tidak boleh diikuti huruf/angka, jadi "2 kopi" atau "5 kali" tidak dibaca sebagai harga.
+const PRICE_SOURCE =
+  '(\\brp\\.?\\s*)?(\\d{1,3}(?:[.,]\\d{3})+|\\d+(?:[.,]\\d+)?)\\s*(rb|ribu|k|jt|juta)?(?![a-z0-9])';
+
+const UNIT_MULTIPLIER: Record<string, number> = { rb: 1e3, ribu: 1e3, k: 1e3, jt: 1e6, juta: 1e6 };
+
+function parseIdNumber(num: string): number {
+  if (/^\d{1,3}([.,]\d{3})+$/.test(num)) return Number(num.replace(/[.,]/g, ''));
+  return Number(num.replace(',', '.'));
+}
+
+function formatPriceDisplay(num: string, unit: string): string {
+  if (unit === 'rb' || unit === 'ribu' || unit === 'k') return `Rp${num}rb`;
+  if (unit === 'jt' || unit === 'juta') return `Rp${num}jt`;
+  return `Rp${num}`;
+}
+
+export function findPrices(text: string): PriceMatch[] {
+  const out: PriceMatch[] = [];
+  const re = new RegExp(PRICE_SOURCE, 'gi');
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text || '')) !== null) {
+    const full = m[0];
+    const prefix = m[1] || '';
+    const num = m[2] || '';
+    const unit = (m[3] || '').toLowerCase();
+    const hasSeparator = /^\d{1,3}([.,]\d{3})+$/.test(num);
+    if (!prefix && !unit && !hasSeparator) continue;
+    const base = parseIdNumber(num);
+    if (!Number.isFinite(base) || base <= 0) continue;
+    out.push({
+      text: full.trim(),
+      display: formatPriceDisplay(num, unit),
+      value: base * (UNIT_MULTIPLIER[unit] || 1),
+      start: m.index,
+      end: m.index + full.length,
+    });
+  }
+  return out;
+}
+
+/** "Rp18rb" → 18000, "Rp 1,5jt" → 1500000, "18.000" → 18000. null bila bukan harga. */
+export function priceToNumber(text: string): number | null {
+  const hits = findPrices(text || '');
+  if (hits.length) return hits[0].value;
+  const plain = /^\s*(\d[\d.,]*)\s*$/.exec(text || '');
+  if (!plain) return null;
+  const n = parseIdNumber(plain[1]);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/* -------------------------------------------------------------------------- */
+/* DATA BAWAAN                                                                */
 /* -------------------------------------------------------------------------- */
 
 export const CUSTOM_IMAGE_ASSETS: CustomImageAsset[] = [
   {
-    id: 'asset-depup-saas',
-    title: 'DepUp SaaS Dashboard Preview',
-    category: 'edukasi',
-    url: 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&w=1080&q=80',
-  },
-  {
     id: 'asset-promo-coffee',
-    title: 'Signature Coffee Promo',
+    title: 'Foto produk minuman',
     category: 'promo',
     url: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=1080&q=80',
   },
   {
     id: 'asset-quote-sunset',
-    title: 'Minimal Aesthetic Visual',
+    title: 'Visual tenang',
     category: 'quote',
     url: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1080&q=80',
+  },
+  {
+    id: 'asset-edukasi-laptop',
+    title: 'Ilustrasi belajar',
+    category: 'edukasi',
+    url: 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&w=1080&q=80',
   },
 ];
 
 export const COLOR_PALETTES: ColorPalette[] = [
   {
+    id: 'promo-pop',
+    name: 'Kuning Promo',
+    bgPrimary: '#ffe08a',
+    bgSecondary: '#ffc94d',
+    textColor: '#1c1206',
+    accentColor: '#dc2626',
+    badgeTextColor: '#ffffff',
+  },
+  {
+    id: 'quote-ink',
+    name: 'Tinta Malam',
+    bgPrimary: '#0b1026',
+    bgSecondary: '#241a3d',
+    textColor: '#f8f5ee',
+    accentColor: '#c08a3e',
+    badgeTextColor: '#1f1b2e',
+  },
+  {
+    id: 'aurora-mint',
+    name: 'Mint Segar',
+    bgPrimary: '#d1fae5',
+    bgSecondary: '#ecfeff',
+    textColor: '#064e3b',
+    accentColor: '#10b981',
+    badgeTextColor: '#ffffff',
+  },
+  {
     id: 'depup-lavender',
-    name: 'DepUp Lavender Pastel',
+    name: 'Lavender Pastel',
     bgPrimary: '#dcd6f7',
     bgSecondary: '#f3e8ff',
     textColor: '#18181b',
@@ -258,7 +515,7 @@ export const COLOR_PALETTES: ColorPalette[] = [
   },
   {
     id: 'midnight-indigo',
-    name: 'Linear Dark Indigo',
+    name: 'Indigo Malam',
     bgPrimary: '#090d16',
     bgSecondary: '#1e1b4b',
     textColor: '#f8fafc',
@@ -266,17 +523,8 @@ export const COLOR_PALETTES: ColorPalette[] = [
     badgeTextColor: '#ffffff',
   },
   {
-    id: 'aurora-mint',
-    name: 'Aurora Mint Fresh',
-    bgPrimary: '#d1fae5',
-    bgSecondary: '#ecfeff',
-    textColor: '#064e3b',
-    accentColor: '#10b981',
-    badgeTextColor: '#ffffff',
-  },
-  {
     id: 'cyber-sunset',
-    name: 'Cyber Sunset Pulse',
+    name: 'Sunset Neon',
     bgPrimary: '#18181b',
     bgSecondary: '#4c0519',
     textColor: '#ffffff',
@@ -285,7 +533,7 @@ export const COLOR_PALETTES: ColorPalette[] = [
   },
   {
     id: 'emerald-luxury',
-    name: 'Emerald Pro',
+    name: 'Emerald',
     bgPrimary: '#064e3b',
     bgSecondary: '#022c22',
     textColor: '#ecfdf5',
@@ -297,12 +545,12 @@ export const COLOR_PALETTES: ColorPalette[] = [
 export const MUSIC_TRACKS: MusicTrack[] = [
   {
     id: 'track-saas-upbeat',
-    title: 'DepUp Future Garage (118 BPM)',
+    title: 'Future Garage (118 BPM)',
     mood: 'upbeat',
     bpm: 118,
     url: '/music/upbeat.mp3',
     cdnUrl: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3',
-    description: 'Beat elektronik bersih bergaya demo produk SaaS & startup modern',
+    description: 'Beat elektronik bersih untuk demo produk',
   },
   {
     id: 'track-energetic-drop',
@@ -311,16 +559,16 @@ export const MUSIC_TRACKS: MusicTrack[] = [
     bpm: 128,
     url: '/music/energetic.mp3',
     cdnUrl: 'https://cdn.pixabay.com/download/audio/2022/10/25/audio_946b0939c8.mp3',
-    description: 'Ketukan cepat untuk video promo kilat & transisi CapCut',
+    description: 'Ketukan cepat untuk video promo',
   },
   {
     id: 'track-chill-lofi',
-    title: 'Lofi Coding & Focus (110 BPM)',
+    title: 'Lofi Focus (110 BPM)',
     mood: 'chill',
     bpm: 110,
     url: '/music/chill.mp3',
     cdnUrl: 'https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3',
-    description: 'Suasana santai untuk microlearning, tutorial, & edukasi teknologi',
+    description: 'Suasana santai untuk video edukasi',
   },
   {
     id: 'track-slow-ambient',
@@ -329,151 +577,397 @@ export const MUSIC_TRACKS: MusicTrack[] = [
     bpm: 92,
     url: '/music/slow.mp3',
     cdnUrl: 'https://cdn.pixabay.com/download/audio/2021/11/25/audio_91b32e02f9.mp3',
-    description: 'Alunan sinematik lembut untuk kutipan & storytelling mendalam',
+    description: 'Alunan lembut untuk kutipan',
   },
 ];
 
-export const BANK_HOOK: Record<CategoryType, string[]> = {
-  promo: [
-    'Deploy & jalankan {product} tanpa ribet sekarang! 🚀',
-    'Masih pakai cara lama? Coba {product} mulai {price}!',
-    'Rahasia {product} yang bikin kerjaan 10x lebih cepat ⚡',
-    'Spesial hari ini: {product} cuma {price} di {store}!',
-  ],
-  edukasi: [
-    '3 Langkah mudah menguasai {topic} tanpa pusing 💡',
-    'Cara kerja {topic} yang jarang dibahas orang!',
-    'Jangan lewatkan alur praktis {topic} ini dalam 30 detik 🚀',
-    'Tutorial cepat {topic}: Tempel, Periksa, langsung jalan!',
-  ],
-  quote: [
-    'Konsistensi kecil hari ini tentang {topic} mengubah segalanya ✨',
-    'Berhenti menunda {topic}, mulai dari langkah pertama.',
-    'Fokus pada progres {topic}, bukan kesempurnaan semata.',
-    'Setiap karya besar dimulai dari keberanian mencoba {topic}.',
-  ],
-};
+/**
+ * Kalimat hasil training admin (diisi saat runtime oleh lib/training.ts).
+ * Kalimat bawaan ada di konstanta PROMO_*, QUOTE_PACKS, dan EDU_PACKS di bawah.
+ */
+export const BANK_HOOK: Record<CategoryType, string[]> = { promo: [], quote: [], edukasi: [] };
 
 export const BANK_SCENES: Record<
   CategoryType,
   { scene2: SceneTemplateEntry[]; scene3: SceneTemplateEntry[] }
 > = {
-  promo: {
-    scene2: [
-      {
-        text: '1 Tempel & Hubungkan {product}',
-        subtext: 'Konfigurasi instan tanpa setup rumit, langsung terdeteksi otomatis.',
-        emoji: '⌘',
-      },
-      {
-        text: 'Kualitas unggulan {product} siap pakai',
-        subtext: 'Dirancang agar hemat waktu dengan performa maksimal setiap hari.',
-        emoji: '⚡',
-      },
-    ],
-    scene3: [
-      {
-        text: 'Penawaran spesial {price} di {store}',
-        subtext: 'Pantau hasil secara langsung dengan garansi kepuasan penuh.',
-        emoji: '🚀',
-      },
-      {
-        text: 'Stok terbatas! Cuma {price} hari ini',
-        subtext: 'Langsung aktif dan siap digunakan begitu pemesanan selesai.',
-        emoji: '🔥',
-      },
-    ],
-  },
-  edukasi: {
-    scene2: [
-      {
-        text: '2 Periksa kompatibilitas {topic}',
-        subtext: 'Tahu platform dan pengaturan mana yang paling pas buat kebutuhanmu.',
-        emoji: '🔍',
-      },
-      {
-        text: 'Pahami struktur inti {topic}',
-        subtext: 'Ringkas, bersih, dan langsung bisa dipraktekkan tanpa teori berbelit.',
-        emoji: '📘',
-      },
-    ],
-    scene3: [
-      {
-        text: '3 Deploy dan pantau {topic}',
-        subtext: 'Progres tampil langsung secara real-time tanpa setup rumit.',
-        emoji: '🚀',
-      },
-      {
-        text: 'Hasil langsung terlihat dalam hitungan detik',
-        subtext: 'Simpan panduan ini agar mudah dibuka kembali saat praktek.',
-        emoji: '✅',
-      },
-    ],
-  },
-  quote: {
-    scene2: [
-      {
-        text: 'Proses tidak pernah mengkhianati hasil',
-        subtext: 'Nikmati setiap tahapan belajar dan bertumbuh bersama {topic}.',
-        emoji: '🌱',
-      },
-    ],
-    scene3: [
-      {
-        text: 'Mulai langkahmu hari ini juga',
-        subtext: 'Satu tindakan nyata jauh lebih berarti daripada seribu rencana.',
-        emoji: '✨',
-      },
-    ],
-  },
+  promo: { scene2: [], scene3: [] },
+  quote: { scene2: [], scene3: [] },
+  edukasi: { scene2: [], scene3: [] },
 };
 
-export const BANK_CTA: string[] = [
-  'Coba sekarang di {store} — klik link di bio! 🚀',
-  'Ambil promo {price} sebelum kehabisan hari ini! 🔥',
-  'Simpan & bagikan video ini ke tim kamu! ✨',
-  'Mulai deploy pertamamu tanpa ribet sekarang! ⚡',
-];
+export const BANK_CTA: Record<CategoryType, string[]> = { promo: [], quote: [], edukasi: [] };
 
 export const BANK_HASHTAGS: Record<CategoryType, string[]> = {
-  promo: ['#PromoSpesial', '#MotionID', '#Rekomendasi', '#DiskonHariIni', '#ViralIndonesia'],
-  edukasi: ['#BelajarCepat', '#TechIndonesia', '#WebDevID', '#TipsProduktif', '#MotionGraphic'],
-  quote: ['#MotivasiHarian', '#MindsetBertumbuh', '#Inspirasi', '#QuotesIndonesia', '#Semangat'],
+  promo: ['#promo', '#diskon', '#umkm', '#promohariini'],
+  quote: ['#quotes', '#katakata', '#selfreminder', '#quotesindonesia'],
+  edukasi: ['#edukasi', '#tips', '#belajar', '#infobermanfaat'],
 };
 
+/** Kata kunci → hashtag tambahan (bisa ditambah lewat training "keyword_rule"). */
 export const TOPIC_HASHTAG_MAP: Record<string, string[]> = {
-  deploy: ['#DeployApp', '#GitHubRepo', '#SaaSIndonesia', '#CloudHosting'],
-  coding: ['#ProgrammerIndonesia', '#NextJS', '#TypeScript', '#WebDeveloper'],
-  kopi: ['#KopiSusu', '#KulinerHits', '#AnakKopi', '#PromoKopi'],
+  kopi: ['#kopisusu', '#kopikekinian'],
 };
 
-const trainedVideoPresets: TrainedVideoPreset[] = [
+const trainedVideoPresets: TrainedVideoPreset[] = [];
+
+/* ---------- Promo ---------- */
+
+const PROMO_HOOKS = [
+  'Stop scroll! {product} lagi promo 👀',
+  'Lagi cari {product}? Pas banget, lagi promo!',
+  '{product} favoritmu lagi turun harga 🔥',
+  'Kabar baik buat pencinta {product}!',
+  'Promo {product} cuma {price}!',
+  'Cuma {price} buat {product}? Serius!',
+  'Jangan sampai kehabisan promo {product} di {store}!',
+  'Stop scroll! Ada promo spesial hari ini 👀',
+];
+
+const PROMO_HOOK_SUBTEXTS = [
+  'Promo terbatas, simak sampai habis.',
+  'Harga promonya ada sebentar lagi 👇',
+  'Khusus di {store} selama promo berlangsung.',
+];
+
+const PROMO_BENEFIT_TITLES = [
+  'Kenapa harus {product}?',
+  'Ini alasan {product} jadi favorit',
+  'Yang bikin {product} beda:',
+  'Kenapa banyak yang pilih ini?',
+];
+
+const PROMO_PRICE_TITLES = ['Sekarang cuma {price}!', 'Harga promo: {price}', 'Cukup {price} aja!'];
+
+const PROMO_DISCOUNT_TITLES = [
+  'Hemat {discount}%, sekarang {price}!',
+  'Turun dari {original_price} jadi {price}!',
+];
+
+const PROMO_NOPRICE_TITLES = [
+  'Harga spesial selama promo!',
+  'Harga spesialnya cuma di {store}!',
+  'Cek harga spesialnya sekarang!',
+];
+
+const PROMO_CTA_TITLES = [
+  'Pesan sekarang sebelum promonya habis!',
+  'Yuk, order sekarang juga!',
+  'Mampir ke {store} hari ini!',
+  'Klik link di bio buat pesan!',
+];
+
+interface PromoKind {
+  match: RegExp;
+  benefits: string[];
+  hashtags: string[];
+}
+
+const PROMO_KINDS: PromoKind[] = [
   {
-    id: 'preset-depup-7697972111469546753',
-    title: 'DepUp SaaS Step Workflow (@depup.web)',
-    description: 'Deploy without the hassle. 🚀 — Pastel lavender gradient + lime orb + 3-step SaaS UI & live terminal.',
-    category: 'edukasi',
-    videoUrl: 'https://www.tiktok.com/@depup.web/video/7697972111469546753',
-    creatorHandle: '@depup.web',
-    profile: {
-      presetId: 'depup-workflow',
-      creatorHandle: '@depup.web',
-      sourceUrl: 'https://www.tiktok.com/@depup.web/video/7697972111469546753',
-      easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
-      cameraMotion: 'spring-slide-vertical',
-      bpm: 118,
-      paletteId: 'depup-lavender',
-      widgetSequence: ['repo_input_card', 'repo_scanner_card', 'terminal_build_card'],
-      stepBadges: ['1 Tempel', '2 Periksa', '3 Deploy'],
-      cardRadius: 24,
-      glassBlur: 18,
-      staggerMs: 85,
-    },
+    match:
+      /kopi|teh\b|susu|boba|jus|minuman|\bes\b|makan|nasi|ayam|bakso|\bmie?\b|soto|sate|kue|roti|donat|martabak|snack|cemilan|camilan|keripik|sambal|seblak|pizza|burger|dimsum|frozen|katering|catering/,
+    benefits: [
+      'Dibuat fresh setiap hari',
+      'Rasa favorit pelanggan',
+      'Porsi pas, harga bersahabat',
+      'Bahan pilihan berkualitas',
+    ],
+    hashtags: ['#kulinerindonesia', '#jajanan'],
   },
+  {
+    match:
+      /baju|kaos|kemeja|celana|\brok\b|dress|gamis|hijab|jilbab|kerudung|jaket|hoodie|sepatu|sandal|\btas\b|dompet|topi|outfit|batik/,
+    benefits: [
+      'Bahan nyaman dipakai seharian',
+      'Banyak pilihan ukuran dan warna',
+      'Jahitan rapi dan awet',
+      'Cocok buat harian atau acara',
+    ],
+    hashtags: ['#fashionlokal', '#outfit'],
+  },
+  {
+    match: /skincare|serum|sabun|lipstik|parfum|lotion|sunscreen|masker|kosmetik|make ?up/,
+    benefits: [
+      'Praktis dipakai setiap hari',
+      'Kemasan mudah dibawa',
+      'Banyak pilihan varian',
+      'Harga ramah di kantong',
+    ],
+    hashtags: ['#skincarelokal', '#beauty'],
+  },
+  {
+    match: /jasa|servis|service|laundry|\bles\b|kursus|kelas|potong rambut|barbershop|salon|desain|fotografi/,
+    benefits: [
+      'Dikerjakan rapi dan tepat waktu',
+      'Bisa konsultasi dulu',
+      'Harga jelas dari awal',
+      'Pelayanan ramah',
+    ],
+    hashtags: ['#jasa', '#umkmindonesia'],
+  },
+];
+
+const PROMO_DEFAULT_KIND: PromoKind = {
+  match: /$^/,
+  benefits: [
+    'Kualitas terjaga',
+    'Harga bersahabat',
+    'Pelayanan cepat dan ramah',
+    'Promo berlaku terbatas',
+  ],
+  hashtags: ['#umkmindonesia', '#produklokal'],
+};
+
+/* ---------- Quote ---------- */
+
+interface QuotePack {
+  hooks: string[];
+  quotes: string[];
+  hashtags: string[];
+}
+
+const QUOTE_PACKS: Record<QuoteMood, QuotePack> = {
+  capek: {
+    hooks: [
+      'Untuk kamu yang lagi capek, tapi tetap bertahan.',
+      'Kalau hari ini berat, baca ini dulu.',
+      'Capek itu wajar. Berhenti sebentar juga boleh.',
+    ],
+    quotes: [
+      'Istirahat bukan menyerah, itu cara mengisi ulang tenaga.',
+      'Pelan-pelan saja, yang penting tidak berhenti.',
+      'Kamu sudah sejauh ini. Itu bukan hal kecil.',
+      'Tidak semua hari harus produktif. Bertahan juga pencapaian.',
+      'Lelahmu hari ini sedang membentuk dirimu yang besok.',
+    ],
+    hashtags: ['#capek', '#healing'],
+  },
+  galau: {
+    hooks: [
+      'Buat kamu yang lagi nggak baik-baik saja.',
+      'Kalau hatimu lagi berat, ini buat kamu.',
+      'Sedih itu boleh, nggak harus pura-pura kuat.',
+    ],
+    quotes: [
+      'Hari buruk bukan berarti hidupmu buruk.',
+      'Yang pergi jadi pelajaran, yang tinggal jaga baik-baik.',
+      'Hatimu juga butuh waktu untuk pulih.',
+      'Kamu berhak bahagia, mulai dari dirimu sendiri.',
+      'Menangis bukan tanda lemah, itu tanda kamu manusia.',
+    ],
+    hashtags: ['#galau', '#patahhati'],
+  },
+  semangat: {
+    hooks: [
+      'Pengingat buat kamu yang lagi berjuang.',
+      'Simpan ini buat hari-hari malasmu.',
+      'Kalau mulai ragu, baca ini lagi.',
+    ],
+    quotes: [
+      'Mulai dari yang kecil, tapi mulai hari ini.',
+      'Konsisten mengalahkan bakat yang malas.',
+      'Progres kecil tetap progres.',
+      'Mimpi besar dibangun dari kebiasaan kecil.',
+      'Gagal hari ini bukan akhir, cuma bagian dari cerita.',
+    ],
+    hashtags: ['#motivasi', '#semangat'],
+  },
+  cinta: {
+    hooks: [
+      'Buat kamu yang lagi belajar mencintai dengan sehat.',
+      'Pengingat kecil soal cinta.',
+      'Untuk hati yang sedang menunggu.',
+    ],
+    quotes: [
+      'Cinta yang sehat bikin kamu tumbuh, bukan takut.',
+      'Yang tepat tidak akan membuatmu terus menebak-nebak.',
+      'Sayangi dirimu dulu, baru orang lain.',
+      'Cinta itu soal hadir, bukan cuma soal kata.',
+    ],
+    hashtags: ['#cinta', '#relationship'],
+  },
+  syukur: {
+    hooks: [
+      'Pengingat untuk pelan-pelan bersyukur.',
+      'Sebelum mengeluh, baca ini dulu.',
+      'Untuk kamu yang sedang belajar ikhlas.',
+    ],
+    quotes: [
+      'Yang kamu punya hari ini dulu pernah kamu doakan.',
+      'Tenang bukan karena masalah hilang, tapi karena hati ikhlas.',
+      'Cukup itu bukan soal jumlah, tapi soal rasa.',
+      'Bersyukur bikin yang sedikit terasa cukup.',
+    ],
+    hashtags: ['#bersyukur', '#ikhlas'],
+  },
+  netral: {
+    hooks: [
+      'Pengingat kecil untuk hari ini.',
+      'Baca pelan-pelan, ini buat kamu.',
+      'Satu menit untuk dirimu sendiri.',
+    ],
+    quotes: [
+      'Semua yang besar dimulai dari langkah kecil.',
+      'Jangan bandingkan awalmu dengan pertengahan orang lain.',
+      'Hari ini cukup lakukan yang terbaik yang kamu bisa.',
+      'Pelan bukan berarti tertinggal.',
+    ],
+    hashtags: ['#motivasi'],
+  },
+};
+
+const QUOTE_MOOD_RULES: Array<[QuoteMood, RegExp]> = [
+  ['capek', /capek|\bcape\b|lelah|penat|burnout|kerja|lembur/],
+  ['galau', /galau|sedih|patah hati|kecewa|nangis|menangis|kesepian|sendirian|move on|mantan|hancur/],
+  ['cinta', /cinta|sayang|pasangan|jodoh|rindu|kangen|nikah|pacar/],
+  ['syukur', /syukur|bersyukur|ikhlas|sabar|tenang|damai|bahagia/],
+  ['semangat', /semangat|motivasi|sukses|mimpi|usaha|berjuang|konsisten|disiplin|produktif|bangkit|gagal/],
+];
+
+const QUOTE_HOOK_SUBTEXTS = ['Baca pelan-pelan, ya.', 'Simpan kalau ini kena di hati.'];
+const QUOTE_LEADS_1 = ['Ingat ini baik-baik:', 'Satu hal yang perlu kamu tahu:', 'Pegang kalimat ini:'];
+const QUOTE_LEADS_2 = ['Dan jangan lupa:', 'Satu lagi:', 'Yang paling penting:'];
+const QUOTE_CTA_TITLES = [
+  'Simpan untuk pengingat, kirim ke yang butuh.',
+  'Kirim ini ke orang yang lagi butuh.',
+  'Simpan, lalu baca lagi saat hari terasa berat.',
+];
+const QUOTE_CTA_SUBTEXTS = ['Kamu nggak sendirian.', 'Semoga harimu lebih ringan.'];
+
+/* ---------- Edukasi ---------- */
+
+interface EduPack {
+  match: RegExp;
+  steps: string[];
+  tips: string[];
+  hashtags: string[];
+}
+
+const EDU_PACKS: EduPack[] = [
+  {
+    match: /uang|keuangan|nabung|menabung|tabungan|gaji|investasi|budget|anggaran|utang|hutang|cicilan|hemat/,
+    steps: [
+      'Catat semua pengeluaran selama 30 hari',
+      'Bagi gaji pakai pola 50/30/20',
+      'Sisihkan tabungan di awal bulan',
+      'Siapkan dana darurat sebelum investasi',
+      'Hindari cicilan untuk barang konsumtif',
+    ],
+    tips: [
+      'Jangan menunggu sisa gaji untuk menabung.',
+      'Naik gaji boleh, naik gaya hidup jangan dulu.',
+      'Pisahkan rekening tabungan dan rekening harian.',
+    ],
+    hashtags: ['#tipskeuangan', '#keuangan'],
+  },
+  {
+    match: /belajar|ujian|kuliah|sekolah|hafal|menghafal|skripsi|materi|bahasa inggris/,
+    steps: [
+      'Fokus belajar 25 menit, lalu istirahat 5 menit',
+      'Jelaskan ulang materi pakai bahasamu sendiri',
+      'Ulangi materi besok dan minggu depan',
+      'Kerjakan latihan soal, jangan cuma membaca',
+      'Tidur cukup sebelum hari ujian',
+    ],
+    tips: [
+      'Latihan soal lebih efektif daripada membaca ulang.',
+      'Belajar sedikit tiap hari lebih nempel daripada sistem kebut semalam.',
+      'Jauhkan HP saat sedang belajar.',
+    ],
+    hashtags: ['#tipsbelajar', '#pelajar'],
+  },
+  {
+    match: /produktif|produktivitas|fokus|waktu|malas|menunda|prokrastinasi|rutinitas|kerja/,
+    steps: [
+      'Tulis 3 prioritas sebelum mulai kerja',
+      'Kerjakan tugas terberat saat pikiran segar',
+      'Matikan notifikasi saat sedang fokus',
+      'Kelompokkan tugas kecil di satu waktu',
+      'Rencanakan besok sebelum tutup hari',
+    ],
+    tips: [
+      'Kalau bisa selesai dalam 2 menit, kerjakan sekarang.',
+      'Multitasking justru bikin kerja lebih lama.',
+      'Istirahat singkat bikin fokus bertahan lebih lama.',
+    ],
+    hashtags: ['#produktif', '#selfimprovement'],
+  },
+  {
+    match: /sehat|kesehatan|olahraga|tidur|gizi|air putih|jalan kaki|stres|stress/,
+    steps: [
+      'Minum air putih yang cukup setiap hari',
+      'Bergerak minimal 30 menit sehari',
+      'Tidur dan bangun di jam yang sama',
+      'Kurangi layar satu jam sebelum tidur',
+      'Perbanyak sayur dan buah di piringmu',
+    ],
+    tips: [
+      'Konsisten lebih penting daripada langsung berat.',
+      'Mulai dari kebiasaan kecil yang gampang diulang.',
+      'Kalau ada keluhan kesehatan, konsultasikan ke dokter.',
+    ],
+    hashtags: ['#hidupsehat', '#tipssehat'],
+  },
+  {
+    match: /jualan|bisnis|usaha|umkm|toko|pelanggan|marketing|pemasaran|konten|closing|omzet/,
+    steps: [
+      'Kenali satu masalah utama pelangganmu',
+      'Tunjukkan produk saat dipakai, bukan cuma difoto',
+      'Posting rutin di jam pelanggan aktif',
+      'Balas komentar dan DM secepat mungkin',
+      'Minta testimoni dari pelanggan yang puas',
+    ],
+    tips: [
+      'Jual manfaatnya, bukan cuma fiturnya.',
+      'Satu konten yang jelas lebih baik dari sepuluh yang asal.',
+      'Pelanggan lama lebih mudah diajak beli lagi.',
+    ],
+    hashtags: ['#tipsbisnis', '#jualanonline'],
+  },
+  {
+    match: /masak|resep|memasak|dapur|bikin kue|baking/,
+    steps: [
+      'Siapkan semua bahan sebelum mulai memasak',
+      'Panaskan wajan sebelum bahan masuk',
+      'Masak dengan api sedang supaya matang merata',
+      'Cicipi dan koreksi rasa di akhir',
+    ],
+    tips: [
+      'Takar bumbu dulu, jangan langsung dituang.',
+      'Jangan isi wajan terlalu penuh supaya tidak lembek.',
+    ],
+    hashtags: ['#resep', '#masakdirumah'],
+  },
+];
+
+const EDU_DEFAULT: EduPack = {
+  match: /$^/,
+  steps: [
+    'Pahami dasarnya dulu sebelum yang rumit',
+    'Praktik sedikit, tapi setiap hari',
+    'Catat progres dan evaluasi tiap minggu',
+    'Belajar dari orang yang sudah berhasil',
+    'Ulangi bagian yang masih sulit',
+  ],
+  tips: [
+    'Konsisten kecil lebih baik daripada semangat sesaat.',
+    'Jangan takut salah, itu bagian dari belajar.',
+  ],
+  hashtags: ['#belajarbareng'],
+};
+
+const EDU_NOUNS = 'cara|tips|tip|langkah|trik|kebiasaan|hal|rahasia|kesalahan|fakta|alasan|ide';
+const EDU_LIST_TITLES = ['Ini langkah-langkahnya:', 'Caranya begini:', 'Coba urutan ini:'];
+const EDU_TIP_TITLES = ['Tips penting:', 'Yang sering dilupakan:', 'Satu lagi:'];
+const EDU_CTA_TITLES = [
+  'Simpan biar nggak lupa!',
+  'Bagikan ke teman yang butuh!',
+  'Follow untuk tips berikutnya!',
 ];
 
 /* -------------------------------------------------------------------------- */
-/* TRAINING INJECTION MUTATORS                                                */
+/* TRAINING ADMIN (dipanggil lib/training.ts)                                 */
 /* -------------------------------------------------------------------------- */
 
 export function addTrainedVideoPresetToEngine(preset: TrainedVideoPreset): void {
@@ -491,9 +985,9 @@ export function getTrainedVideoPresets(): TrainedVideoPreset[] {
 
 export function addCustomHookToEngine(category: CategoryType, hookText: string): boolean {
   const clean = hookText.trim();
-  if (!clean) return false;
-  const list = BANK_HOOK[category] || BANK_HOOK.promo;
-  if (!list.includes(clean)) list.unshift(clean);
+  const list = BANK_HOOK[category];
+  if (!clean || !list) return false;
+  if (!list.includes(clean)) list.push(clean);
   return true;
 }
 
@@ -502,9 +996,9 @@ export function addCustomSceneToEngine(
   slot: 'scene2' | 'scene3',
   entry: SceneTemplateEntry
 ): boolean {
-  if (!entry.text?.trim()) return false;
-  const target = BANK_SCENES[category] || BANK_SCENES.promo;
-  target[slot].unshift({
+  const target = BANK_SCENES[category];
+  if (!entry.text?.trim() || !target) return false;
+  target[slot].push({
     text: entry.text.trim(),
     subtext: entry.subtext?.trim() || '',
     emoji: entry.emoji?.trim() || '✨',
@@ -512,10 +1006,14 @@ export function addCustomSceneToEngine(
   return true;
 }
 
-export function addCustomCtaToEngine(ctaText: string): boolean {
+/** Tanpa kategori = berlaku untuk semua kategori. */
+export function addCustomCtaToEngine(ctaText: string, category?: CategoryType): boolean {
   const clean = ctaText.trim();
   if (!clean) return false;
-  if (!BANK_CTA.includes(clean)) BANK_CTA.unshift(clean);
+  const cats: CategoryType[] = category ? [category] : ['promo', 'quote', 'edukasi'];
+  cats.forEach((c) => {
+    if (!BANK_CTA[c].includes(clean)) BANK_CTA[c].push(clean);
+  });
   return true;
 }
 
@@ -540,92 +1038,601 @@ export function addKeywordRuleToEngine(keywords: string[], hashtags: string[]): 
 }
 
 /* -------------------------------------------------------------------------- */
-/* CORE PARSER & GENERATOR ENGINE                                             */
+/* PARSER TOPIK                                                               */
 /* -------------------------------------------------------------------------- */
 
-export function parseTopic(rawTopic: string, options?: GenerateOptions): ParsedTopicMeta {
-  const cleanTopic = (rawTopic || 'Aplikasi Web Modern').trim();
-  const priceMatch = cleanTopic.match(/(\d+[.,]?\d*)\s*(rb|ribu|k|jt|juta)/i);
-  const extractedPrice = priceMatch ? `Rp ${priceMatch[1]}${priceMatch[2].toUpperCase()}` : '';
-  const priceText = options?.customPrice?.trim() || extractedPrice || ' Akses Gratis';
+const PROMO_FILLER = new Set([
+  'promo',
+  'diskon',
+  'sale',
+  'cuma',
+  'hanya',
+  'dari',
+  'jadi',
+  'harga',
+  'spesial',
+  'special',
+  'murah',
+  'flash',
+  'hemat',
+  'potongan',
+  'mulai',
+  'only',
+  'turun',
+]);
+const TRAILING_FILLER = new Set(['hari', 'ini', 'aja', 'saja', 'sekarang', 'juga', 'nih', 'yuk', 'guys']);
+const LEADING_FILLER = new Set(['yuk', 'ada', 'lagi', 'beli', 'jual']);
 
-  const productName =
-    options?.customProductName?.trim() ||
-    cleanTopic.replace(/(\d+[.,]?\d*)\s*(rb|ribu|k|jt|juta)/gi, '').trim() ||
-    cleanTopic;
+function stripFiller(s: string): string {
+  const tokens = s
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((t) => !PROMO_FILLER.has(t.toLowerCase().replace(/[^a-z]/g, '')));
+  while (tokens.length && LEADING_FILLER.has(tokens[0].toLowerCase())) tokens.shift();
+  while (tokens.length && TRAILING_FILLER.has(tokens[tokens.length - 1].toLowerCase())) tokens.pop();
+  return tokens.join(' ').replace(/^[,.!?:;\-–—]+|[,.!?:;\-–—]+$/g, '').trim();
+}
 
-  const storeName = options?.customStoreName?.trim() || 'MotionID Studio';
+function detectQuoteMood(lower: string): QuoteMood {
+  for (const [mood, re] of QUOTE_MOOD_RULES) {
+    if (re.test(lower)) return mood;
+  }
+  return 'netral';
+}
+
+function findEduPack(lower: string): EduPack {
+  return EDU_PACKS.find((p) => p.match.test(lower)) || EDU_DEFAULT;
+}
+
+function detectPromoKind(lower: string): PromoKind {
+  return PROMO_KINDS.find((k) => k.match.test(lower)) || PROMO_DEFAULT_KIND;
+}
+
+function stripLeadWords(s: string): string {
+  return s.replace(/^(untuk|agar|supaya|biar|buat)\s+/i, '').trim();
+}
+
+function parseEduTopic(topic: string): {
+  count: number | null;
+  exact: boolean;
+  noun: string;
+  subject: string;
+} {
+  const t = topic.trim();
+  const m = t.match(new RegExp(`^(\\d{1,2})\\s+(${EDU_NOUNS})\\b\\s*(.*)$`, 'i'));
+  if (m) {
+    const asked = Number(m[1]);
+    const count = Math.min(6, Math.max(2, asked));
+    return { count, exact: count === asked, noun: m[2].toLowerCase(), subject: stripLeadWords(m[3]) };
+  }
+  const m2 = t.match(/^(cara|tips|tutorial|panduan)\s+(.*)$/i);
+  if (m2) {
+    return {
+      count: null,
+      exact: false,
+      noun: m2[1].toLowerCase() === 'tips' ? 'tips' : 'cara',
+      subject: stripLeadWords(m2[2]),
+    };
+  }
+  return { count: null, exact: false, noun: 'cara', subject: stripLeadWords(t) };
+}
+
+/**
+ * Baca harga, harga normal, produk, dan toko dari topik.
+ * Contoh: "promo kopi susu dari 25rb jadi 18rb di kopi senja"
+ *  → produk "Kopi Susu", harga "Rp18rb", harga normal "Rp25rb", toko "Kopi Senja", hemat 28%.
+ */
+export function parseTopic(
+  rawTopic: string,
+  options?: GenerateOptions,
+  category?: CategoryType
+): ParsedTopicMeta {
+  const cleanTopic = (rawTopic || '').replace(/\s+/g, ' ').trim();
   const lower = cleanTopic.toLowerCase();
 
+  const prices = findPrices(cleanTopic);
+  let promoHit: PriceMatch | undefined;
+  let originalHit: PriceMatch | undefined;
+  if (prices.length) {
+    const sorted = [...prices].sort((a, b) => a.value - b.value);
+    promoHit = sorted[0];
+    const top = sorted[sorted.length - 1];
+    if (sorted.length > 1 && top.value > promoHit.value) originalHit = top;
+  }
+
+  const priceText = options?.customPrice?.trim() || promoHit?.display || '';
+  const originalPriceText = options?.customOriginalPrice?.trim() || originalHit?.display || '';
+  const pv = priceToNumber(priceText);
+  const ov = priceToNumber(originalPriceText);
+  const discountPercent =
+    pv !== null && ov !== null && pv > 0 && ov > pv ? Math.round((1 - pv / ov) * 100) : null;
+
+  // Buang teks harga (dari belakang supaya posisi tetap valid)
+  let rest = cleanTopic;
+  [...prices]
+    .sort((a, b) => b.start - a.start)
+    .forEach((p) => {
+      rest = `${rest.slice(0, p.start)} ${rest.slice(p.end)}`;
+    });
+  rest = rest.replace(/\s+/g, ' ').trim();
+
+  let storeName = options?.customStoreName?.trim() || '';
+  if (category === 'promo') {
+    const handle = rest.match(/(?:^|\s)(@[a-z0-9._]{2,30})\s*$/i);
+    if (handle && handle.index !== undefined) {
+      if (!storeName) storeName = handle[1];
+      rest = rest.slice(0, handle.index).trim();
+    } else {
+      const at = rest.match(/\s+di\s+([^,.!?]{2,40})$/i);
+      if (at && at.index !== undefined) {
+        const store = stripFiller(at[1]);
+        if (store) {
+          if (!storeName) storeName = titleCase(store);
+          rest = rest.slice(0, at.index).trim();
+        }
+      }
+    }
+  }
+
+  const productName = options?.customProductName?.trim() || titleCase(stripFiller(rest)) || '';
+
+  const quoteMood = detectQuoteMood(lower);
   let detectedMood: ParsedTopicMeta['detectedMood'] = 'netral';
-  let emotionKeyword = 'modern';
-  if (/promo|diskon|murah|sale|rb|ribu/.test(lower)) {
+  let emotionKeyword = 'netral';
+  if (prices.length || /promo|diskon|murah|sale/.test(lower)) {
     detectedMood = 'promo';
     emotionKeyword = 'antusias';
-  } else if (/cara|tutorial|langkah|deploy|belajar|tips|repo/.test(lower)) {
+  } else if (/cara|tutorial|langkah|belajar|tips/.test(lower)) {
     detectedMood = 'edukasi';
-    emotionKeyword = 'pintar';
-  } else if (/galau|sedih|capek|tenang|hidup/.test(lower)) {
+    emotionKeyword = 'informatif';
+  } else if (quoteMood !== 'netral') {
     detectedMood = 'galau';
-    emotionKeyword = 'reflektif';
+    emotionKeyword = quoteMood;
   }
+
+  const edu = parseEduTopic(cleanTopic);
 
   return {
     cleanTopic,
     productName,
     priceText,
-    originalPriceText: priceText,
+    originalPriceText,
     storeName,
     emotionKeyword,
     detectedMood,
+    discountPercent,
+    subject: edu.subject,
+    stepCount: edu.count,
+    stepCountExact: edu.exact,
+    stepNoun: edu.noun,
+    quoteMood,
   };
 }
 
 export const extractTopicMetadata = parseTopic;
 
+/** Tebak kategori dari topik (dipakai bila kategori tidak dipilih). */
+export function detectCategory(topic: string): CategoryType {
+  const lower = (topic || '').toLowerCase();
+  if (findPrices(topic).length > 0 || /\b(promo|diskon|sale|jual|order|grosir|ongkir|harga)\b/.test(lower)) {
+    return 'promo';
+  }
+  if (
+    new RegExp(`^\\s*\\d{1,2}\\s+(${EDU_NOUNS})\\b`).test(lower) ||
+    /\b(cara|tips|tutorial|panduan|belajar)\b/.test(lower)
+  ) {
+    return 'edukasi';
+  }
+  if (/\b(kata-kata|quote|quotes|renungan|pengingat|motivasi)\b/.test(lower) || detectQuoteMood(lower) !== 'netral') {
+    return 'quote';
+  }
+  return 'promo';
+}
+
+/* -------------------------------------------------------------------------- */
+/* PLACEHOLDER                                                                */
+/* -------------------------------------------------------------------------- */
+
+type PlaceholderKey = 'product' | 'price' | 'original' | 'store' | 'topic' | 'discount';
+
+// Mendukung nama Indonesia (dokumentasi lama) dan Inggris.
+const PLACEHOLDERS: Array<[string, PlaceholderKey]> = [
+  ['\\{(?:product|produk)\\}', 'product'],
+  ['\\{(?:price|harga)\\}', 'price'],
+  ['\\{(?:original_price|harga_coret|harga_normal)\\}', 'original'],
+  ['\\{(?:store|toko)\\}', 'store'],
+  ['\\{(?:topic|topik)\\}', 'topic'],
+  ['\\{(?:discount|diskon)\\}', 'discount'],
+];
+
+function placeholderValues(meta: ParsedTopicMeta): Record<PlaceholderKey, string> {
+  return {
+    product: meta.productName || '',
+    price: meta.priceText || '',
+    original: meta.originalPriceText || '',
+    store: meta.storeName || '',
+    topic: meta.cleanTopic || '',
+    discount: meta.discountPercent ? String(meta.discountPercent) : '',
+  };
+}
+
+/** true bila semua placeholder di template punya nilai. */
+export function canFill(template: string, meta: ParsedTopicMeta): boolean {
+  const values = placeholderValues(meta);
+  return PLACEHOLDERS.every(
+    ([source, key]) => !new RegExp(source, 'i').test(template) || values[key].trim() !== ''
+  );
+}
+
 export function interpolateTemplate(template: string, meta: ParsedTopicMeta): string {
-  return (template || '')
-    .replace(/\{topic\}/gi, meta.cleanTopic)
-    .replace(/\{product\}/gi, meta.productName)
-    .replace(/\{price\}/gi, meta.priceText)
-    .replace(/\{store\}/gi, meta.storeName);
+  const values = placeholderValues(meta);
+  let out = template || '';
+  for (const [source, key] of PLACEHOLDERS) {
+    out = out.replace(new RegExp(source, 'gi'), values[key]);
+  }
+  return cleanSpaces(out);
+}
+
+function pickFilled(
+  templates: readonly string[],
+  meta: ParsedTopicMeta,
+  rng: Rng,
+  exclude: readonly string[] = []
+): string {
+  const pool = templates
+    .filter((t) => canFill(t, meta))
+    .filter((t) => !exclude.includes(t) && !exclude.includes(interpolateTemplate(t, meta)));
+  if (!pool.length) return '';
+  return interpolateTemplate(pick(pool, rng, pool[0]), meta);
+}
+
+function pickEntry(
+  builtins: readonly SceneTemplateEntry[],
+  customs: readonly SceneTemplateEntry[],
+  meta: ParsedTopicMeta,
+  rng: Rng
+): SceneTemplateEntry {
+  const pool = [...builtins, ...customs].filter(
+    (e) => canFill(e.text, meta) && canFill(e.subtext || '', meta)
+  );
+  const fallback: SceneTemplateEntry = builtins[0] || { text: '', subtext: '', emoji: '' };
+  const chosen = pick(pool, rng, fallback);
+  return {
+    text: interpolateTemplate(chosen.text, meta),
+    subtext: interpolateTemplate(chosen.subtext || '', meta),
+    emoji: chosen.emoji,
+  };
+}
+
+const asEntries = (list: readonly string[], emoji: string): SceneTemplateEntry[] =>
+  list.map((text) => ({ text, subtext: '', emoji }));
+
+/* -------------------------------------------------------------------------- */
+/* GAYA PER KATEGORI                                                          */
+/* -------------------------------------------------------------------------- */
+
+const CATEGORY_STYLE: Record<
+  CategoryType,
+  { paletteId: string; font: EngineFontName; musicId: string; camera: CameraMotionType }
+> = {
+  promo: {
+    paletteId: 'promo-pop',
+    font: 'Montserrat',
+    musicId: 'track-energetic-drop',
+    camera: 'whip-zoom-spring',
+  },
+  quote: {
+    paletteId: 'quote-ink',
+    font: 'Playfair Display',
+    musicId: 'track-slow-ambient',
+    camera: 'smooth-float',
+  },
+  edukasi: {
+    paletteId: 'aurora-mint',
+    font: 'Poppins',
+    musicId: 'track-chill-lofi',
+    camera: 'spring-slide-vertical',
+  },
+};
+
+export function suggestCameraMotion(category: CategoryType): CameraMotionType {
+  return (CATEGORY_STYLE[category] || CATEGORY_STYLE.promo).camera;
+}
+
+/** Font bawaan per kategori ('saas' dan lainnya → Poppins). */
+export function suggestedFontFor(category: string): EngineFontName {
+  return category === 'promo' || category === 'quote' || category === 'edukasi'
+    ? CATEGORY_STYLE[category].font
+    : 'Poppins';
 }
 
 export function suggestStyle(
   rawTopic: string,
   category: CategoryType = 'promo',
-  forceRandom = false
+  forceRandom = false,
+  rng: Rng = Math.random
 ): StyleSuggestion {
-  const lower = (rawTopic || '').toLowerCase();
-  let chosenPalette = COLOR_PALETTES[0];
+  void rawTopic;
+  const base = CATEGORY_STYLE[category] || CATEGORY_STYLE.promo;
+  const palette = forceRandom
+    ? pick(COLOR_PALETTES, rng, COLOR_PALETTES[0])
+    : COLOR_PALETTES.find((p) => p.id === base.paletteId) || COLOR_PALETTES[0];
+  const music = MUSIC_TRACKS.find((m) => m.id === base.musicId) || MUSIC_TRACKS[0];
+  return {
+    paletteId: palette.id,
+    colors: palette,
+    font: base.font,
+    musicId: music.id,
+    music,
+    backgroundType: 'gradient',
+    gradientPreset: palette.id,
+    moodLabel: `${palette.name} • ${music.bpm} BPM`,
+  };
+}
 
-  if (forceRandom) {
-    chosenPalette = COLOR_PALETTES[Math.floor(Math.random() * COLOR_PALETTES.length)];
-  } else if (lower.includes('depup') || lower.includes('deploy') || category === 'edukasi') {
-    chosenPalette = COLOR_PALETTES[0]; // DepUp Lavender Pastel
-  } else if (category === 'promo') {
-    chosenPalette = COLOR_PALETTES[1]; // Linear Dark Indigo
-  } else if (category === 'quote') {
-    chosenPalette = COLOR_PALETTES[2]; // Aurora Mint
+/* -------------------------------------------------------------------------- */
+/* PENYUSUN SCENE PER KATEGORI                                                */
+/* -------------------------------------------------------------------------- */
+
+type SceneDraft = Omit<SceneItem, 'id' | 'sceneNumber' | 'imageUrl' | 'cameraMotion' | 'paletteId'>;
+
+const joinItems = (items: Array<string | null | undefined>) =>
+  items.map((s) => (s || '').trim()).filter(Boolean).join(' | ');
+
+function buildPromoScenes(meta: ParsedTopicMeta, rng: Rng, options?: GenerateOptions): SceneDraft[] {
+  const product = meta.productName;
+  const kind = detectPromoKind(`${meta.cleanTopic} ${product}`.toLowerCase());
+  const hasPrice = Boolean(meta.priceText);
+
+  const hook =
+    pickFilled([...PROMO_HOOKS, ...BANK_HOOK.promo], meta, rng, options?.excludeHooks) ||
+    'Stop scroll! Ada promo spesial hari ini 👀';
+  const hookSub = pickFilled(PROMO_HOOK_SUBTEXTS, meta, rng) || 'Promo terbatas, simak sampai habis.';
+
+  const benefit = pickEntry(asEntries(PROMO_BENEFIT_TITLES, '✅'), BANK_SCENES.promo.scene2, meta, rng);
+  const benefits = pickSome(kind.benefits, 3, rng);
+
+  const priceTitles = hasPrice
+    ? meta.discountPercent
+      ? [...PROMO_PRICE_TITLES, ...PROMO_DISCOUNT_TITLES]
+      : PROMO_PRICE_TITLES
+    : PROMO_NOPRICE_TITLES;
+  const priceScene = pickEntry(asEntries(priceTitles, '🏷️'), BANK_SCENES.promo.scene3, meta, rng);
+  const priceSub =
+    priceScene.subtext ||
+    (meta.originalPriceText
+      ? `Harga normal ${meta.originalPriceText}.`
+      : hasPrice
+      ? 'Selama persediaan masih ada.'
+      : 'Tanya harga promonya lewat DM, ya.');
+  const sticker = meta.discountPercent ? `Hemat ${meta.discountPercent}%` : 'Promo';
+
+  const cta =
+    pickFilled([...PROMO_CTA_TITLES, ...BANK_CTA.promo], meta, rng) || 'Pesan sekarang sebelum promonya habis!';
+  const ctaSub = meta.storeName
+    ? `Promo terbatas di ${meta.storeName}.`
+    : 'Promo terbatas, jangan sampai kelewatan.';
+
+  const productLabel = product || 'Promo spesial';
+
+  return [
+    {
+      role: 'Hook / Masalah',
+      text: hook,
+      subtext: hookSub,
+      emoji: '🔥',
+      duration: 3.4,
+      animation: 'pop',
+      stepBadge: 'Lagi promo',
+      widgetType: 'price_tag_card',
+      primaryInput: productLabel,
+      secondaryInput: joinItems([pick(['Promo spesial', 'Spesial hari ini'], rng, 'Promo spesial'), meta.storeName]),
+    },
+    {
+      role: 'Isi / Solusi',
+      text: benefit.text || 'Kenapa banyak yang pilih ini?',
+      subtext: benefit.subtext,
+      emoji: '✅',
+      duration: 3.8,
+      animation: 'slide-up',
+      stepBadge: 'Keunggulan',
+      widgetType: 'checklist_card',
+      primaryInput: '',
+      secondaryInput: joinItems(benefits),
+    },
+    {
+      role: 'Bukti / Harga',
+      text: priceScene.text || 'Harga spesial selama promo!',
+      subtext: priceSub,
+      emoji: '🏷️',
+      duration: 3.6,
+      animation: 'zoom',
+      stepBadge: 'Harga spesial',
+      widgetType: 'price_tag_card',
+      primaryInput: productLabel,
+      secondaryInput: hasPrice
+        ? joinItems([meta.priceText, meta.originalPriceText, sticker, meta.storeName])
+        : joinItems(['Harga spesial', meta.storeName]),
+    },
+    {
+      role: 'CTA Akhir',
+      text: cta,
+      subtext: ctaSub,
+      emoji: '🛒',
+      duration: 3.2,
+      animation: 'bounce',
+      stepBadge: 'Cara order',
+      widgetType: 'cta_button_card',
+      primaryInput: pick(['Pesan Sekarang', 'Order Sekarang'], rng, 'Pesan Sekarang'),
+      secondaryInput: joinItems([meta.storeName, pick(['Link di bio', 'Pesan via DM'], rng, 'Link di bio')]),
+    },
+  ];
+}
+
+function buildQuoteScenes(meta: ParsedTopicMeta, rng: Rng, options?: GenerateOptions): SceneDraft[] {
+  const pack = QUOTE_PACKS[meta.quoteMood || 'netral'] || QUOTE_PACKS.netral;
+  const hook =
+    pickFilled([...pack.hooks, ...BANK_HOOK.quote], meta, rng, options?.excludeHooks) || pack.hooks[0];
+
+  const trainedQuotes = [...BANK_SCENES.quote.scene2, ...BANK_SCENES.quote.scene3]
+    .map((e) => e.text)
+    .filter((t) => canFill(t, meta))
+    .map((t) => interpolateTemplate(t, meta));
+  const quotes = pickSome([...pack.quotes, ...trainedQuotes], 3, rng);
+  for (const extra of QUOTE_PACKS.netral.quotes) {
+    if (quotes.length >= 3) break;
+    if (!quotes.includes(extra)) quotes.push(extra);
   }
 
-  const chosenMusic =
-    category === 'promo'
-      ? MUSIC_TRACKS[1]
-      : category === 'edukasi'
-      ? MUSIC_TRACKS[0]
-      : MUSIC_TRACKS[3];
+  const signature = meta.storeName;
+  const cta = pickFilled([...QUOTE_CTA_TITLES, ...BANK_CTA.quote], meta, rng) || QUOTE_CTA_TITLES[0];
 
-  return {
-    paletteId: chosenPalette.id,
-    colors: chosenPalette,
-    font: category === 'quote' ? 'Playfair Display' : 'Space Grotesk',
-    musicId: chosenMusic.id,
-    music: chosenMusic,
-    backgroundType: 'gradient',
-    gradientPreset: chosenPalette.id,
-    moodLabel: `${chosenPalette.name} • ${chosenMusic.bpm} BPM`,
-  };
+  return [
+    {
+      role: 'Hook / Masalah',
+      text: hook,
+      subtext: pick(QUOTE_HOOK_SUBTEXTS, rng, ''),
+      emoji: '🤍',
+      duration: 4.0,
+      animation: 'fade',
+      stepBadge: 'Untukmu',
+      widgetType: 'quote_card',
+      primaryInput: quotes[0],
+      secondaryInput: signature,
+    },
+    {
+      role: 'Renungan',
+      text: pick(QUOTE_LEADS_1, rng, QUOTE_LEADS_1[0]),
+      subtext: '',
+      emoji: '🌙',
+      duration: 4.2,
+      animation: 'typewriter',
+      stepBadge: 'Renungan',
+      widgetType: 'quote_card',
+      primaryInput: quotes[1],
+      secondaryInput: signature,
+    },
+    {
+      role: 'Renungan',
+      text: pick(QUOTE_LEADS_2, rng, QUOTE_LEADS_2[0]),
+      subtext: '',
+      emoji: '✨',
+      duration: 4.2,
+      animation: 'typewriter',
+      stepBadge: 'Pengingat',
+      widgetType: 'quote_card',
+      primaryInput: quotes[2],
+      secondaryInput: signature,
+    },
+    {
+      role: 'CTA Akhir',
+      text: cta,
+      subtext: pick(QUOTE_CTA_SUBTEXTS, rng, ''),
+      emoji: '📌',
+      duration: 3.2,
+      animation: 'fade',
+      stepBadge: 'Simpan',
+      widgetType: 'cta_button_card',
+      primaryInput: 'Simpan',
+      secondaryInput: 'Kirim ke teman | Follow untuk lainnya',
+    },
+  ];
+}
+
+function buildEdukasiScenes(meta: ParsedTopicMeta, rng: Rng, options?: GenerateOptions): SceneDraft[] {
+  const lower = meta.cleanTopic.toLowerCase();
+  const pack = findEduPack(lower);
+  const want = meta.stepCount ?? 3;
+  const steps = pickOrdered(pack.steps, Math.min(want, pack.steps.length), rng);
+  for (const extra of EDU_DEFAULT.steps) {
+    if (steps.length >= want) break;
+    if (!steps.includes(extra)) steps.push(extra);
+  }
+  const n = steps.length;
+  const noun = meta.stepNoun || 'cara';
+  const subject = meta.subject || meta.cleanTopic || 'hal baru';
+
+  const builtInHooks = meta.stepCount
+    ? [
+        `${n} ${noun} ${subject} yang jarang dibahas`,
+        `${n} ${noun} ${subject} yang wajib kamu tahu`,
+        ...(meta.stepCountExact ? [meta.cleanTopic] : []),
+      ]
+    : [`Cara ${subject} tanpa ribet`, `Mau ${subject}? Mulai dari sini`, `Panduan singkat ${subject}`];
+  const hook = sentenceCase(
+    pickFilled([...builtInHooks, ...BANK_HOOK.edukasi], meta, rng, options?.excludeHooks) || builtInHooks[0]
+  );
+  const hookSub = pick(
+    meta.stepCount
+      ? ['Simpan dulu biar nggak lupa.', `Nomor ${n} paling sering dilupakan.`, 'Tonton sampai habis, ya.']
+      : ['Simpan dulu biar nggak lupa.', 'Tonton sampai habis, ya.'],
+    rng,
+    ''
+  );
+
+  const listScene = pickEntry(asEntries(EDU_LIST_TITLES, '📝'), BANK_SCENES.edukasi.scene2, meta, rng);
+  const tip = pickEntry(asEntries(pack.tips, '⚠️'), BANK_SCENES.edukasi.scene3, meta, rng);
+  const cta = pickFilled([...EDU_CTA_TITLES, ...BANK_CTA.edukasi], meta, rng) || EDU_CTA_TITLES[0];
+
+  return [
+    {
+      role: 'Hook / Masalah',
+      text: hook,
+      subtext: hookSub,
+      emoji: '💡',
+      duration: 3.4,
+      animation: 'pop',
+      stepBadge: meta.stepCount ? `${n} ${noun}` : 'Edukasi',
+      widgetType: 'step_number_card',
+      primaryInput: String(n),
+      secondaryInput: joinItems([noun, shortenAtWord(subject, 48)]),
+    },
+    {
+      role: 'Langkah',
+      text: listScene.text || EDU_LIST_TITLES[0],
+      subtext: listScene.subtext,
+      emoji: '📝',
+      duration: Math.round((2.8 + 0.7 * n) * 10) / 10,
+      animation: 'slide-up',
+      stepBadge: 'Langkahnya',
+      widgetType: 'checklist_card',
+      primaryInput: '',
+      secondaryInput: steps.map((s, i) => `${i + 1}. ${s}`).join(' | '),
+    },
+    {
+      role: 'Tips Penting',
+      text: pick(EDU_TIP_TITLES, rng, EDU_TIP_TITLES[0]),
+      subtext: tip.subtext,
+      emoji: '⚠️',
+      duration: 3.8,
+      animation: 'zoom',
+      stepBadge: 'Tips penting',
+      widgetType: 'step_number_card',
+      primaryInput: '!',
+      secondaryInput: tip.text,
+    },
+    {
+      role: 'CTA Akhir',
+      text: cta,
+      subtext: 'Biar bisa kamu buka lagi kapan saja.',
+      emoji: '📌',
+      duration: 3.2,
+      animation: 'bounce',
+      stepBadge: 'Simpan',
+      widgetType: 'cta_button_card',
+      primaryInput: pick(['Simpan Video', 'Simpan Sekarang'], rng, 'Simpan Video'),
+      secondaryInput: 'Bagikan | Follow',
+    },
+  ];
+}
+
+/* -------------------------------------------------------------------------- */
+/* GENERATOR UTAMA                                                            */
+/* -------------------------------------------------------------------------- */
+
+function normalizeHashtag(tag: string): string {
+  const body = tag.replace(/^#/, '').toLowerCase().replace(/[^a-z0-9_]/g, '');
+  return body.length >= 2 ? `#${body}` : '';
 }
 
 export function generateCaptionAndHashtags(
@@ -634,209 +1641,80 @@ export function generateCaptionAndHashtags(
   scenesOrMeta?: SceneItem[] | ParsedTopicMeta,
   maybeMeta?: ParsedTopicMeta
 ): { caption: string; hashtags: string[] } {
+  const scenes = Array.isArray(scenesOrMeta) ? scenesOrMeta : [];
   const meta =
     maybeMeta ||
-    (scenesOrMeta && !Array.isArray(scenesOrMeta) ? scenesOrMeta : parseTopic(topic));
-
-  const baseTags = [...(BANK_HASHTAGS[category] || BANK_HASHTAGS.promo)];
+    (scenesOrMeta && !Array.isArray(scenesOrMeta) ? scenesOrMeta : parseTopic(topic, undefined, category));
   const lower = (topic || '').toLowerCase();
-  Object.entries(TOPIC_HASHTAG_MAP).forEach(([kw, tags]) => {
-    if (lower.includes(kw)) {
-      tags.forEach((t) => {
-        if (!baseTags.includes(t)) baseTags.push(t);
-      });
-    }
+
+  const tags: string[] = [...(BANK_HASHTAGS[category] || BANK_HASHTAGS.promo)];
+  let caption: string;
+
+  if (category === 'quote') {
+    const quote =
+      scenes.find((s) => s.widgetType === 'quote_card' && s.primaryInput)?.primaryInput ||
+      scenes[0]?.text ||
+      '';
+    caption = `${quote} 🤍 Simpan dan kirim ke orang yang lagi butuh.`;
+    tags.push(...QUOTE_PACKS[meta.quoteMood || detectQuoteMood(lower)].hashtags);
+  } else if (category === 'edukasi') {
+    const title = scenes[0]?.text || sentenceCase(meta.cleanTopic);
+    caption = `${title} 📌 Simpan biar nggak lupa, bagikan ke teman yang butuh.`;
+    tags.push(...findEduPack(lower).hashtags);
+  } else {
+    const product = meta.productName || 'Promo spesial';
+    caption = `🔥 ${product}${meta.priceText ? ` cuma ${meta.priceText}` : ' lagi promo'}${
+      meta.originalPriceText ? ` (normal ${meta.originalPriceText})` : ''
+    }${meta.storeName ? ` di ${meta.storeName}` : ''}. Promo terbatas, yuk order sekarang!`;
+    tags.push(...detectPromoKind(`${lower} ${product.toLowerCase()}`).hashtags);
+    const storeTag = normalizeHashtag(meta.storeName || '');
+    if (storeTag.length > 3 && storeTag.length <= 30) tags.push(storeTag);
+  }
+
+  Object.entries(TOPIC_HASHTAG_MAP).forEach(([kw, list]) => {
+    if (kw && lower.includes(kw)) tags.push(...list);
   });
+  tags.push('#fyp');
 
-  const caption = `${meta.productName} — Solusi cepat tanpa ribet bersama ${meta.storeName}. 🚀 ${baseTags
-    .slice(0, 5)
-    .join(' ')}`;
-
-  return {
-    caption,
-    hashtags: baseTags.slice(0, 8),
-  };
+  const unique = Array.from(new Set(tags.map(normalizeHashtag).filter(Boolean)));
+  return { caption: cleanSpaces(caption), hashtags: unique.slice(0, 8) };
 }
 
-export function generateDynamicMotionScenes(
-  prompt: string,
-  presetId = 'depup-workflow'
-): GeneratedMotionScene[] {
-  const activePreset =
-    trainedVideoPresets.find((p) => p.profile.presetId === presetId || p.id === presetId) ||
-    trainedVideoPresets[0];
-
-  const cleanTopic = prompt.trim() || 'Deploy Aplikasi Web Tanpa Ribet';
-  const slug =
-    cleanTopic
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '')
-      .slice(0, 24) || 'app-project';
-
-  const springFactor = solveSpring(0.5, { stiffness: 220, damping: 14 });
-  void springFactor;
-
-  return [
-    {
-      id: 'scene-step-1',
-      stepBadge: activePreset.profile.stepBadges[0] || '1 Tempel',
-      title: 'Tempel link repo',
-      subtext: 'Repo private pun bisa, cukup tambahkan GitHub Token.',
-      duration: 3.4,
-      paletteId: activePreset.profile.paletteId,
-      widgetType: 'repo_input_card',
-      widgetData: {
-        primaryInput: `github.com/dimas/${slug}`,
-        secondaryBadge: 'Private Repo • Token Ready',
-      },
-      cameraMotion: activePreset.profile.cameraMotion,
-      easing: activePreset.profile.easing,
-    },
-    {
-      id: 'scene-step-2',
-      stepBadge: activePreset.profile.stepBadges[1] || '2 Periksa',
-      title: 'Periksa repo dulu',
-      subtext: 'Tahu platform mana yang paling pas buat app kamu.',
-      duration: 3.4,
-      paletteId: activePreset.profile.paletteId,
-      widgetType: 'repo_scanner_card',
-      widgetData: {
-        primaryInput: `Analisa Otomatis: ${cleanTopic}`,
-        secondaryBadge: 'Next.js 14 • Edge Ready • 99% Match',
-        metrics: [
-          { label: 'Framework', value: 'Next.js App', accent: '#6366f1' },
-          { label: 'Build Speed', value: '1.4s Fast', accent: '#10b981' },
-          { label: 'Auto SSL', value: 'Aktif', accent: '#8b5cf6' },
-        ],
-      },
-      cameraMotion: activePreset.profile.cameraMotion,
-      easing: activePreset.profile.easing,
-    },
-    {
-      id: 'scene-step-3',
-      stepBadge: activePreset.profile.stepBadges[2] || '3 Deploy',
-      title: 'Deploy dan pantau',
-      subtext: 'Progres tampil langsung, tanpa perlu setup rumit.',
-      duration: 3.6,
-      paletteId: activePreset.profile.paletteId,
-      widgetType: 'terminal_build_card',
-      widgetData: {
-        primaryInput: `https://${slug}.depup.id`,
-        terminalLines: [
-          `$ git clone https://github.com/dimas/${slug}.git`,
-          `$ npm install --production && npm run build`,
-          `✓ Container optimized & Edge SSL provisioned`,
-          `🚀 Live at https://${slug}.depup.id (24ms)`,
-        ],
-      },
-      cameraMotion: activePreset.profile.cameraMotion,
-      easing: activePreset.profile.easing,
-    },
-  ];
-}
-
+/**
+ * Buat script video lengkap sesuai kategori.
+ * Setiap pemanggilan tanpa `seed` menghasilkan variasi kalimat yang berbeda.
+ */
 export function generateScript(
   rawTopic: string,
   category: CategoryType = 'promo',
   options?: GenerateOptions
 ): GeneratedScriptResult {
-  const meta = parseTopic(rawTopic, options);
-  const style = suggestStyle(rawTopic, category, options?.forceRandomPalette);
+  const rng = createRng(options?.seed);
+  const meta = parseTopic(rawTopic, options, category);
+  const style = suggestStyle(rawTopic, category, options?.forceRandomPalette, rng);
 
-  const hooks = BANK_HOOK[category] || BANK_HOOK.promo;
-  const availableHooks = options?.excludeHooks?.length
-    ? hooks.filter((h) => !options.excludeHooks!.includes(h))
-    : hooks;
-  const rawHook = availableHooks[0] || hooks[0];
-  const hook = interpolateTemplate(rawHook, meta);
+  const drafts =
+    category === 'quote'
+      ? buildQuoteScenes(meta, rng, options)
+      : category === 'edukasi'
+      ? buildEdukasiScenes(meta, rng, options)
+      : buildPromoScenes(meta, rng, options);
 
-  const sceneBank = BANK_SCENES[category] || BANK_SCENES.promo;
-  const s2 = sceneBank.scene2[0];
-  const s3 = sceneBank.scene3[0];
-  const cta = interpolateTemplate(BANK_CTA[0], meta);
-
-  const slug =
-    meta.productName
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '')
-      .slice(0, 20) || 'app';
-
-  const scenes: SceneItem[] = [
-    {
-      id: 'scene-1',
-      sceneNumber: 1,
-      role: 'Hook / Masalah',
-      text: hook,
-      subtext: 'Repo private pun bisa, cukup tambahkan GitHub Token otomatis.',
-      emoji: '🚀',
-      duration: 3.4,
-      animation: 'pop',
-      imageUrl: options?.userImages?.[0] || CUSTOM_IMAGE_ASSETS[0]?.url,
-      stepBadge: '1 Tempel',
-      widgetType: 'repo_input_card',
-      primaryInput: `github.com/dimas/${slug}`,
-      secondaryInput: 'Private Repo Ready, GitHub Token Active',
-      cameraMotion: 'spring-slide-vertical',
-      paletteId: style.paletteId,
-    },
-    {
-      id: 'scene-2',
-      sceneNumber: 2,
-      role: 'Isi / Solusi',
-      text: interpolateTemplate(s2.text, meta),
-      subtext: interpolateTemplate(s2.subtext, meta),
-      emoji: s2.emoji || '⚡',
-      duration: 3.4,
-      animation: 'slide-up',
-      imageUrl: options?.userImages?.[1] || CUSTOM_IMAGE_ASSETS[1]?.url,
-      stepBadge: '2 Periksa',
-      widgetType: 'repo_scanner_card',
-      primaryInput: `Analisa AI: ${meta.productName.slice(0, 24)}`,
-      secondaryInput: 'Next.js 14 App, Build 1.4s Cepat, 99% Match',
-      cameraMotion: 'spring-slide-vertical',
-      paletteId: style.paletteId,
-    },
-    {
-      id: 'scene-3',
-      sceneNumber: 3,
-      role: 'Bukti / Harga',
-      text: interpolateTemplate(s3.text, meta),
-      subtext: interpolateTemplate(s3.subtext, meta),
-      emoji: s3.emoji || '🔥',
-      duration: 3.5,
-      animation: 'zoom',
-      imageUrl: options?.userImages?.[2] || CUSTOM_IMAGE_ASSETS[2]?.url,
-      stepBadge: '3 Deploy',
-      widgetType: 'terminal_build_card',
-      primaryInput: `https://${slug}.depup.id`,
-      secondaryInput: `$ git clone https://github.com/dimas/${slug}, $ npm install --production, ✓ Live at https://${slug}.depup.id 🚀`,
-      cameraMotion: 'spring-slide-vertical',
-      paletteId: style.paletteId,
-    },
-    {
-      id: 'scene-4',
-      sceneNumber: 4,
-      role: 'CTA Akhir',
-      text: cta,
-      subtext: `Mulai bersama ${meta.storeName} dalam hitungan detik.`,
-      emoji: '✨',
-      duration: 3.2,
-      animation: 'bounce',
-      stepBadge: '4 Live',
-      widgetType: 'bento_metrics_grid',
-      primaryInput: `${meta.productName} • ${meta.priceText}`,
-      secondaryInput: '60 FPS Smooth, Auto-Scale, Siap Pakai',
-      cameraMotion: 'perspective-tilt-3d',
-      paletteId: style.paletteId,
-    },
-  ];
+  const camera = suggestCameraMotion(category);
+  const fallbackImage = CUSTOM_IMAGE_ASSETS.find((a) => a.category === category)?.url;
+  const scenes: SceneItem[] = drafts.map((draft, i) => ({
+    id: `scene-${i + 1}`,
+    sceneNumber: i + 1,
+    ...draft,
+    imageUrl: options?.userImages?.[i] || fallbackImage,
+    cameraMotion: camera,
+    paletteId: style.paletteId,
+  }));
 
   const { caption, hashtags } = generateCaptionAndHashtags(rawTopic, category, scenes, meta);
 
   return {
-    hook,
+    hook: scenes[0]?.text || '',
     scenes,
     caption,
     hashtags,
@@ -847,10 +1725,28 @@ export function generateScript(
   };
 }
 
+/** Kompatibilitas versi lama: kategori ditebak dari prompt. */
+export function generateDynamicMotionScenes(prompt: string, presetId?: string): GeneratedMotionScene[] {
+  void presetId;
+  const result = generateScript(prompt, detectCategory(prompt));
+  return result.scenes.map((s) => ({
+    id: s.id,
+    stepBadge: s.stepBadge || '',
+    title: s.text,
+    subtext: s.subtext,
+    duration: s.duration,
+    paletteId: s.paletteId || result.suggestedStyle.paletteId,
+    widgetType: s.widgetType || 'checklist_card',
+    widgetData: { primaryInput: s.primaryInput, secondaryBadge: s.secondaryInput },
+    cameraMotion: s.cameraMotion || 'spring-slide-vertical',
+    easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+  }));
+}
+
 export function randomizeHookAndStyle(
   currentTopic: string,
   category: CategoryType = 'promo',
-  currentPaletteId = 'depup-lavender',
+  currentPaletteId = 'promo-pop',
   options?: GenerateOptions
 ): {
   newScript: GeneratedScriptResult;
@@ -877,6 +1773,7 @@ export function randomizeHookAndStyle(
     music: randomMusic,
     gradientPreset: randomPalette.id,
   };
+  newScript.scenes = newScript.scenes.map((s) => ({ ...s, paletteId: randomPalette.id }));
 
   return {
     newScript,
