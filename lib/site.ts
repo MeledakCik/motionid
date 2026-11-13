@@ -13,4 +13,4 @@ export const SITE_URL = resolveSiteUrl();
 export const SITE_NAME = 'MotionKu';
 export const SITE_TITLE = 'MotionKu — Generator Video TikTok & Reels Otomatis, Gratis';
 export const SITE_DESCRIPTION =
-  'Ketik topik, jadi video motion graphic untuk TikTok, Reels & Shorts lengkap dengan hook, 4 scene animasi, CTA, caption dan hashtag. 9 template, tanpa API key, gratis.';
+  'Ketik topik, jadi video pendek untuk TikTok, Reels, Shorts, dan status WhatsApp. Naskah, gaya visual, dan animasi disusun otomatis, lalu dirender jadi MP4 1080p langsung di browser. Gratis.';

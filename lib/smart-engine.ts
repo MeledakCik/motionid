@@ -1009,7 +1009,9 @@ const EDU_DEFAULT: EduPack = {
   hashtags: ['#belajarbareng'],
 };
 
-const EDU_NOUNS = 'cara|tips|tip|langkah|trik|kebiasaan|hal|rahasia|kesalahan|fakta|alasan|ide';
+// Sengaja ditulis sebagai regex literal: minifier SWC merusak "\\b" di dalam template literal.
+const EDU_COUNT_RE = /^(\d{1,2})\s+(cara|tips|tip|langkah|trik|kebiasaan|hal|rahasia|kesalahan|fakta|alasan|ide)\b\s*(.*)$/i;
+const EDU_COUNT_START_RE = /^\s*\d{1,2}\s+(cara|tips|tip|langkah|trik|kebiasaan|hal|rahasia|kesalahan|fakta|alasan|ide)\b/;
 const EDU_LIST_TITLES = ['Ini langkah-langkahnya:', 'Caranya begini:', 'Coba urutan ini:'];
 const EDU_TIP_TITLES = ['Tips penting:', 'Yang sering dilupakan:', 'Satu lagi:'];
 const EDU_CTA_TITLES = [
@@ -1168,7 +1170,7 @@ function parseEduTopic(topic: string): {
   subject: string;
 } {
   const t = topic.trim();
-  const m = t.match(new RegExp(`^(\\d{1,2})\\s+(${EDU_NOUNS})\\b\\s*(.*)$`, 'i'));
+  const m = t.match(EDU_COUNT_RE);
   if (m) {
     const asked = Number(m[1]);
     const count = Math.min(6, Math.max(2, asked));
@@ -1292,7 +1294,7 @@ export function detectCategory(topic: string): CategoryType {
     return 'promo';
   }
   if (
-    new RegExp(`^\\s*\\d{1,2}\\s+(${EDU_NOUNS})\\b`).test(lower) ||
+    EDU_COUNT_START_RE.test(lower) ||
     /\b(cara|tips|tutorial|panduan|belajar)\b/.test(lower)
   ) {
     return 'edukasi';
