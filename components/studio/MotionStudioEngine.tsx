@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -36,17 +36,49 @@ import {
 import {
   TrainingRow,
   analyzeCreatorVideoReference,
+  applyTrainingRow,
   forgetTrainingRow,
   loadTrainingIntoEngine,
 } from '@/lib/training';
 import { createClient } from '@/lib/supabase/client';
 import { useEditorStore, type FontFamilyName } from '@/store/useEditorStore';
 import { ensureCanvasFont, resolveCanvasFamily } from '@/components/templates/fonts';
+import {
+  AnimationSpec,
+  ComponentStyleSpec,
+  TEMPLATE_STYLE_VARIANTS,
+  TransitionSpec,
+  componentPackPreviewStyle,
+  creativePackCounts,
+  findAnimationPack,
+  findComponentPack,
+  findIconPack,
+  findTransitionPack,
+  getAnimationPacks,
+  getComponentPacks,
+  getIconPacks,
+  getTransitionPacks,
+  parseAnimationCode,
+  parseComponentCode,
+  parseSvgIcon,
+  parseTransitionCode,
+} from '@/lib/creative-packs';
 
 export type WidgetRigType = StudioWidgetType;
 export type CameraMotionType = EngineCameraMotionType;
 
 const ADMIN_EMAIL = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'kakangkasyaf@gmail.com').toLowerCase();
+
+export interface SceneTransform {
+  /** Geser horizontal, -0.5..0.5 dari lebar kanvas. */
+  x: number;
+  /** Geser vertikal, -0.5..0.5 dari tinggi kanvas. */
+  y: number;
+  scale: number;
+  /** Derajat. */
+  rotation: number;
+  opacity: number;
+}
 
 export interface StudioSceneItem {
   layout?: SceneLayout;
@@ -64,6 +96,20 @@ export interface StudioSceneItem {
   duration: number;
   cameraMotion: CameraMotionType;
   paletteId: string;
+  /** Transformasi bebas ala Figma: posisi, skala, rotasi, transparansi. */
+  transform?: SceneTransform;
+  iconPackId?: string;
+  componentPackId?: string;
+  transitionPackId?: string;
+  animationPackId?: string;
+  /** Override radius kartu untuk scene ini. */
+  radius?: number;
+  /** Kode tampilan komponen dari inspector (gaya Figma). */
+  componentCode?: string;
+  componentStyle?: Partial<ComponentStyleSpec>;
+  /** Simpan hasil parse agar renderer tidak membaca kode setiap frame. */
+  customTransition?: TransitionSpec;
+  customAnimation?: AnimationSpec;
 }
 
 export interface TrainedVideoPresetItem {
@@ -785,6 +831,34 @@ export const CATEGORY_PRESETS: TrainedVideoPresetItem[] = CATEGORY_PRESET_SOURCE
 
 const BUILT_IN_PRESETS: TrainedVideoPresetItem[] = [...CATEGORY_PRESETS, ...INITIAL_TRAINED_VIDEOS];
 
+/**
+ * 300+ template siap pakai: tiap preset dasar diperbanyak dengan variasi palet,
+ * kamera, transisi, latar, dan animasi judul. Semua tetap bisa diedit di studio.
+ */
+const TEMPLATE_LIBRARY: TrainedVideoPresetItem[] = BUILT_IN_PRESETS.flatMap((base, baseIndex) =>
+  TEMPLATE_STYLE_VARIANTS.map((variant, variantIndex) => ({
+    ...base,
+    id: `${base.id}-lib-${baseIndex}-${variantIndex}`,
+    title: `${base.title} · ${variant.name}`,
+    summary: `${base.summary} Varian ${variant.name.toLowerCase()} siap edit.`,
+    cameraMotion: variant.cameraMotion as CameraMotionType,
+    paletteId: variant.paletteId,
+    bpm: Math.max(80, Math.round(base.bpm * variant.bpmScale)),
+    triggerKeywords: base.triggerKeywords,
+    scenesBlueprint: base.scenesBlueprint.map((scene) => ({
+      ...scene,
+      cameraMotion: variant.cameraMotion as CameraMotionType,
+      paletteId: variant.paletteId,
+      transition: variant.transition as SceneTransition,
+      bgStyle: variant.bgStyle as BackgroundStyle,
+      headlineAnim: variant.headlineAnim as HeadlineAnim,
+      layout:
+        scene.layout === 'center-text' ? scene.layout : (variant.layout as SceneLayout),
+      transform: { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 },
+    })),
+  }))
+);
+
 /** Baris ai_training_data (type video_motion/ui_blueprint) → preset yang bisa dipakai semua user. */
 function rowToPreset(row: TrainingRow): TrainedVideoPresetItem | null {
   if (row.type !== 'video_motion' && row.type !== 'ui_blueprint') return null;
@@ -1027,6 +1101,33 @@ const ANIM_LABELS: Record<HeadlineAnim, string> = {
 const VARIANT_LABEL: Record<'A' | 'B' | 'C', string> = { A: 'lengkap', B: 'alternatif', C: 'ringkas' };
 const ENERGY_LABEL: Record<'calm' | 'medium' | 'high', string> = { calm: 'tenang', medium: 'sedang', high: 'tinggi' };
 
+/** Preview SVG aman: hanya path, bukan HTML mentah dari admin. */
+function SafeSvgPreview({
+  paths,
+  className = 'w-6 h-6',
+  fallbackColor = '#7C6CFF',
+}: {
+  paths: Array<{ d: string; fill?: string; stroke?: string; strokeWidth?: number }>;
+  className?: string;
+  fallbackColor?: string;
+}) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      {paths.map((part, index) => (
+        <path
+          key={index}
+          d={part.d}
+          fill={part.fill && part.fill !== 'none' ? part.fill : fallbackColor}
+          stroke={part.stroke && part.stroke !== 'none' ? part.stroke : 'none'}
+          strokeWidth={part.strokeWidth || 0}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ))}
+    </svg>
+  );
+}
+
 function OptionSelect<T extends string>({
   label,
   value,
@@ -1061,6 +1162,23 @@ function sanitizeVisual(sc: Partial<StudioSceneItem>): Partial<StudioSceneItem> 
   if (sc.headlineAnim && (HEADLINE_ANIMS as readonly string[]).includes(sc.headlineAnim)) out.headlineAnim = sc.headlineAnim;
   if (typeof sc.decor === 'string') out.decor = sc.decor.slice(0, 24);
   if (typeof sc.emphasis === 'string') out.emphasis = sc.emphasis.slice(0, 200);
+  if (sc.transform && typeof sc.transform === 'object') {
+    const t = sc.transform as Partial<SceneTransform>;
+    out.transform = {
+      x: Math.max(-0.5, Math.min(0.5, Number(t.x) || 0)),
+      y: Math.max(-0.5, Math.min(0.5, Number(t.y) || 0)),
+      scale: Math.max(0.3, Math.min(2, Number(t.scale) || 1)),
+      rotation: Math.max(-45, Math.min(45, Number(t.rotation) || 0)),
+      opacity: Math.max(0.05, Math.min(1, Number(t.opacity) || 1)),
+    };
+  }
+  if (typeof sc.iconPackId === 'string') out.iconPackId = sc.iconPackId.slice(0, 120);
+  if (typeof sc.componentPackId === 'string') out.componentPackId = sc.componentPackId.slice(0, 120);
+  if (typeof sc.transitionPackId === 'string') out.transitionPackId = sc.transitionPackId.slice(0, 120);
+  if (typeof sc.animationPackId === 'string') out.animationPackId = sc.animationPackId.slice(0, 120);
+  if (typeof sc.radius === 'number') out.radius = Math.max(0, Math.min(64, sc.radius));
+  if (typeof sc.componentCode === 'string') out.componentCode = sc.componentCode.slice(0, 2000);
+  if (sc.componentStyle && typeof sc.componentStyle === 'object') out.componentStyle = sc.componentStyle;
   return out;
 }
 
@@ -1357,6 +1475,54 @@ function drawDecor(
   ctx.restore();
 }
 
+/** Gambar icon pack SVG sebagai badge dekoratif (tanpa script, hanya path). */
+function drawIconPack(
+  ctx: CanvasRenderingContext2D,
+  icon: { paths: Array<{ d: string; fill?: string; stroke?: string; strokeWidth?: number }>; color: string; accent: string },
+  W: number,
+  H: number,
+  t: number,
+  localTime: number,
+  sceneIndex: number,
+  pal: PaletteThemeConfig
+) {
+  if (!icon.paths.length) return;
+  const S = Math.min(W, H);
+  const pop = solveSpring(Math.max(0, localTime - 0.18), { stiffness: 190, damping: 13 });
+  if (pop <= 0.01) return;
+  const [sx, sy] = DECOR_SPOTS[(sceneIndex * 3 + 2) % DECOR_SPOTS.length];
+  const size = S * 0.135;
+  const x = W * sx;
+  const y = H * sy + Math.sin(t * 1.5 + sceneIndex) * S * 0.01;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(Math.sin(t * 0.8 + sceneIndex) * 0.05);
+  ctx.scale(pop, pop);
+  ctx.globalAlpha = 0.94;
+  ctx.fillStyle = pal.isDark ? 'rgba(255,255,255,0.09)' : 'rgba(255,255,255,0.72)';
+  ctx.strokeStyle = `${icon.accent}66`;
+  ctx.lineWidth = Math.max(1, S * 0.002);
+  drawRoundedRect(ctx, -size * 0.62, -size * 0.62, size * 1.24, size * 1.24, size * 0.34);
+  ctx.fill();
+  ctx.stroke();
+  const iconSize = size * 0.68;
+  ctx.translate(-iconSize / 2, -iconSize / 2);
+  ctx.scale(iconSize / 24, iconSize / 24);
+  for (const part of icon.paths) {
+    try {
+      const path = new Path2D(part.d);
+      ctx.fillStyle = part.fill && part.fill !== 'none' ? part.fill : icon.color;
+      ctx.strokeStyle = part.stroke && part.stroke !== 'none' ? part.stroke : icon.accent;
+      ctx.lineWidth = Math.max(1, part.strokeWidth || 0);
+      if (part.fill !== 'none') ctx.fill(path);
+      if (part.stroke && part.stroke !== 'none') ctx.stroke(path);
+    } catch {
+      // Path SVG tidak valid dari input admin: lewati supaya render tetap jalan.
+    }
+  }
+  ctx.restore();
+}
+
 interface WordBox {
   text: string;
   x: number;
@@ -1409,13 +1575,42 @@ function compositeScene(
   localTime: number,
   duration: number,
   isLast: boolean,
-  timeSec: number
+  timeSec: number,
+  custom?: TransitionSpec | null
 ) {
   const enter = smoothStep(0, 0.38, localTime);
   const exit = isLast ? 0 : smoothStep(duration - 0.26, duration, localTime);
   const eo = 1 - Math.pow(1 - enter, 3);
   const ei = exit * exit * exit;
   ctx.save();
+  if (custom) {
+    const moveX = ((1 - eo) - ei) * custom.fromX * 0.01 * W;
+    const moveY = ((1 - eo) - ei) * custom.fromY * 0.01 * H;
+    const scale = 1 + (custom.fromScale - 1) * (1 - eo) - (1 - custom.fromScale) * ei * 0.35;
+    ctx.translate(W / 2 + moveX, H / 2 + moveY);
+    ctx.rotate(((1 - eo) * custom.fromRotate * Math.PI) / 180);
+    ctx.scale(scale, scale);
+    ctx.translate(-W / 2, -H / 2);
+    ctx.globalAlpha = (custom.fade ? enter : 1) * (1 - exit * (custom.fade ? 1 : 0.55));
+    if (custom.wipe) {
+      ctx.beginPath();
+      ctx.rect(0, 0, W * eo, H);
+      ctx.clip();
+    }
+    ctx.drawImage(layer, 0, 0, W, H);
+    ctx.restore();
+    if (custom.flash) {
+      const f = Math.max(0, 1 - smoothStep(0, custom.duration * 0.6, localTime)) * 0.75;
+      if (f > 0) {
+        ctx.save();
+        ctx.globalAlpha = f;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, W, H);
+        ctx.restore();
+      }
+    }
+    return;
+  }
   if (transition === 'fade') {
     ctx.globalAlpha = enter * (1 - exit);
   } else if (transition === 'slide') {
@@ -1941,8 +2136,23 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
   const [isAdmin, setIsAdmin] = useState(initialRole === 'admin');
   const [roleModeState, setRoleMode] = useState<'user' | 'admin'>(initialRole);
   const roleMode: 'user' | 'admin' = isAdmin ? roleModeState : 'user';
-  const [leftTab, setLeftTab] = useState<'prompt' | 'templates' | 'widgets' | 'layers'>('prompt');
-  const [adminTab, setAdminTab] = useState<'video' | 'blueprint' | 'physics' | 'rules'>('video');
+  const [leftTab, setLeftTab] = useState<'prompt' | 'templates' | 'packs' | 'widgets' | 'layers'>('prompt');
+  const [adminTab, setAdminTab] = useState<'video' | 'blueprint' | 'physics' | 'rules' | 'code'>('video');
+  const [mobilePanel, setMobilePanel] = useState<'canvas' | 'library' | 'inspector'>('canvas');
+  const [showWelcome, setShowWelcome] = useState(true);
+  const [templateSearch, setTemplateSearch] = useState('');
+  const [templateCategory, setTemplateCategory] = useState<'all' | 'saas' | CategoryType>('all');
+  const [templateLimit, setTemplateLimit] = useState(36);
+  const [packKind, setPackKind] = useState<'icon' | 'component' | 'transition' | 'animation'>('icon');
+  const [packSearch, setPackSearch] = useState('');
+  const [packLimit, setPackLimit] = useState(36);
+  const [adminCodeKind, setAdminCodeKind] = useState<'icon' | 'component' | 'transition' | 'animation'>('icon');
+  const [adminCodeName, setAdminCodeName] = useState('');
+  const [adminCodeTags, setAdminCodeTags] = useState('');
+  const [adminCodeCategory, setAdminCodeCategory] = useState<'all' | CategoryType>('all');
+  const [adminCodeText, setAdminCodeText] = useState(
+    '<svg viewBox="0 0 24 24"><path d="M12 2l2.9 6.1 6.6.9-4.8 4.7 1.2 6.6L12 17.7 6.1 20.8l1.2-6.6L2.5 9.5l6.6-.9z" fill="#7C6CFF"/></svg>'
+  );
 
   const [projectTitle, setProjectTitle] = useState(storeTopic || 'Proyek tanpa judul');
   const [aspectRatio, setAspectRatio] = useState<'9:16' | '1:1' | '16:9'>('9:16');
@@ -1957,7 +2167,7 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
   const [palettes, setPalettes] = useState<Record<string, PaletteThemeConfig>>(
     DEFAULT_PALETTE_THEMES
   );
-  const [trainedVideos, setTrainedVideos] = useState<TrainedVideoPresetItem[]>(BUILT_IN_PRESETS);
+  const [trainedVideos, setTrainedVideos] = useState<TrainedVideoPresetItem[]>(TEMPLATE_LIBRARY);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(
     (CATEGORY_PRESETS.find((p) => p.category === storeCategory) || CATEGORY_PRESETS[0]).id
   );
@@ -2086,7 +2296,7 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
             .map(rowToPreset)
             .filter((p): p is TrainedVideoPresetItem => p !== null);
           if (fromDb.length) {
-            setTrainedVideos([...CATEGORY_PRESETS, ...fromDb, ...INITIAL_TRAINED_VIDEOS]);
+            setTrainedVideos([...fromDb, ...TEMPLATE_LIBRARY]);
           }
         }
       } catch {
@@ -2254,7 +2464,17 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
 
       const W = canvas.width / ratio;
       const H = canvas.height / ratio;
-      const pal = resolvePalette(palettes, scene.paletteId);
+      let pal = resolvePalette(palettes, scene.paletteId);
+      const componentPack = findComponentPack(scene.componentPackId);
+      const sceneStyle: Partial<ComponentStyleSpec> = {
+        ...(componentPack?.style || {}),
+        ...(scene.componentStyle ||
+          (scene.componentCode ? parseComponentCode(scene.componentCode) : {})),
+      };
+      if (sceneStyle.background) pal = { ...pal, cardBg: sceneStyle.background };
+      if (sceneStyle.foreground) pal = { ...pal, cardText: sceneStyle.foreground };
+      if (sceneStyle.border) pal = { ...pal, cardBorder: sceneStyle.border };
+      if (sceneStyle.accent) pal = { ...pal, accent: sceneStyle.accent, accentSoft: `${sceneStyle.accent}22` };
       const wType = normalizeWidgetType(scene.widgetType);
       const S = Math.min(W, H);
       const stiffness = 140 + springTension * 14;
@@ -2312,6 +2532,10 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
         drawBackgroundStyle(ctx, scene.bgStyle, W, H, timeSec, pal);
       }
       drawDecor(ctx, scene.decor, W, H, timeSec, localTime, index);
+      if (scene.iconPackId) {
+        const iconPack = findIconPack(scene.iconPackId);
+        if (iconPack) drawIconPack(ctx, iconPack, W, H, timeSec, localTime, index, pal);
+      }
 
       // Konten scene digambar di layer terpisah supaya transisi bisa menggerakkan semuanya sekaligus
       const layer = getLayerCanvas(canvas.width, canvas.height);
@@ -2355,6 +2579,17 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
       ctx.scale(camZoom, camZoom);
       ctx.rotate(camRotZ);
       ctx.translate(-W / 2, -H / 2);
+
+      // Transformasi bebas ala Figma (drag di kanvas atau slider inspector).
+      const tf = scene.transform;
+      if (tf) {
+        ctx.globalAlpha *= Math.max(0.05, Math.min(1, tf.opacity ?? 1));
+        ctx.translate(W / 2 + (tf.x || 0) * W, H / 2 + (tf.y || 0) * H);
+        ctx.rotate(((tf.rotation || 0) * Math.PI) / 180);
+        const tfScale = Math.max(0.3, Math.min(2, tf.scale || 1));
+        ctx.scale(tfScale, tfScale);
+        ctx.translate(-W / 2, -H / 2);
+      }
 
       const U = Math.min(W, H * 0.75);
       const landscape = W > H * 1.15;
@@ -2452,6 +2687,7 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
 
       // Judul dengan animasi sesuai gaya; kata kunci dari prompt diberi warna aksen
       const anim: HeadlineAnim = scene.headlineAnim || 'spring-words';
+      const customAnim = scene.customAnimation || findAnimationPack(scene.animationPackId)?.spec || null;
       const emphasisKeys = new Set(
         String(scene.emphasis || '')
           .split('|')
@@ -2500,9 +2736,23 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
           const idx = wordIdx++;
           let alpha = 1;
           let dy = lineDy;
+          let dx = 0;
+          let rot = 0;
           let scale = 1;
           let text = wd.text;
-          if (anim === 'spring-words' || anim === 'marker') {
+          if (customAnim) {
+            const delay = 0.06 + idx * customAnim.stagger;
+            const sp = solveSpring(Math.max(0, localTime - delay), {
+              stiffness: stiffness * 1.05,
+              damping: damping * 0.92,
+            });
+            const appear = smoothStep(0, Math.max(0.14, customAnim.duration * 0.7), localTime - delay);
+            alpha = customAnim.fade ? appear : 1;
+            dx = (1 - sp) * customAnim.fromX * titleFontSize * 0.02;
+            dy = (1 - sp) * customAnim.fromY * titleFontSize * 0.02;
+            scale = 1 + (customAnim.fromScale - 1) * (1 - sp);
+            rot = ((1 - sp) * customAnim.fromRotate * Math.PI) / 180;
+          } else if (anim === 'spring-words' || anim === 'marker') {
             const delay = 0.08 + idx * 0.065;
             const sp = solveSpring(Math.max(0, localTime - delay), { stiffness, damping });
             alpha = smoothStep(0, 0.22, localTime - delay);
@@ -2517,7 +2767,8 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
           const kinetic = wType === 'kinetic_showcase_card' && idx === activeWordIdx;
           ctx.save();
           ctx.globalAlpha = alpha * baseAlpha;
-          ctx.translate(lineX + wd.x + wd.w / 2, lineY + titleFontSize / 2 + dy);
+          ctx.translate(lineX + wd.x + wd.w / 2 + dx, lineY + titleFontSize / 2 + dy);
+          if (rot) ctx.rotate(rot);
           ctx.scale(scale, scale);
           if (kinetic || (emph && anim === 'marker')) {
             const grow = kinetic ? 1 : smoothStep(0.25 + idx * 0.065, 0.55 + idx * 0.065, localTime);
@@ -2532,7 +2783,7 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
           }
           ctx.fillText(text, -wd.w / 2, -titleFontSize / 2);
           ctx.restore();
-          if (anim === 'typewriter') {
+          if (anim === 'typewriter' && !customAnim) {
             caret = { x: lineX + wd.x + ctx.measureText(text).width, y: lineY };
           }
         });
@@ -2562,7 +2813,7 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
       // Kartu utama
       const cardSpring = solveSpring(Math.max(0, localTime - 0.14), { stiffness, damping });
       const cardY = cardY0 + (1 - cardSpring) * (layout === 'card-first' ? -40 : 68);
-      const radius = Number(cardRadius) || 24;
+      const radius = Number(scene.radius) || componentPack?.style.radius || Number(cardRadius) || 24;
 
       if (showParticles && cardH > 0) {
         ctx.save();
@@ -3345,7 +3596,8 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
         localTime,
         duration,
         index === scenes.length - 1,
-        timeSec
+        timeSec,
+        scene.customTransition || findTransitionPack(scene.transitionPackId)?.spec || null
       );
 
       const footerY = H - H * 0.058;
@@ -3430,6 +3682,84 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
     setScenes((prev) =>
       prev.map((sc, idx) => (idx === activeSceneIndex ? { ...sc, ...patch } : sc))
     );
+  };
+
+  const sceneTransform: SceneTransform = {
+    x: activeScene?.transform?.x ?? 0,
+    y: activeScene?.transform?.y ?? 0,
+    scale: activeScene?.transform?.scale ?? 1,
+    rotation: activeScene?.transform?.rotation ?? 0,
+    opacity: activeScene?.transform?.opacity ?? 1,
+  };
+
+  const setSceneTransform = (patch: Partial<SceneTransform>) => {
+    updateActiveScene({ transform: { ...sceneTransform, ...patch } });
+  };
+
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    width: number;
+    height: number;
+    index: number;
+    base: SceneTransform;
+  } | null>(null);
+  const [dragging, setDragging] = useState(false);
+
+  const handleCanvasPointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      width: Math.max(1, rect.width),
+      height: Math.max(1, rect.height),
+      index: activeSceneIndex,
+      base: sceneTransform,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDragging(true);
+  };
+
+  const handleCanvasPointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    const dx = (event.clientX - drag.startX) / drag.width;
+    const dy = (event.clientY - drag.startY) / drag.height;
+    const nextX = Math.max(-0.5, Math.min(0.5, drag.base.x + dx));
+    const nextY = Math.max(-0.5, Math.min(0.5, drag.base.y + dy));
+    setScenes((prev) =>
+      prev.map((scene, idx) =>
+        idx === drag.index ? { ...scene, transform: { ...drag.base, x: nextX, y: nextY } } : scene
+      )
+    );
+  };
+
+  const endCanvasPointer = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (dragRef.current && event.currentTarget.hasPointerCapture(dragRef.current.pointerId)) {
+      event.currentTarget.releasePointerCapture(dragRef.current.pointerId);
+    }
+    dragRef.current = null;
+    setDragging(false);
+  };
+
+  const applyComponentCodeToScene = (code: string) => {
+    const style = parseComponentCode(code);
+    updateActiveScene({
+      componentCode: code,
+      componentStyle: { ...(activeScene?.componentStyle || {}), ...style },
+    });
+  };
+
+  const applyTemplate = (vid: TrainedVideoPresetItem) => {
+    setSelectedTemplateId(vid.id);
+    setScenes(JSON.parse(JSON.stringify(vid.scenesBlueprint)));
+    if (vid.category !== 'saas') setStudioCategory(vid.category);
+    setFontName(suggestedFontFor(vid.category));
+    setActiveSceneIndex(0);
+    seekTo(0);
+    showToast(`Template "${vid.title}" diterapkan. Semua teks & tampilan bisa diedit.`);
   };
 
   const handleGenerateFromPrompt = () => {
@@ -3810,6 +4140,53 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
     showToast(`Palet kustom "${newPalName}" ditambahkan ke Studio!`);
   };
 
+  const handleAdminSaveCreativeCode = async () => {
+    if (!isAdmin) {
+      showToast('Hanya admin yang bisa menyimpan pack.');
+      return;
+    }
+    if (!adminCodeName.trim()) {
+      showToast('Beri nama pack-nya dulu.');
+      return;
+    }
+    if (!adminCodeText.trim()) {
+      showToast('Tempel kode / SVG-nya dulu.');
+      return;
+    }
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('ai_training_data')
+        .insert([
+          {
+            type: `${adminCodeKind}_pack`,
+            category: adminCodeCategory,
+            content_text: adminCodeName.trim(),
+            subtext: adminCodeTags.trim() || 'admin, kustom',
+            metadata_json: {
+              kind: adminCodeKind,
+              code: adminCodeText,
+              ...(adminCodeKind === 'icon' ? { svg: adminCodeText } : {}),
+            },
+          },
+        ])
+        .select('*')
+        .single();
+      if (error || !data) {
+        showToast(`Pack gagal disimpan: ${error?.message || 'database tidak mengembalikan data'}`);
+        return;
+      }
+      const row = data as TrainingRow;
+      applyTrainingRow(row);
+      setSupabaseRows((prev) => [row, ...prev]);
+      setAdminCodeName('');
+      setAdminCodeTags('');
+      showToast(`Pack "${row.content_text}" tersimpan dan langsung tersedia untuk user.`);
+    } catch (err) {
+      showToast(`Pack gagal disimpan: ${err instanceof Error ? err.message : 'koneksi bermasalah'}`);
+    }
+  };
+
   const handleAdminSaveRule = async () => {
     if (!isAdmin) {
       showToast('Hanya admin yang bisa menyimpan aturan.');
@@ -3944,8 +4321,55 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
 
   const widgetFields = WIDGET_FIELDS[normalizeWidgetType(activeScene?.widgetType)];
 
+  const filteredTemplates = useMemo(() => {
+    const query = templateSearch.trim().toLowerCase();
+    return trainedVideos.filter((vid) => {
+      if (templateCategory !== 'all' && vid.category !== templateCategory) return false;
+      if (!query) return true;
+      return (
+        vid.title.toLowerCase().includes(query) ||
+        vid.summary.toLowerCase().includes(query) ||
+        vid.triggerKeywords.toLowerCase().includes(query) ||
+        CATEGORY_LABEL[vid.category].toLowerCase().includes(query)
+      );
+    });
+  }, [trainedVideos, templateSearch, templateCategory]);
+
+  const visibleTemplates = filteredTemplates.slice(0, templateLimit);
+
+  const packCounts = creativePackCounts();
+  const packSource = useMemo(() => {
+    if (packKind === 'icon') return getIconPacks();
+    if (packKind === 'component') return getComponentPacks();
+    if (packKind === 'transition') return getTransitionPacks();
+    return getAnimationPacks();
+  }, [packKind, supabaseRows]);
+  const filteredPacks = useMemo(() => {
+    const query = packSearch.trim().toLowerCase();
+    if (!query) return packSource;
+    return packSource.filter(
+      (pack) =>
+        pack.name.toLowerCase().includes(query) ||
+        pack.tags.join(' ').toLowerCase().includes(query) ||
+        pack.author.includes(query)
+    );
+  }, [packSource, packSearch]);
+  const visiblePacks = filteredPacks.slice(0, packLimit);
+  const activeIconPack = findIconPack(activeScene?.iconPackId);
+  const activeComponentPack = findComponentPack(activeScene?.componentPackId);
+  const activeTransitionPack = findTransitionPack(activeScene?.transitionPackId);
+  const activeAnimationPack = findAnimationPack(activeScene?.animationPackId);
+  const adminCodePreviewPaths = useMemo(
+    () => (adminCodeKind === 'icon' ? parseSvgIcon(adminCodeText) : []),
+    [adminCodeKind, adminCodeText]
+  );
+  const adminCodePreviewStyle = useMemo(
+    () => (adminCodeKind === 'component' ? parseComponentCode(adminCodeText) : {}),
+    [adminCodeKind, adminCodeText]
+  );
+
   return (
-    <div className="min-h-screen flex flex-col bg-[#090a0f] text-slate-100 select-none font-sans">
+    <div className="min-h-screen flex flex-col bg-[#090a0f] text-slate-100 select-none font-sans pb-14 lg:pb-0 mk-studio">
       {/* TOP BAR (IDENTICAL TO IMAGE_892545.JPG) */}
       <header className="border-b border-[#222636] bg-[#10121a] px-3 py-2 flex flex-wrap items-center justify-between gap-2 z-30">
         <div className="flex items-center gap-2.5">
@@ -4101,14 +4525,15 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
       {/* MAIN 3-COLUMN STUDIO WORKSPACE (SHARED BY USER & ADMIN) */}
       <main className="flex-1 flex flex-col lg:flex-row overflow-hidden">
         {/* LEFT SIDEBAR: USER TABS OR ADMIN UNRESTRICTED TRAINING TABS */}
-        <aside className="w-full lg:w-80 border-b lg:border-b-0 lg:border-r border-[#222636] bg-[#11131a] flex flex-col shrink-0">
+        <aside className={`${mobilePanel === 'library' ? 'flex' : 'hidden'} lg:flex w-full lg:w-80 border-b lg:border-b-0 lg:border-r border-[#222636] bg-[#11131a] flex-col shrink-0`}>
           {roleMode === 'user' ? (
             <>
-              <div className="grid grid-cols-4 border-b border-[#222636] bg-[#0c0e14] p-1 gap-1 text-[11px] font-semibold">
+              <div className="grid grid-cols-5 border-b border-[#222636] bg-[#0c0e14] p-1 gap-1 text-[10px] font-semibold">
                 {(
                   [
-                    ['prompt', 'Generator'],
+                    ['prompt', 'Mulai'],
                     ['templates', 'Template'],
+                    ['packs', 'Pack'],
                     ['widgets', 'Komponen'],
                     ['layers', 'Layer'],
                   ] as const
@@ -4116,10 +4541,11 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
                   <button
                     key={key}
                     type="button"
+                    title={label}
                     onClick={() => setLeftTab(key)}
                     className={`py-2 rounded-lg ${
                       leftTab === key
-                        ? 'bg-[#1b1f2e] text-indigo-400 border border-indigo-500/30'
+                        ? 'bg-[#1b1f2e] text-[#C8F169] border border-[#C8F169]/30'
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
@@ -4130,6 +4556,48 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
 
               {leftTab === 'prompt' && (
                 <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                  {showWelcome && (
+                    <div className="rounded-2xl border border-[#C8F169]/25 bg-gradient-to-br from-[#7C6CFF]/15 via-[#171a24] to-[#C8F169]/10 p-3 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="text-[11px] font-bold text-[#C8F169]">Baru di MotionKu?</div>
+                          <p className="text-[10px] text-slate-300 leading-relaxed mt-0.5">
+                            Cukup 3 langkah: tulis ide, pilih template, lalu edit di kanvas.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          aria-label="Tutup panduan"
+                          onClick={() => setShowWelcome(false)}
+                          className="text-slate-400 hover:text-white text-xs"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      <ol className="grid grid-cols-3 gap-1.5 text-[10px] text-slate-300">
+                        <li className="rounded-lg bg-black/20 px-2 py-1.5"><b className="text-white">1.</b> Tulis ide</li>
+                        <li className="rounded-lg bg-black/20 px-2 py-1.5"><b className="text-white">2.</b> Pilih template</li>
+                        <li className="rounded-lg bg-black/20 px-2 py-1.5"><b className="text-white">3.</b> Edit & render</li>
+                      </ol>
+                      <div className="flex gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setLeftTab('templates')}
+                          className="flex-1 py-1.5 rounded-lg bg-[#C8F169] text-[#0e0a24] font-bold text-[10px]"
+                        >
+                          Lihat {trainedVideos.length}+ template
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLeftTab('packs')}
+                          className="flex-1 py-1.5 rounded-lg bg-white/10 border border-white/15 text-white font-semibold text-[10px]"
+                        >
+                          Buka pack
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="space-y-1.5">
                     <div className="text-[11px] font-semibold text-slate-300">Kategori video</div>
                     <div className="grid grid-cols-3 gap-1.5">
@@ -4170,6 +4638,25 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
                       {CATEGORY_HINTS[studioCategory].hint} Tambahkan suasana, warna, atau platform (mis. &quot;aesthetic
                       hangat&quot;, &quot;merah tegas&quot;, &quot;buat story WA&quot;) supaya gayanya ikut menyesuaikan.
                     </p>
+                    <div className="flex flex-wrap gap-1">
+                      {[
+                        { label: '☕ Promo kopi', text: 'promo kopi susu gula aren dari 25rb jadi 18rb, hangat', cat: 'promo' as CategoryType },
+                        { label: '🌙 Quote malam', text: 'kata-kata buat yang lagi capek kerja', cat: 'quote' as CategoryType },
+                        { label: '💡 Tips cepat', text: '3 cara mengatur keuangan di usia 20an', cat: 'edukasi' as CategoryType },
+                      ].map((sample) => (
+                        <button
+                          key={sample.label}
+                          type="button"
+                          onClick={() => {
+                            setStudioCategory(sample.cat);
+                            setSmartPrompt(sample.text);
+                          }}
+                          className="px-2 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] text-slate-300 hover:text-white hover:border-[#7C6CFF]/60"
+                        >
+                          {sample.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   {studioCategory === 'promo' && (
@@ -4247,36 +4734,258 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
 
               {leftTab === 'templates' && (
                 <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
-                  {trainedVideos.map((vid) => (
-                    <div
-                      key={vid.id}
-                      onClick={() => {
-                        setSelectedTemplateId(vid.id);
-                        setScenes(JSON.parse(JSON.stringify(vid.scenesBlueprint)));
-                        if (vid.category !== 'saas') setStudioCategory(vid.category);
-                        setFontName(suggestedFontFor(vid.category));
-                        setActiveSceneIndex(0);
-                        seekTo(0);
-                        showToast(`Template "${vid.title}" diterapkan.`);
+                  <div className="space-y-1.5">
+                    <label htmlFor="template-search" className="block text-[10px] font-semibold text-slate-400 uppercase">
+                      Cari template
+                    </label>
+                    <input
+                      id="template-search"
+                      value={templateSearch}
+                      onChange={(e) => {
+                        setTemplateSearch(e.target.value);
+                        setTemplateLimit(36);
                       }}
-                      className={`p-3 rounded-xl border cursor-pointer transition ${
-                        selectedTemplateId === vid.id
-                          ? 'bg-[#1c2033] border-indigo-500'
-                          : 'bg-[#171a24] border-[#262b3d] hover:border-[#3a425e]'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between text-[10px] mb-1">
-                        <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-semibold">
-                          {CATEGORY_LABEL[vid.category]}
-                        </span>
-                        <span className="text-emerald-400 font-mono">
-                          {vid.scenesBlueprint.length} scene
-                        </span>
-                      </div>
-                      <div className="text-xs font-bold text-white">{vid.title}</div>
-                      <p className="text-[11px] text-slate-400 mt-1">{vid.summary}</p>
+                      placeholder="promo kopi, quote, edukasi…"
+                      className={INPUT_CLS}
+                    />
+                    <div className="flex gap-1 overflow-x-auto pb-1">
+                      {(
+                        [
+                          ['all', 'Semua'],
+                          ['promo', 'Promo'],
+                          ['quote', 'Quote'],
+                          ['edukasi', 'Edukasi'],
+                          ['saas', 'Demo'],
+                        ] as const
+                      ).map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => {
+                            setTemplateCategory(value);
+                            setTemplateLimit(36);
+                          }}
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-semibold whitespace-nowrap border ${
+                            templateCategory === value
+                              ? 'bg-[#C8F169] text-[#0e0a24] border-[#C8F169]'
+                              : 'bg-[#181b26] text-slate-300 border-[#2a2f42]'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
                     </div>
-                  ))}
+                    <div className="flex items-center justify-between text-[10px] text-slate-400">
+                      <span>{filteredTemplates.length} template cocok</span>
+                      <span className="text-[#C8F169] font-semibold">{trainedVideos.length}+ siap pakai</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {visibleTemplates.map((vid) => {
+                      const pal = palettes[vid.paletteId];
+                      return (
+                        <button
+                          key={vid.id}
+                          type="button"
+                          onClick={() => applyTemplate(vid)}
+                          className={`text-left rounded-xl border overflow-hidden transition ${
+                            selectedTemplateId === vid.id
+                              ? 'border-[#C8F169] ring-1 ring-[#C8F169]/40'
+                              : 'border-[#262b3d] hover:border-[#7C6CFF]/70'
+                          }`}
+                        >
+                          <div
+                            className="h-14 relative"
+                            style={{
+                              background: `linear-gradient(135deg, ${pal?.bgStart || '#171a24'}, ${pal?.bgMid || '#1c2033'} 55%, ${pal?.bgEnd || '#0e0a24'})`,
+                            }}
+                          >
+                            <span
+                              className="absolute left-1.5 top-1.5 px-1.5 py-0.5 rounded text-[8px] font-bold"
+                              style={{ background: pal?.pillBg || '#fff', color: pal?.pillText || '#111' }}
+                            >
+                              {CATEGORY_LABEL[vid.category]}
+                            </span>
+                            <span
+                              className="absolute bottom-1.5 left-1.5 right-1.5 h-1.5 rounded-full"
+                              style={{ background: pal?.accent || '#C8F169' }}
+                            />
+                          </div>
+                          <div className="p-1.5 bg-[#171a24] space-y-0.5">
+                            <div className="text-[10px] font-bold text-white line-clamp-2 leading-tight">{vid.title}</div>
+                            <div className="text-[9px] text-slate-500">
+                              {vid.scenesBlueprint.length} scene · {vid.bpm} BPM
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {visibleTemplates.length < filteredTemplates.length && (
+                    <button
+                      type="button"
+                      onClick={() => setTemplateLimit((n) => n + 36)}
+                      className="w-full py-2 rounded-xl bg-[#7C6CFF]/15 border border-[#7C6CFF]/40 text-[11px] font-bold text-[#c9c1ff]"
+                    >
+                      Muat 36 template lagi
+                    </button>
+                  )}
+                  {!filteredTemplates.length && (
+                    <div className="text-center text-[11px] text-slate-500 py-8">
+                      Tidak ada template yang cocok. Coba kata kunci lain.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {leftTab === 'packs' && (
+                <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+                  <div className="rounded-xl border border-[#282c3e] bg-[#0d1017] p-2">
+                    <div className="text-[10px] font-bold text-[#C8F169]">Creative Packs</div>
+                    <p className="text-[10px] text-slate-400 leading-relaxed">
+                      Tempel ikon, gaya kartu, transisi, atau animasi ke scene yang sedang aktif.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {(
+                      [
+                        ['icon', 'Ikon', packCounts.icon],
+                        ['component', 'Komponen', packCounts.component],
+                        ['transition', 'Transisi', packCounts.transition],
+                        ['animation', 'Animasi', packCounts.animation],
+                      ] as const
+                    ).map(([kind, label, count]) => (
+                      <button
+                        key={kind}
+                        type="button"
+                        onClick={() => {
+                          setPackKind(kind);
+                          setPackLimit(36);
+                        }}
+                        className={`p-2 rounded-xl border text-left ${
+                          packKind === kind
+                            ? 'bg-[#7C6CFF]/20 border-[#7C6CFF] text-white'
+                            : 'bg-[#181b26] border-[#2a2f42] text-slate-300'
+                        }`}
+                      >
+                        <div className="text-[10px] font-bold">{label}</div>
+                        <div className="text-[9px] text-[#C8F169]">{count}+ pack</div>
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    value={packSearch}
+                    onChange={(e) => {
+                      setPackSearch(e.target.value);
+                      setPackLimit(36);
+                    }}
+                    placeholder={`Cari ${packKind === 'icon' ? 'ikon' : packKind === 'component' ? 'gaya kartu' : packKind}…`}
+                    className={INPUT_CLS}
+                  />
+                  <div className="flex items-center justify-between text-[10px] text-slate-400">
+                    <span>{filteredPacks.length} pack</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateActiveScene({
+                          iconPackId: undefined,
+                          componentPackId: undefined,
+                          transitionPackId: undefined,
+                          animationPackId: undefined,
+                          componentCode: undefined,
+                          componentStyle: undefined,
+                          customTransition: undefined,
+                          customAnimation: undefined,
+                          radius: undefined,
+                        })
+                      }
+                      className="text-rose-300 hover:text-rose-200"
+                    >
+                      Reset pack scene
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {visiblePacks.map((pack) => {
+                      const isActive =
+                        (pack.kind === 'icon' && activeScene?.iconPackId === pack.id) ||
+                        (pack.kind === 'component' && activeScene?.componentPackId === pack.id) ||
+                        (pack.kind === 'transition' && activeScene?.transitionPackId === pack.id) ||
+                        (pack.kind === 'animation' && activeScene?.animationPackId === pack.id);
+                      return (
+                        <button
+                          key={pack.id}
+                          type="button"
+                          onClick={() => {
+                            if (pack.kind === 'icon') {
+                              updateActiveScene({ iconPackId: pack.id });
+                              showToast(`Ikon "${pack.name}" dipasang.`);
+                            } else if (pack.kind === 'component') {
+                              updateActiveScene({ componentPackId: pack.id, radius: pack.style.radius });
+                              showToast(`Komponen "${pack.name}" dipasang.`);
+                            } else if (pack.kind === 'transition') {
+                              updateActiveScene({ transitionPackId: pack.id, customTransition: pack.spec });
+                              showToast(`Transisi "${pack.name}" dipasang.`);
+                            } else {
+                              updateActiveScene({ animationPackId: pack.id, customAnimation: pack.spec });
+                              showToast(`Animasi "${pack.name}" dipasang.`);
+                            }
+                          }}
+                          className={`rounded-xl border overflow-hidden text-left ${
+                            isActive
+                              ? 'border-[#C8F169] ring-1 ring-[#C8F169]/40'
+                              : 'border-[#262b3d] hover:border-[#7C6CFF]/70'
+                          }`}
+                        >
+                          <div className="h-12 flex items-center justify-center bg-[#0d1017] relative overflow-hidden">
+                            {pack.kind === 'icon' && (
+                              <SafeSvgPreview paths={pack.paths} className="w-7 h-7" fallbackColor={pack.color} />
+                            )}
+                            {pack.kind === 'component' && (
+                              <div className="w-14 h-7 rounded-md" style={componentPackPreviewStyle(pack)} />
+                            )}
+                            {(pack.kind === 'transition' || pack.kind === 'animation') && (
+                              <div
+                                className="w-8 h-8 rounded-lg"
+                                style={{
+                                  background: 'linear-gradient(135deg, #7C6CFF, #C8F169)',
+                                  animation: 'mk-pack-demo 1.3s ease-in-out infinite',
+                                  animationDirection:
+                                    pack.spec.duration > 0.6 ? 'alternate' : 'alternate-reverse',
+                                }}
+                              />
+                            )}
+                            {pack.author === 'admin' && (
+                              <span className="absolute right-1 top-1 px-1 rounded bg-[#C8F169] text-[#0e0a24] text-[8px] font-bold">
+                                adm
+                              </span>
+                            )}
+                          </div>
+                          <div className="p-1.5 bg-[#171a24]">
+                            <div className="text-[10px] font-bold text-white line-clamp-2 leading-tight">{pack.name}</div>
+                            <div className="text-[8px] text-slate-500 truncate">{pack.tags.slice(0, 3).join(' · ')}</div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {visiblePacks.length < filteredPacks.length && (
+                    <button
+                      type="button"
+                      onClick={() => setPackLimit((n) => n + 36)}
+                      className="w-full py-2 rounded-xl bg-[#7C6CFF]/15 border border-[#7C6CFF]/40 text-[11px] font-bold text-[#c9c1ff]"
+                    >
+                      Muat 36 pack lagi
+                    </button>
+                  )}
+                  <div className="rounded-xl border border-[#282c3e] bg-[#0d1017] p-2 space-y-1 text-[10px] text-slate-400">
+                    <div className="font-semibold text-slate-200">Terpasang di scene ini</div>
+                    <div>Ikon: {activeIconPack?.name || '—'}</div>
+                    <div>Komponen: {activeComponentPack?.name || '—'}</div>
+                    <div>Transisi: {activeTransitionPack?.name || activeScene?.transition || '—'}</div>
+                    <div>Animasi: {activeAnimationPack?.name || activeScene?.headlineAnim || '—'}</div>
+                  </div>
                 </div>
               )}
 
@@ -4328,13 +5037,14 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
           ) : (
             /* ADMIN MODE LEFT SIDEBAR: 4 UNRESTRICTED TRAINING TABS */
             <>
-              <div className="grid grid-cols-4 border-b border-[#222636] bg-[#0c0e14] p-1 gap-1 text-[10px] font-bold">
+              <div className="grid grid-cols-5 border-b border-[#222636] bg-[#0c0e14] p-1 gap-1 text-[10px] font-bold">
                 {(
                   [
-                    ['video', '🎬 Referensi'],
+                    ['video', '🎬 Ref'],
                     ['blueprint', '🧬 Scene'],
                     ['physics', '🎨 Palet'],
                     ['rules', '📚 Rules'],
+                    ['code', '🧩 Kode'],
                   ] as const
                 ).map(([key, label]) => (
                   <button
@@ -4740,12 +5450,131 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
                   </button>
                 </div>
               )}
+
+              {adminTab === 'code' && (
+                <div className="flex-1 overflow-y-auto p-3 space-y-2.5 text-xs">
+                  <div className="font-bold text-white">🧩 Training kode pack</div>
+                  <p className="text-[10px] text-slate-400 leading-relaxed">
+                    Tempel SVG ikon, kode komponen, kode transisi, atau kode animasi. Langsung tersedia untuk semua user
+                    setelah disimpan.
+                  </p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {(
+                      [
+                        ['icon', 'SVG ikon'],
+                        ['component', 'Kode komponen'],
+                        ['transition', 'Kode transisi'],
+                        ['animation', 'Kode animasi'],
+                      ] as const
+                    ).map(([kind, label]) => (
+                      <button
+                        key={kind}
+                        type="button"
+                        onClick={() => {
+                          setAdminCodeKind(kind);
+                          setAdminCodeText(
+                            kind === 'icon'
+                              ? '<svg viewBox="0 0 24 24"><path d="M12 2l2.9 6.1 6.6.9-4.8 4.7 1.2 6.6L12 17.7 6.1 20.8l1.2-6.6L2.5 9.5l6.6-.9z" fill="#7C6CFF"/></svg>'
+                              : kind === 'component'
+                              ? 'background: rgba(255,255,255,0.96);\ncolor: #171225;\nborder: #7C6CFF55;\nradius: 26;\nshadow: 28;\nopacity: 1;\naccent: #7C6CFF;'
+                              : kind === 'transition'
+                              ? 'fromX=-45; fromY=0; scale=0.94; rotate=-2; fade=1; duration=0.45s; ease=ease-out;'
+                              : 'fromY=36; scale=0.86; rotate=-3; stagger=0.06; fade=1; duration=0.45s; ease=ease-out;'
+                          );
+                        }}
+                        className={`py-2 rounded-xl border font-bold text-[10px] ${
+                          adminCodeKind === kind
+                            ? 'bg-[#7C6CFF] text-white border-[#7C6CFF]'
+                            : 'bg-[#181b26] border-[#2a2f42] text-slate-300'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    value={adminCodeName}
+                    onChange={(e) => setAdminCodeName(e.target.value)}
+                    placeholder="Nama pack (mis. Ikon Bintang Neon)"
+                    className={INPUT_CLS}
+                  />
+                  <input
+                    value={adminCodeTags}
+                    onChange={(e) => setAdminCodeTags(e.target.value)}
+                    placeholder="Kata kunci, pisahkan koma"
+                    className={INPUT_CLS}
+                  />
+                  <select
+                    value={adminCodeCategory}
+                    onChange={(e) => setAdminCodeCategory(e.target.value as typeof adminCodeCategory)}
+                    className={INPUT_CLS}
+                  >
+                    <option value="all">Semua kategori</option>
+                    <option value="promo">Promo</option>
+                    <option value="quote">Quote</option>
+                    <option value="edukasi">Edukasi</option>
+                  </select>
+                  <textarea
+                    rows={7}
+                    value={adminCodeText}
+                    onChange={(e) => setAdminCodeText(e.target.value)}
+                    spellCheck={false}
+                    className="w-full rounded-xl bg-[#090b10] border border-[#2a2f42] p-2 text-[10px] font-mono text-lime-200"
+                    placeholder={
+                      adminCodeKind === 'icon'
+                        ? '<svg viewBox="0 0 24 24"><path d="..." fill="#7C6CFF"/></svg>'
+                        : adminCodeKind === 'component'
+                        ? 'background: ...; color: ...; border: ...; radius: ...;'
+                        : 'fromX=...; fromY=...; scale=...; duration=...;'
+                    }
+                  />
+                  <div className="rounded-xl border border-[#2a2f42] bg-[#0d1017] p-2">
+                    <div className="text-[9px] uppercase font-bold text-slate-400 mb-1.5">Pratinjau</div>
+                    {adminCodeKind === 'icon' ? (
+                      <SafeSvgPreview paths={adminCodePreviewPaths} className="w-10 h-10 mx-auto" />
+                    ) : adminCodeKind === 'component' ? (
+                      <div
+                        className="mx-auto w-36 h-14 rounded-xl flex items-center justify-center text-[10px] font-bold"
+                        style={{
+                          background: adminCodePreviewStyle.background || '#ffffff',
+                          color: adminCodePreviewStyle.foreground || '#0f172a',
+                          border: `1.5px solid ${adminCodePreviewStyle.border || '#7C6CFF55'}`,
+                          borderRadius: Math.min(24, adminCodePreviewStyle.radius ?? 20),
+                        }}
+                      >
+                        Komponen
+                      </div>
+                    ) : (
+                      <div className="h-14 flex items-center justify-center">
+                        <div
+                          className="w-10 h-10 rounded-xl"
+                          style={{
+                            background: 'linear-gradient(135deg, #7C6CFF, #C8F169)',
+                            animation: 'mk-pack-demo 1.2s ease-in-out infinite alternate',
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAdminSaveCreativeCode}
+                    className="w-full py-2 rounded-xl bg-[#C8F169] text-[#0e0a24] font-black text-xs"
+                  >
+                    + Simpan pack ke Supabase
+                  </button>
+                  <p className="text-[10px] text-slate-500">
+                    Tersedia sekarang: {packCounts.icon}+ ikon · {packCounts.component}+ komponen ·{' '}
+                    {packCounts.transition}+ transisi · {packCounts.animation}+ animasi.
+                  </p>
+                </div>
+              )}
             </>
           )}
         </aside>
 
         {/* CENTER VIEWPORT + KEYFRAME TIMELINE */}
-        <section className="flex-1 flex flex-col min-w-0 bg-[#07080c]">
+        <section className={`${mobilePanel === 'canvas' ? 'flex' : 'hidden'} lg:flex flex-1 flex-col min-w-0 bg-[#07080c]`}>
           <div className="h-10 border-b border-[#1c202e] bg-[#0d0f17]/95 px-3 flex flex-wrap items-center justify-between gap-2 text-xs">
             <div className="flex items-center gap-2">
               <span className="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 font-bold text-[11px]">
@@ -4814,8 +5643,29 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
                 ref={canvasRef}
                 width={canvasDims.w}
                 height={canvasDims.h}
-                className="w-full h-full block"
+                onPointerDown={handleCanvasPointerDown}
+                onPointerMove={handleCanvasPointerMove}
+                onPointerUp={endCanvasPointer}
+                onPointerCancel={endCanvasPointer}
+                className={`w-full h-full block touch-none select-none ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                title="Tarik untuk menggeser tampilan scene (seperti Figma)."
               />
+              <div className="pointer-events-none absolute inset-2 rounded-xl border border-dashed border-[#C8F169]/40">
+                <span className="absolute -top-2.5 left-2 px-1.5 py-0.5 rounded bg-[#C8F169] text-[#0e0a24] text-[8px] font-bold">
+                  Scene {activeSceneIndex + 1} · geser bebas
+                </span>
+                {[
+                  '-left-1 -top-1',
+                  '-right-1 -top-1',
+                  '-left-1 -bottom-1',
+                  '-right-1 -bottom-1',
+                ].map((pos) => (
+                  <span key={pos} className={`absolute w-2 h-2 rounded-sm bg-[#C8F169] ${pos}`} />
+                ))}
+              </div>
+              <div className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-black/50 text-[9px] text-white/80">
+                X {Math.round(sceneTransform.x * 100)}% · Y {Math.round(sceneTransform.y * 100)}% · {Math.round(sceneTransform.scale * 100)}%
+              </div>
             </div>
           </div>
 
@@ -4932,7 +5782,7 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
         </section>
 
         {/* RIGHT SIDEBAR: INSPECTOR & ADMIN DATASET CONTROL */}
-        <aside className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-[#222636] bg-[#11131a] flex flex-col shrink-0 overflow-y-auto p-3.5 space-y-4 text-xs">
+        <aside className={`${mobilePanel === 'inspector' ? 'flex' : 'hidden'} lg:flex w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-[#222636] bg-[#11131a] flex-col shrink-0 overflow-y-auto p-3.5 space-y-4 text-xs`}>
           <div className="flex items-center justify-between border-b border-[#222636] pb-2">
             <span className="font-bold uppercase tracking-wider text-slate-300">
               {roleMode === 'admin' ? 'Admin Telemetry & Inspector' : 'Inspector & Physics Rig'}
@@ -4973,6 +5823,104 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
                 className="w-full bg-[#181b26] border border-[#2a2f42] rounded-lg p-2 text-xs text-slate-200"
               />
             </div>
+          </div>
+
+          <div className="space-y-2 rounded-xl border border-[#7C6CFF]/35 bg-[#7C6CFF]/5 p-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-[#c9c1ff]">🎛️ Desain bebas (Figma-style)</span>
+              <button
+                type="button"
+                onClick={() =>
+                  updateActiveScene({
+                    transform: { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 },
+                  })
+                }
+                className="text-[9px] px-1.5 py-0.5 rounded bg-white/10 text-slate-200"
+              >
+                Reset
+              </button>
+            </div>
+            <p className="text-[9px] text-slate-400 leading-relaxed">
+              Tarik langsung di kanvas, atau atur angka di bawah. Semua perubahan hanya untuk scene aktif.
+            </p>
+            {(
+              [
+                ['x', 'Geser X', -0.5, 0.5, 0.01],
+                ['y', 'Geser Y', -0.5, 0.5, 0.01],
+                ['scale', 'Skala', 0.4, 1.8, 0.01],
+                ['rotation', 'Rotasi', -30, 30, 1],
+                ['opacity', 'Opasitas', 0.1, 1, 0.01],
+              ] as const
+            ).map(([key, label, min, max, step]) => (
+              <label key={key} className="block">
+                <span className="flex items-center justify-between text-[10px] text-slate-400">
+                  <span>{label}</span>
+                  <span className="font-mono text-slate-200">
+                    {key === 'rotation'
+                      ? `${Math.round(sceneTransform[key])}°`
+                      : key === 'scale' || key === 'opacity'
+                      ? `${Math.round(sceneTransform[key] * 100)}%`
+                      : `${Math.round(sceneTransform[key] * 100)}`}
+                  </span>
+                </span>
+                <input
+                  type="range"
+                  min={min}
+                  max={max}
+                  step={step}
+                  value={sceneTransform[key]}
+                  onChange={(e) => setSceneTransform({ [key]: Number(e.target.value) })}
+                  className="w-full accent-[#C8F169]"
+                />
+              </label>
+            ))}
+            <div className="grid grid-cols-5 gap-1">
+              {(
+                [
+                  ['Kiri', { x: -0.12, y: 0 }],
+                  ['Tengah', { x: 0, y: 0 }],
+                  ['Kanan', { x: 0.12, y: 0 }],
+                  ['Atas', { x: 0, y: -0.12 }],
+                  ['Bawah', { x: 0, y: 0.12 }],
+                ] as const
+              ).map(([label, patch]) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setSceneTransform(patch)}
+                  className="py-1 rounded bg-[#181b26] border border-[#2a2f42] text-[9px] text-slate-300"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <label className="block">
+              <span className="flex justify-between text-[10px] text-slate-400">
+                <span>Radius kartu</span>
+                <span className="font-mono">{activeScene?.radius ?? activeComponentPack?.style.radius ?? cardRadius}px</span>
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={64}
+                step={1}
+                value={activeScene?.radius ?? activeComponentPack?.style.radius ?? cardRadius}
+                onChange={(e) => updateActiveScene({ radius: Number(e.target.value) })}
+                className="w-full accent-[#C8F169]"
+              />
+            </label>
+            <label className="block">
+              <span className="block text-[10px] text-slate-400 mb-1">
+                Kode tampilan komponen (CSS ringkas)
+              </span>
+              <textarea
+                rows={3}
+                value={activeScene?.componentCode || ''}
+                onChange={(e) => applyComponentCodeToScene(e.target.value)}
+                placeholder={'background: #ffffff;\ncolor: #0f172a;\nborder: #7C6CFF55;\nradius: 26;\naccent: #7C6CFF;'}
+                className="w-full bg-[#090b10] border border-[#2a2f42] rounded-lg p-2 text-[10px] font-mono text-lime-200"
+              />
+            </label>
           </div>
 
           <div className="space-y-2.5 pb-3 border-b border-[#222634]">
@@ -5154,6 +6102,30 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
           )}
         </aside>
       </main>
+
+      {/* MOBILE NAV: kanvas, aset, pengaturan — hemat ruang untuk device menengah ke bawah */}
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 h-14 bg-[#0c0e14]/95 backdrop-blur border-t border-[#222636] grid grid-cols-3 gap-1 px-2 pb-[env(safe-area-inset-bottom)]">
+        {(
+          [
+            ['canvas', '🎬 Kanvas'],
+            ['library', '🧩 Aset'],
+            ['inspector', '🎛️ Atur'],
+          ] as const
+        ).map(([panel, label]) => (
+          <button
+            key={panel}
+            type="button"
+            onClick={() => setMobilePanel(panel)}
+            className={`my-1.5 rounded-xl text-[11px] font-bold ${
+              mobilePanel === panel
+                ? 'bg-[#7C6CFF] text-white'
+                : 'bg-[#181b26] text-slate-300'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
 
       {toastMsg && (
         <div className="fixed bottom-5 right-5 z-50 px-4 py-2.5 rounded-xl bg-[#1b1f2e] border border-indigo-500/50 text-xs font-semibold text-white shadow-2xl flex items-center gap-2">

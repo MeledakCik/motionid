@@ -181,7 +181,22 @@ alter table public.ai_training_data add column if not exists metadata_json jsonb
 alter table public.ai_training_data drop constraint if exists ai_training_data_type_check;
 alter table public.ai_training_data
   add constraint ai_training_data_type_check
-  check (type in ('video_motion', 'ui_blueprint', 'hook', 'scene2', 'scene3', 'cta', 'image_asset', 'keyword_rule'))
+  check (
+    type in (
+      'video_motion',
+      'ui_blueprint',
+      'hook',
+      'scene2',
+      'scene3',
+      'cta',
+      'image_asset',
+      'keyword_rule',
+      'icon_pack',
+      'component_pack',
+      'transition_pack',
+      'animation_pack'
+    )
+  )
   not valid;
 
 alter table public.ai_training_data drop constraint if exists ai_training_data_category_check;

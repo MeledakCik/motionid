@@ -4,11 +4,46 @@
 
 :root {
   color-scheme: dark;
+  --mk-iris: #7c6cff;
+  --mk-iris-soft: #9d91ff;
+  --mk-lime: #c8f169;
+  --mk-midnight: #0e0a24;
+  --mk-panel: #141026;
+  --mk-panel-2: #1b1633;
+  --mk-line: rgba(255, 255, 255, 0.09);
 }
 
 body {
   background-color: #020617;
   color: #f8fafc;
+}
+
+/* Identitas MotionKu: iris + lime di atas malam ungu. */
+.mk-studio {
+  background:
+    radial-gradient(720px circle at 12% -8%, rgba(124, 108, 255, 0.16), transparent 62%),
+    radial-gradient(560px circle at 96% 18%, rgba(200, 241, 105, 0.07), transparent 60%),
+    #090a0f;
+}
+.mk-brand-text {
+  background: linear-gradient(92deg, #ffffff 8%, #c9c1ff 46%, #c8f169 96%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.mk-brand-ring:focus-visible {
+  outline: 2px solid #c8f169;
+  outline-offset: 2px;
+}
+@keyframes mk-pack-demo {
+  0% { transform: translateX(-10px) scale(0.86) rotate(-6deg); opacity: 0.55; }
+  55% { transform: translateX(4px) scale(1.06) rotate(3deg); opacity: 1; }
+  100% { transform: translateX(10px) scale(0.94) rotate(6deg); opacity: 0.8; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [style*="mk-pack-demo"] {
+    animation: none !important;
+  }
 }
 
 /* ---------------------------------------------------------------------------

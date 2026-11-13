@@ -91,3 +91,34 @@ Tab **Referensi** di mode admin:
 1. Unggah video referensi. Video dianalisis di browser: warna dominan, banyaknya gerak, potongan adegan, dan bagian layar yang paling ramai.
 2. Atau tempel link YouTube/TikTok. Judul, kreator, dan warna thumbnail dibaca lewat oEmbed resmi (`/api/reference`, khusus admin). Gerak dan transisi tidak bisa dibaca dari link.
 3. Sesuaikan form, isi **kata pemicu**, lalu klik **Simpan untuk semua user**. Prompt yang mengandung kata pemicu akan memprioritaskan gaya ini.
+
+## Library kreatif bawaan (`lib/creative-packs.ts`)
+
+Studio membawa library besar yang ringan karena dibuat dari kombinasi bentuk + tema, bukan file gambar berat:
+
+| Jenis | Jumlah | Isi |
+| --- | --- | --- |
+| Template | **336** | 7 preset dasar × 12 palet × 4 gaya gerak |
+| Icon pack | **340** | 34 glyph × 10 gaya (solid, outline, duotone) |
+| Component pack | **300** | 15 gaya kartu × 20 palet |
+| Transition pack | **300** | 25 gerak transisi × 12 tempo/easing |
+| Animation pack | **300** | 25 gerak teks × 12 tempo/easing |
+
+Semua pack bisa dicari dan difilter lewat tab **Pack** di panel kiri Studio. Pilih pack untuk langsung menerapkannya ke scene aktif.
+
+## Training kode pack (admin)
+
+Di `/admin`, buka tab **🧩 Kode** pada panel kanan. Admin dapat menempel kode untuk empat jenis pack:
+
+- **SVG ikon** — tempel `<svg>...</svg>` atau isi atribut `d` saja. Hanya `path` yang dibaca; script dan event handler diabaikan.
+- **Kode komponen** — pasangan `background: ...; color: ...; border: ...; radius: ...; shadow: ...; opacity: ...; accent: ...;`.
+- **Kode transisi** — mis. `fromX=-45; fromY=0; scale=0.94; rotate=-2; fade=1; duration=0.45s; ease=ease-out;`.
+- **Kode animasi** — mis. `fromY=36; scale=0.86; rotate=-3; stagger=0.06; fade=1; duration=0.45s;`.
+
+Isi nama dan kata kunci, lalu klik **Simpan pack ke Supabase**. Pack langsung terdaftar untuk semua user dan ikut dimuat saat training dibaca. Parser bersifat aman: tidak ada eksekusi HTML/JS mentah, hanya pembacaan CSS/SVG terbatas. Kolom `type` pada `ai_training_data` sekarang menerima `icon_pack`, `component_pack`, `transition_pack`, dan `animation_pack` (lihat `supabase/migration.sql`).
+
+## Identitas visual & responsivitas
+
+- Warna brand: **Iris `#7C6CFF`**, **Lime `#C8F169`**, **Midnight `#0E0A24`** (variabel `--mk-*` di `app/globals.css` dan `brand.*` di `tailwind.config.ts`).
+- Layout Studio responsif: di layar kecil panel kiri, kanvas, dan inspector bergantian lewat bottom navigation; kontrol Figma-style (X/Y, skala, rotasi, opacity, radius, alignment, kode CSS komponen) tetap tersedia.
+- Animasi demo pack otomatis berhenti saat pengguna mengaktifkan `prefers-reduced-motion`.

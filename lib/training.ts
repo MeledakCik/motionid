@@ -12,6 +12,10 @@ import {
   CategoryType,
   MotionTelemetryProfile,
 } from '@/lib/smart-engine';
+import {
+  registerCreativePackFromRow,
+  removeCreativePackFromRegistry,
+} from '@/lib/creative-packs';
 
 export type TrainingType =
   | 'video_motion'
@@ -21,7 +25,11 @@ export type TrainingType =
   | 'scene3'
   | 'cta'
   | 'image_asset'
-  | 'keyword_rule';
+  | 'keyword_rule'
+  | 'icon_pack'
+  | 'component_pack'
+  | 'transition_pack'
+  | 'animation_pack';
 
 export type TrainingCategory = CategoryType | 'saas' | 'all';
 
@@ -195,6 +203,11 @@ export function applyTrainingRow(row: TrainingRow): boolean {
         splitList(row.content_text),
         splitList(row.subtext || '')
       );
+    case 'icon_pack':
+    case 'component_pack':
+    case 'transition_pack':
+    case 'animation_pack':
+      return registerCreativePackFromRow(row);
     default:
       return false;
   }
@@ -232,4 +245,5 @@ export function loadTrainingIntoEngine(): Promise<number> {
 export function forgetTrainingRow(id: string) {
   appliedIds.delete(id);
   removeStylePackFromEngine(`db-${id}`);
+  removeCreativePackFromRegistry(`db-${id}`);
 }
