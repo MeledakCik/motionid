@@ -2,12 +2,20 @@ import { create } from 'zustand';
 import {
   AspectRatioType,
   CategoryType,
+  COLOR_PALETTES,
   ColorPalette,
+  CursorAnimationMode,
+  CursorVisualSkin,
   GeneratedScriptResult,
   generateScript,
+  MUSIC_TRACKS,
   MusicTrack,
-  randomizeHookAndStyle,
   SceneItem,
+  SceneTransition,
+  AnimationType,
+  CameraMotionType,
+  buildNonRepeatingSequence,
+  synthesizeAllSceneImagesFromDataPack,
 } from '@/lib/smart-engine';
 
 export type TemplateId = 'Q1' | 'Q2' | 'Q3' | 'P1' | 'P2' | 'P3' | 'E1' | 'E2' | 'E3';
@@ -24,7 +32,7 @@ export interface ProjectStyleConfig {
   aspectRatio: AspectRatioType;
   font: FontFamilyName;
   colors: ColorPalette;
-  backgroundType: 'solid' | 'gradient' | 'picsum' | 'upload';
+  backgroundType: 'solid' | 'gradient' | 'picsum' | 'upload' | 'datapack';
   solidColor: string;
   gradientPreset: string;
   backgroundImageUrl: string;
@@ -33,6 +41,10 @@ export interface ProjectStyleConfig {
   showSubtitle: boolean;
   showEmoji: boolean;
   showProgressBar: boolean;
+  cursorMode: CursorAnimationMode;
+  cursorSkin: CursorVisualSkin;
+  cursorSpeed: number;
+  autoDataPackImages: boolean;
 }
 
 export interface EditorState {
@@ -65,73 +77,70 @@ export interface EditorState {
   addUserImages: (urls: string[]) => void;
   removeUserImage: (index: number) => void;
   randomizeProject: () => void;
+  randomizeNonRepeatingMotions: () => void;
+  regenerateDataPackImages: (customQuery?: string) => void;
+  setCursorMode: (mode: CursorAnimationMode) => void;
   setSaveStatus: (status: 'saved' | 'saving' | 'unsaved') => void;
 }
 
-const DEFAULT_TOPIC = 'Promo Kopi Susu Gula Aren 18rb';
-// seed tetap → isi awal sama di server & browser (tidak ada hydration mismatch)
-const initialScript = generateScript(DEFAULT_TOPIC, 'promo', {
-  customPrice: 'Rp18rb',
-  customOriginalPrice: 'Rp25rb',
-  customProductName: 'Kopi Susu Gula Aren',
-  customStoreName: 'Kopi Senja Kita',
-  seed: 7,
-  stylePackId: 'poster-promo',
-  variant: 'A',
+const initialScript = generateScript('Promo Kopi Susu Gula Aren 18rb', 'promo', {
+  cursorMode: 'single-pro',
+  useDataPackImages: true,
 });
 
 export const useEditorStore = create<EditorState>((set, get) => ({
-  projectId: 'demo-project-1',
+  projectId: 'default-motionid-project',
   title: 'Promo Kopi Susu Gula Aren 18rb',
-  topic: DEFAULT_TOPIC,
+  topic: 'Promo Kopi Susu Gula Aren 18rb',
   category: 'promo',
   templateId: 'P1',
   script: initialScript,
   style: {
     aspectRatio: '9:16',
-    font: initialScript.suggestedStyle.font,
-    colors: initialScript.suggestedColor,
-    backgroundType: 'gradient',
-    solidColor: initialScript.suggestedColor.bgPrimary,
-    gradientPreset: initialScript.suggestedStyle.gradientPreset,
-    backgroundImageUrl: 'https://picsum.photos/seed/motionku-coffee/720/1280',
-    userImages: [],
-    music: initialScript.suggestedMusic,
+    font: 'Space Grotesk',
+    colors: initialScript.suggestedColor || COLOR_PALETTES[0],
+    backgroundType: 'datapack',
+    solidColor: '#070815',
+    gradientPreset: COLOR_PALETTES[0].gradient,
+    backgroundImageUrl: initialScript.scenes[0]?.imageUrl || '',
+    userImages: initialScript.scenes.map((s) => s.imageUrl || '').filter(Boolean),
+    music: initialScript.suggestedMusic || MUSIC_TRACKS[0],
     showSubtitle: true,
     showEmoji: true,
     showProgressBar: true,
+    cursorMode: 'single-pro',
+    cursorSkin: 'figma-pill',
+    cursorSpeed: 1,
+    autoDataPackImages: true,
   },
   activeSceneIndex: 0,
   isPlaying: true,
   saveStatus: 'saved',
 
-  initProject: ({ id, title, topic, category, templateId, script, style }) => {
-    const generated = script || generateScript(topic, category);
-    set({
-      projectId: id,
-      title,
-      topic,
-      category,
-      templateId,
+  initProject: (payload) => {
+    const generated =
+      payload.script ||
+      generateScript(payload.topic, payload.category, {
+        cursorMode: payload.style?.cursorMode ?? 'single-pro',
+        useDataPackImages: true,
+      });
+    set((state) => ({
+      projectId: payload.id,
+      title: payload.title,
+      topic: payload.topic,
+      category: payload.category,
+      templateId: payload.templateId,
       script: generated,
       style: {
-        aspectRatio: style?.aspectRatio || '9:16',
-        font: style?.font || generated.suggestedStyle.font,
-        colors: style?.colors || generated.suggestedColor,
-        backgroundType: style?.backgroundType || 'gradient',
-        solidColor: style?.solidColor || generated.suggestedColor.bgPrimary,
-        gradientPreset: style?.gradientPreset || generated.suggestedStyle.gradientPreset,
-        backgroundImageUrl:
-          style?.backgroundImageUrl || 'https://picsum.photos/seed/motionku-coffee/720/1280',
-        userImages: style?.userImages || [],
-        music: style?.music || generated.suggestedMusic,
-        showSubtitle: style?.showSubtitle ?? true,
-        showEmoji: style?.showEmoji ?? true,
-        showProgressBar: style?.showProgressBar ?? true,
+        ...state.style,
+        colors: generated.suggestedColor,
+        music: generated.suggestedMusic,
+        userImages: generated.scenes.map((s) => s.imageUrl || '').filter(Boolean),
+        ...payload.style,
       },
       activeSceneIndex: 0,
-      saveStatus: 'unsaved',
-    });
+      saveStatus: 'saved',
+    }));
   },
 
   setActiveSceneIndex: (index) => set({ activeSceneIndex: index }),
@@ -140,14 +149,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   updateScene: (sceneIndex, partial) =>
     set((state) => {
-      const updatedScenes = state.script.scenes.map((scene, idx) =>
-        idx === sceneIndex ? { ...scene, ...partial } : scene
+      const nextScenes = state.script.scenes.map((sc, idx) =>
+        idx === sceneIndex ? { ...sc, ...partial } : sc
       );
       return {
-        script: {
-          ...state.script,
-          scenes: updatedScenes,
-        },
+        script: { ...state.script, scenes: nextScenes },
         saveStatus: 'unsaved',
       };
     }),
@@ -160,70 +166,127 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   updateColors: (colors) =>
     set((state) => ({
-      style: {
-        ...state.style,
-        colors,
-        solidColor: colors.bgPrimary,
-      },
+      style: { ...state.style, colors, gradientPreset: colors.gradient },
       saveStatus: 'unsaved',
     })),
 
   addUserImages: (urls) =>
     set((state) => {
       const merged = [...state.style.userImages, ...urls];
-      const updatedScenes = state.script.scenes.map((sc, idx) => ({
+      const nextScenes = state.script.scenes.map((sc, idx) => ({
         ...sc,
         imageUrl: merged[idx % merged.length] || sc.imageUrl,
       }));
       return {
-        script: {
-          ...state.script,
-          scenes: updatedScenes,
-        },
-        style: {
-          ...state.style,
-          backgroundType: 'upload',
-          backgroundImageUrl: merged[0] || state.style.backgroundImageUrl,
-          userImages: merged,
-        },
+        style: { ...state.style, userImages: merged },
+        script: { ...state.script, scenes: nextScenes },
         saveStatus: 'unsaved',
       };
     }),
 
   removeUserImage: (index) =>
+    set((state) => ({
+      style: {
+        ...state.style,
+        userImages: state.style.userImages.filter((_, idx) => idx !== index),
+      },
+      saveStatus: 'unsaved',
+    })),
+
+  randomizeProject: () => {
+    const { topic, category, style } = get();
+    const fresh = generateScript(topic, category, {
+      cursorMode: style.cursorMode,
+      useDataPackImages: true,
+      seed: Math.floor(Math.random() * 999999) + Date.now(),
+    });
+    set({
+      script: fresh,
+      style: {
+        ...style,
+        colors: fresh.suggestedColor,
+        gradientPreset: fresh.suggestedColor.gradient,
+        userImages: fresh.scenes.map((s) => s.imageUrl || '').filter(Boolean),
+      },
+      saveStatus: 'unsaved',
+    });
+  },
+
+  randomizeNonRepeatingMotions: () =>
     set((state) => {
-      const filtered = state.style.userImages.filter((_, i) => i !== index);
+      const seed = Math.floor(Math.random() * 999999) + Date.now();
+      const transitions = buildNonRepeatingSequence<SceneTransition>(
+        ['whip-left', 'iris-wipe', 'diagonal-slice', 'zoom-punch', 'glitch-cut', 'morph-card', 'shutter-blinds', 'blueprint-wire'],
+        state.script.scenes.length,
+        seed
+      );
+      const animations = buildNonRepeatingSequence<AnimationType>(
+        ['pop', 'slide-up', 'typewriter', 'bounce', 'zoom', 'fade'],
+        state.script.scenes.length,
+        seed + 19
+      );
+      const cameras = buildNonRepeatingSequence<CameraMotionType>(
+        ['zoom-in', 'dutch-tilt', 'orbit-3d', 'pan-drift', 'handheld-float', 'zoom-out'],
+        state.script.scenes.length,
+        seed + 41
+      );
+
+      const nextScenes = state.script.scenes.map((sc, idx) => ({
+        ...sc,
+        transition: transitions[idx],
+        animation: animations[idx],
+        cameraMotion: cameras[idx],
+      }));
+
       return {
+        script: { ...state.script, scenes: nextScenes },
+        saveStatus: 'unsaved',
+      };
+    }),
+
+  regenerateDataPackImages: (customQuery) =>
+    set((state) => {
+      const queryToUse = customQuery?.trim() || state.topic;
+      const synthList = synthesizeAllSceneImagesFromDataPack({
+        topic: queryToUse,
+        category: state.category,
+        priceLabel: state.script.extractedMeta?.priceText,
+        scenes: state.script.scenes.map((s) => ({ text: s.text, subtext: s.subtext })),
+      });
+
+      const nextScenes = state.script.scenes.map((sc, idx) => ({
+        ...sc,
+        imageUrl: synthList[idx]?.dataUri || sc.imageUrl,
+        dataPackMeta: synthList[idx]
+          ? {
+              clusterId: synthList[idx].clusterId,
+              packTitle: synthList[idx].packTitle,
+              compositionStyle: synthList[idx].compositionStyle,
+              matchedKeywords: synthList[idx].matchedKeywords,
+            }
+          : sc.dataPackMeta,
+      }));
+
+      return {
+        script: {
+          ...state.script,
+          scenes: nextScenes,
+          synthesizedPackImages: synthList,
+        },
         style: {
           ...state.style,
-          userImages: filtered,
-          backgroundImageUrl:
-            filtered[0] || 'https://picsum.photos/seed/motionku-coffee/720/1280',
+          backgroundType: 'datapack',
+          userImages: nextScenes.map((s) => s.imageUrl || '').filter(Boolean),
         },
         saveStatus: 'unsaved',
       };
     }),
 
-  randomizeProject: () => {
-    const state = get();
-    const { newScript, randomPalette, randomMusic } = randomizeHookAndStyle(
-      state.topic,
-      state.category,
-      state.style.colors.id,
-      { userImages: state.style.userImages }
-    );
-    set({
-      script: newScript,
-      style: {
-        ...state.style,
-        colors: randomPalette,
-        solidColor: randomPalette.bgPrimary,
-        music: randomMusic,
-      },
-      activeSceneIndex: 0,
+  setCursorMode: (mode) =>
+    set((state) => ({
+      style: { ...state.style, cursorMode: mode },
       saveStatus: 'unsaved',
-    });
-  },
+    })),
 
   setSaveStatus: (status) => set({ saveStatus: status }),
 }));

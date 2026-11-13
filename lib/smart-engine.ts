@@ -1,87 +1,249 @@
 /**
- * MotionKu Smart Engine — generator script video berbasis aturan (tanpa API AI eksternal).
- *
- * Isi video dibuat sesuai kategori:
- * - promo   : produk → keunggulan → harga (dengan harga coret bila ada) → ajakan order
- * - quote   : kalimat renungan sesuai suasana (capek, galau, semangat, cinta, syukur)
- * - edukasi : angka besar → daftar langkah → tips penting → ajakan simpan
- *
- * Kalimat dipilih acak supaya setiap klik "Buat" menghasilkan variasi. Isi `seed` untuk hasil
- * yang selalu sama (dipakai untuk data awal yang ikut dirender di server, agar tidak terjadi
- * hydration mismatch). Kalimat hasil training admin ikut masuk ke kumpulan kandidat, tetapi
- * tidak menggeser kalimat bawaan.
+ * MotionID / MotionKu Smart Engine v5.0 (`lib/smart-engine.ts`)
+ * - 100% Lokal & Bebas Biaya API Eksternal
+ * - Terintegrasi dengan Sistem Pembuat Gambar Otomatis dari Google/Web Data Pack (`lib/google-datapack-image-engine.ts`)
+ * - Engine Variasi Transisi & Animasi Anti-Kembar (Scene 1..4 dijamin berbeda transisi, kamera, layout, & animasi)
+ * - Mode Animasi Kursor Pintar (`off` | `single-pro` | `multi-agent-swarm` | `tutorial-spotlight`)
  */
 
-/* -------------------------------------------------------------------------- */
-/* FISIKA PEGAS & KURSOR                                                      */
-/* -------------------------------------------------------------------------- */
+import {
+  GOOGLE_VISUAL_DATA_PACKS,
+  matchBestDataPack,
+  synthesizeAllSceneImagesFromDataPack,
+  synthesizeDataPackSceneImage,
+  type GoogleDataPackItem,
+  type SynthesizedSceneImage,
+} from '@/lib/google-datapack-image-engine';
 
 export interface SpringConfig {
-  stiffness?: number;
-  damping?: number;
+  stiffness: number;
+  damping: number;
   mass?: number;
+  initialVelocity?: number;
 }
 
-export function solveSpring(
-  t: number,
-  { stiffness = 210, damping = 15, mass = 1 }: SpringConfig = {}
-): number {
-  const clamped = Math.max(0, Math.min(2.5, t));
-  if (clamped <= 0) return 0;
-  const w0 = Math.sqrt(stiffness / mass);
-  const zeta = damping / (2 * Math.sqrt(stiffness * mass));
-  if (zeta < 1) {
-    const wd = w0 * Math.sqrt(1 - zeta * zeta);
-    const env = Math.exp(-zeta * w0 * clamped);
-    return 1 - env * (Math.cos(wd * clamped) + ((zeta * w0) / wd) * Math.sin(wd * clamped));
+export function solveSpring(t: number, config: SpringConfig = { stiffness: 220, damping: 18, mass: 1 }): number {
+  const clampedT = Math.max(0, Math.min(2.5, t));
+  const dt = 1 / 240;
+  const steps = Math.floor(clampedT / dt);
+  let x = 0;
+  let v = config.initialVelocity ?? -1.8;
+  const k = config.stiffness;
+  const c = config.damping;
+  const m = config.mass ?? 1;
+
+  const accel = (pos: number, vel: number) => (-k * (pos - 1) - c * vel) / m;
+
+  for (let i = 0; i < steps; i++) {
+    const k1x = v;
+    const k1v = accel(x, v);
+    const k2x = v + 0.5 * dt * k1v;
+    const k2v = accel(x + 0.5 * dt * k1x, v + 0.5 * dt * k1v);
+    const k3x = v + 0.5 * dt * k2v;
+    const k3v = accel(x + 0.5 * dt * k2x, v + 0.5 * dt * k2v);
+    const k4x = v + dt * k3v;
+    const k4v = accel(x + dt * k3x, v + dt * k3v);
+
+    x += (dt / 6) * (k1x + 2 * k2x + 2 * k3x + k4x);
+    v += (dt / 6) * (k1v + 2 * k2v + 2 * k3v + k4v);
   }
-  return 1 - (1 + w0 * clamped) * Math.exp(-w0 * clamped);
+  return x;
 }
 
 export function smoothStep(edge0: number, edge1: number, x: number): number {
-  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0 || 1)));
+  const t = Math.max(0, Math.min(1, (x - edge0) / Math.max(0.0001, edge1 - edge0)));
   return t * t * (3 - 2 * t);
 }
 
-export interface CursorKeyframeState {
+export type CursorAnimationMode = 'off' | 'single-pro' | 'multi-agent-swarm' | 'tutorial-spotlight';
+export type CursorVisualSkin = 'macos-pro' | 'figma-pill' | 'cyber-crosshair' | 'neon-touch';
+
+export interface CursorAgentPoint {
+  name: string;
+  color: string;
   x: number;
   y: number;
-  isPressed: boolean;
-  rippleProgress: number;
+  isClicking: boolean;
+  actionTag: string;
 }
 
+export interface CursorKeyframeState {
+  visible: boolean;
+  mode: CursorAnimationMode;
+  skin: CursorVisualSkin;
+  x: number;
+  y: number;
+  scale: number;
+  isClicking: boolean;
+  rippleProgress: number;
+  highlightProgress: number;
+  typingProgress: number;
+  cameraZoom: number;
+  cameraPanX: number;
+  cameraPanY: number;
+  cameraTiltDeg: number;
+  activeLabel: string;
+  swarmAgents: CursorAgentPoint[];
+}
+
+/**
+ * Menghitung koreografi kursor pintar per scene (mendukung mode Single Pro @depup.web,
+ * Multi-Agent Swarm @voynann, Tutorial Spotlight, maupun Off).
+ */
 export function computeCursorChoreography(
-  progress: number,
-  startX: number,
-  startY: number,
-  targetX: number,
-  targetY: number
+  sceneProgress: number,
+  sceneIndex: number = 0,
+  mode: CursorAnimationMode = 'single-pro',
+  skin: CursorVisualSkin = 'figma-pill'
 ): CursorKeyframeState {
-  const moveT = smoothStep(0.36, 0.55, progress);
-  const arcLift = Math.sin(moveT * Math.PI) * 18;
+  const p = Math.max(0, Math.min(1, sceneProgress));
+
+  if (mode === 'off') {
+    return {
+      visible: false,
+      mode: 'off',
+      skin,
+      x: 50,
+      y: 50,
+      scale: 1,
+      isClicking: false,
+      rippleProgress: 0,
+      highlightProgress: 0,
+      typingProgress: 1,
+      cameraZoom: 1,
+      cameraPanX: 0,
+      cameraPanY: 0,
+      cameraTiltDeg: 0,
+      activeLabel: '',
+      swarmAgents: [],
+    };
+  }
+
+  // Waypoint berbeda untuk setiap scene agar gerakan kursor tidak monoton!
+  const waypointsByScene: Array<Array<{ x: number; y: number; label: string }>> = [
+    [
+      { x: 82, y: 84, label: 'Init Studio' },
+      { x: 34, y: 38, label: 'Select Hook' },
+      { x: 66, y: 54, label: 'Drag DataPack' },
+      { x: 52, y: 74, label: 'Click CTA' },
+    ],
+    [
+      { x: 18, y: 78, label: 'Inspect Layer' },
+      { x: 58, y: 34, label: 'Type Value' },
+      { x: 42, y: 62, label: 'Adjust Spring' },
+      { x: 72, y: 48, label: 'Lock Frame' },
+    ],
+    [
+      { x: 76, y: 24, label: 'Load Asset Pack' },
+      { x: 48, y: 46, label: 'Highlight Proof' },
+      { x: 32, y: 68, label: 'Apply Shader' },
+      { x: 56, y: 76, label: 'Verify Price' },
+    ],
+    [
+      { x: 24, y: 30, label: 'Final Polish' },
+      { x: 50, y: 52, label: 'Focus Offer' },
+      { x: 50, y: 78, label: 'Click Action!' },
+      { x: 64, y: 82, label: 'Published' },
+    ],
+  ];
+
+  const pts = waypointsByScene[sceneIndex % waypointsByScene.length];
+  let x = pts[0].x;
+  let y = pts[0].y;
+  let activeLabel = pts[0].label;
+
+  if (p < 0.32) {
+    const sp = solveSpring(p / 0.32, { stiffness: 210, damping: 19 });
+    x = pts[0].x + (pts[1].x - pts[0].x) * sp;
+    y = pts[0].y + (pts[1].y - pts[0].y) * sp;
+    activeLabel = pts[1].label;
+  } else if (p < 0.68) {
+    const sp = solveSpring((p - 0.32) / 0.36, { stiffness: 230, damping: 18 });
+    x = pts[1].x + (pts[2].x - pts[1].x) * sp;
+    y = pts[1].y + (pts[2].y - pts[1].y) * sp;
+    activeLabel = pts[2].label;
+  } else {
+    const sp = solveSpring((p - 0.68) / 0.32, { stiffness: 260, damping: 17 });
+    x = pts[2].x + (pts[3].x - pts[2].x) * sp;
+    y = pts[2].y + (pts[3].y - pts[2].y) * sp;
+    activeLabel = pts[3].label;
+  }
+
+  const clickWindow1 = p > 0.29 && p < 0.39;
+  const clickWindow2 = p > 0.67 && p < 0.78;
+  const isClicking = clickWindow1 || clickWindow2;
+  const rippleProgress = clickWindow1
+    ? (p - 0.29) / 0.1
+    : clickWindow2
+    ? (p - 0.67) / 0.11
+    : 0;
+
+  const highlightProgress = smoothStep(0.18, 0.56, p);
+  const typingProgress = smoothStep(0.12, 0.64, p);
+
+  // Kamera dinamis mengikuti kursor saat mode single-pro atau tutorial-spotlight
+  const focusBoost = mode === 'tutorial-spotlight' ? 0.22 : mode === 'single-pro' ? 0.16 : 0.08;
+  const cameraZoom = 1 + Math.sin(p * Math.PI) * focusBoost;
+  const cameraPanX = (50 - x) * 0.18 * Math.sin(p * Math.PI);
+  const cameraPanY = (50 - y) * 0.14 * Math.sin(p * Math.PI);
+  const cameraTiltDeg = Math.sin(p * Math.PI * 2) * (sceneIndex % 2 === 0 ? 1.4 : -1.4);
+
+  // Jika mode Multi-Agent Swarm (@voynann style), bangkitkan 5 agen kursor kolaborator!
+  const swarmSpecs = [
+    { name: 'Director', color: '#F59E0B', phaseOffset: 0.0, radiusX: 18, radiusY: 14, tag: 'Wireframe' },
+    { name: 'DataPack', color: '#38BDF8', phaseOffset: 1.25, radiusX: 24, radiusY: 18, tag: 'Synth Image' },
+    { name: 'MotionRK4', color: '#A855F7', phaseOffset: 2.5, radiusX: 20, radiusY: 22, tag: 'Spring Rig' },
+    { name: 'Typography', color: '#10B981', phaseOffset: 3.75, radiusX: 22, radiusY: 16, tag: 'Highlight' },
+    { name: 'ShaderFX', color: '#F43F5E', phaseOffset: 5.0, radiusX: 16, radiusY: 20, tag: 'Color Grade' },
+  ];
+
+  const swarmAgents: CursorAgentPoint[] =
+    mode === 'multi-agent-swarm'
+      ? swarmSpecs.map((ag, idx) => {
+          const angle = p * Math.PI * 2.2 + ag.phaseOffset + sceneIndex * 0.9;
+          const ax = Math.max(10, Math.min(90, x + Math.cos(angle) * ag.radiusX + (idx - 2) * 5));
+          const ay = Math.max(12, Math.min(88, y + Math.sin(angle) * ag.radiusY + (idx % 2 === 0 ? -6 : 6)));
+          return {
+            name: ag.name,
+            color: ag.color,
+            x: ax,
+            y: ay,
+            isClicking: ((p * 10 + idx) % 3) < 0.45,
+            actionTag: ag.tag,
+          };
+        })
+      : [];
+
   return {
-    x: startX + (targetX - startX) * moveT,
-    y: startY + (targetY - startY) * moveT - arcLift,
-    isPressed: progress > 0.54 && progress < 0.63,
-    rippleProgress: smoothStep(0.55, 0.78, progress),
+    visible: true,
+    mode,
+    skin,
+    x,
+    y,
+    scale: isClicking ? 0.84 : 1,
+    isClicking,
+    rippleProgress,
+    highlightProgress,
+    typingProgress,
+    cameraZoom,
+    cameraPanX,
+    cameraPanY,
+    cameraTiltDeg,
+    activeLabel,
+    swarmAgents,
   };
 }
 
-/* -------------------------------------------------------------------------- */
-/* TIPE DATA                                                                  */
-/* -------------------------------------------------------------------------- */
-
 export type CategoryType = 'quote' | 'promo' | 'edukasi';
-
 export type AnimationType = 'pop' | 'slide-up' | 'typewriter' | 'bounce' | 'fade' | 'zoom';
-
 export type AspectRatioType = '9:16' | '1:1' | '16:9';
-
 export type CameraMotionType =
-  | 'spring-slide-vertical'
-  | 'perspective-tilt-3d'
-  | 'whip-zoom-spring'
-  | 'smooth-float';
+  | 'zoom-in'
+  | 'zoom-out'
+  | 'pan-drift'
+  | 'handheld-float'
+  | 'dutch-tilt'
+  | 'orbit-3d';
 
 export type EngineFontName =
   | 'Poppins'
@@ -91,128 +253,84 @@ export type EngineFontName =
   | 'Space Grotesk'
   | 'Anton';
 
-/** Posisi judul & kartu dalam satu scene. */
-export type SceneLayout = 'stack' | 'card-first' | 'center-text';
-/** Efek pergantian antar-scene. */
-export type SceneTransition = 'cut' | 'fade' | 'slide' | 'push-up' | 'zoom' | 'wipe' | 'flash';
-/** Pola latar di atas gradien palet. */
-export type BackgroundStyle =
-  | 'mesh'
-  | 'sunburst'
-  | 'stripes'
-  | 'blobs'
-  | 'spotlight'
-  | 'confetti'
-  | 'waves'
-  | 'grid';
-/** Cara judul muncul. */
-export type HeadlineAnim = 'spring-words' | 'typewriter' | 'rise-lines' | 'pop' | 'marker';
+export interface EngineTypography {
+  headingFont: EngineFontName;
+  bodyFont: EngineFontName;
+  monoFont: string;
+}
 
-export const SCENE_LAYOUTS: readonly SceneLayout[] = ['stack', 'card-first', 'center-text'];
-export const SCENE_TRANSITIONS: readonly SceneTransition[] = ['cut', 'fade', 'slide', 'push-up', 'zoom', 'wipe', 'flash'];
-export const BACKGROUND_STYLES: readonly BackgroundStyle[] = ['mesh', 'sunburst', 'stripes', 'blobs', 'spotlight', 'confetti', 'waves', 'grid'];
-export const HEADLINE_ANIMS: readonly HeadlineAnim[] = ['spring-words', 'typewriter', 'rise-lines', 'pop', 'marker'];
-
-/** Komponen kartu yang bisa digambar Motion Studio. */
-export type StudioWidgetType =
-  | 'price_tag_card'
-  | 'checklist_card'
-  | 'step_number_card'
-  | 'quote_card'
-  | 'cta_button_card'
-  | 'repo_input_card'
-  | 'repo_scanner_card'
-  | 'terminal_build_card'
-  | 'bento_metrics_grid'
-  | 'kinetic_showcase_card';
-
-/** Termasuk nama lama dari profil training versi sebelumnya (dinormalisasi saat dirender). */
 export type WidgetBlueprintType =
-  | StudioWidgetType
-  | 'feature_spotlight_card'
-  | 'kinetic_hook_card'
-  | 'cta_dock_card';
+  | 'step-paste-card'
+  | 'step-check-card'
+  | 'step-deploy-card'
+  | 'terminal-log-box'
+  | 'metric-flip-counter'
+  | 'price-slash-sticker'
+  | 'countdown-flash-bar'
+  | 'before-after-slider'
+  | 'quiz-poll-card'
+  | 'quote-glass-frame';
 
-export const STUDIO_WIDGET_TYPES: readonly StudioWidgetType[] = [
-  'price_tag_card',
-  'checklist_card',
-  'step_number_card',
-  'quote_card',
-  'cta_button_card',
-  'repo_input_card',
-  'repo_scanner_card',
-  'terminal_build_card',
-  'bento_metrics_grid',
-  'kinetic_showcase_card',
-];
+export interface CustomWidgetBlueprint {
+  id: string;
+  type: WidgetBlueprintType;
+  title: string;
+  primaryText: string;
+  secondaryText: string;
+  badgeText: string;
+  accentHex: string;
+}
 
-const LEGACY_WIDGET_MAP: Record<string, StudioWidgetType> = {
-  feature_spotlight_card: 'checklist_card',
-  kinetic_hook_card: 'kinetic_showcase_card',
-  cta_dock_card: 'cta_button_card',
+export type MotionTelemetryProfile = {
+  fps: number;
+  springStiffness: number;
+  springDamping: number;
+  motionBlurSamples: number;
+  cursorActive: boolean;
 };
 
-/** Ubah nama widget apa pun (termasuk nama lama) menjadi widget yang pasti bisa digambar. */
-export function normalizeWidgetType(
-  value: unknown,
-  fallback: StudioWidgetType = 'checklist_card'
-): StudioWidgetType {
-  if (typeof value !== 'string') return fallback;
-  if ((STUDIO_WIDGET_TYPES as readonly string[]).includes(value)) return value as StudioWidgetType;
-  return LEGACY_WIDGET_MAP[value] || fallback;
-}
+export type SceneRole = 'hook' | 'problem' | 'solution' | 'proof' | 'cta';
 
-export interface MotionTelemetryProfile {
-  presetId: string;
-  creatorHandle: string;
-  sourceUrl: string;
-  easing: string;
-  cameraMotion: CameraMotionType;
-  bpm: number;
-  paletteId: string;
-  widgetSequence: WidgetBlueprintType[];
-  stepBadges: string[];
-  cardRadius: number;
-  glassBlur: number;
-  staggerMs: number;
-}
+export type SceneLayout =
+  | 'center'
+  | 'split-top'
+  | ' editorial-left'
+  | 'editorial-left'
+  | 'card-stack'
+  | 'diagonal-hero'
+  | 'magazine'
+  | 'bento-grid'
+  | 'hud-frame';
 
-export interface TrainedVideoPreset {
-  id: string;
-  title: string;
-  description: string;
-  category: string;
-  videoUrl: string;
-  creatorHandle: string;
-  profile: MotionTelemetryProfile;
-}
+export type SceneTransition =
+  | 'cut'
+  | 'whip-left'
+  | 'iris-wipe'
+  | 'diagonal-slice'
+  | 'zoom-punch'
+  | 'glitch-cut'
+  | 'morph-card'
+  | 'shutter-blinds'
+  | 'blueprint-wire';
 
-export interface GeneratedMotionScene {
-  id: string;
-  stepBadge: string;
-  title: string;
-  subtext: string;
-  duration: number;
-  paletteId: string;
-  widgetType: WidgetBlueprintType;
-  widgetData: {
-    primaryInput?: string;
-    secondaryBadge?: string;
-    terminalLines?: string[];
-    metrics?: Array<{ label: string; value: string; accent: string }>;
-  };
-  cameraMotion: string;
-  easing: string;
-}
+export type BackgroundStyle =
+  | 'aurora'
+  | 'mesh'
+  | 'grid-cyber'
+  | 'sunburst'
+  | 'halftone'
+  | 'particles'
+  | 'minimal-dark'
+  | 'datapack-synth';
 
-export type SceneRole =
-  | 'Hook / Masalah'
-  | 'Isi / Solusi'
-  | 'Bukti / Harga'
-  | 'CTA Akhir'
-  | 'Langkah'
-  | 'Tips Penting'
-  | 'Renungan';
+export type HeadlineAnim =
+  | 'word-pop'
+  | 'typewriter'
+  | 'karaoke'
+  | 'kinetic-slide'
+  | 'elastic-bounce'
+  | 'blur-reveal'
+  | 'glitch-decode';
 
 export interface SceneItem {
   id: string;
@@ -226,9 +344,7 @@ export interface SceneItem {
   imageUrl?: string;
   stepBadge?: string;
   widgetType?: WidgetBlueprintType;
-  /** Isi utama kartu: nama produk, isi kutipan, angka besar, atau teks tombol. */
   primaryInput?: string;
-  /** Isi tambahan kartu, dipisah "|" (contoh: "Rp18rb | Rp25rb | Hemat 28%"). */
   secondaryInput?: string;
   cameraMotion?: CameraMotionType;
   paletteId?: string;
@@ -236,73 +352,77 @@ export interface SceneItem {
   transition?: SceneTransition;
   bgStyle?: BackgroundStyle;
   headlineAnim?: HeadlineAnim;
-  /** Emoji dekorasi yang melayang di latar, mis. "☕✨". */
   decor?: string;
-  /** Kata kunci dari prompt yang ditonjolkan di judul, dipisah "|". */
   emphasis?: string;
+  dataPackMeta?: {
+    clusterId: string;
+    packTitle: string;
+    compositionStyle: string;
+    matchedKeywords: string[];
+  };
+}
+
+export interface GeneratedMotionScene extends SceneItem {
+  telemetry?: MotionTelemetryProfile;
+}
+
+export interface MusicTrack {
+  id: string;
+  name: string;
+  mood: 'energetic' | 'slow' | 'chill' | 'dramatic' | 'upbeat';
+  bpm: number;
+  url: string;
+  durationSec: number;
 }
 
 export interface ColorPalette {
   id: string;
   name: string;
-  bgPrimary: string;
-  bgSecondary: string;
-  textColor: string;
-  accentColor: string;
-  badgeTextColor: string;
-}
-
-export interface MusicTrack {
-  id: string;
-  title: string;
-  mood: 'slow' | 'energetic' | 'chill' | 'upbeat' | 'dramatic';
-  bpm: number;
-  url: string;
-  cdnUrl: string;
-  description: string;
-}
-
-export interface CustomImageAsset {
-  id: string;
-  title: string;
-  category: CategoryType;
-  url: string;
+  background: string;
+  secondary: string;
+  text: string;
+  accent: string;
+  gradient: string;
 }
 
 export interface StyleSuggestion {
-  paletteId: string;
-  colors: ColorPalette;
-  font: EngineFontName;
-  musicId: string;
+  palette: ColorPalette;
   music: MusicTrack;
-  backgroundType: 'solid' | 'gradient' | 'image';
-  gradientPreset: string;
-  moodLabel: string;
+  recommendedTemplate: 'Q1' | 'Q2' | 'Q3' | 'P1' | 'P2' | 'P3' | 'E1' | 'E2' | 'E3';
+  recommendedFont: EngineFontName;
+  moodReason: string;
 }
 
-export type QuoteMood = 'capek' | 'galau' | 'semangat' | 'cinta' | 'syukur' | 'netral';
+export type TopicMood = 'galau' | 'promo' | 'edukasi' | 'hype' | 'aesthetic' | 'tech' | 'neutral';
+export type QuoteMood = 'galau' | 'motivasi' | 'sindir' | 'tenang';
+
+export interface PriceMatch {
+  raw: string;
+  numeric: number;
+  formatted: string;
+}
 
 export interface ParsedTopicMeta {
+  rawTopic: string;
   cleanTopic: string;
   productName: string;
-  /** Harga promo, '' bila tidak ada. */
   priceText: string;
-  /** Harga normal (untuk harga coret), '' bila tidak ada. */
   originalPriceText: string;
-  /** Nama toko, '' bila tidak ada. */
+  discountPercent: number;
   storeName: string;
-  emotionKeyword: string;
-  detectedMood: 'galau' | 'promo' | 'edukasi' | 'netral';
-  discountPercent?: number | null;
-  /** Edukasi: topik tanpa awalan "3 cara …". */
-  subject?: string;
-  /** Edukasi: jumlah langkah yang diminta (dibatasi 2–6). */
-  stepCount?: number | null;
-  /** Edukasi: true bila angka di topik tidak perlu dibatasi. */
-  stepCountExact?: boolean;
-  /** Edukasi: kata benda setelah angka ("cara", "tips", "langkah", …). */
-  stepNoun?: string;
-  quoteMood?: QuoteMood;
+  detectedMood: TopicMood;
+  keywords: string[];
+  matchedDataPackId: string;
+  matchedDataPackTitle: string;
+}
+
+export interface StyleRecipe {
+  id: string;
+  name: string;
+  transitions: SceneTransition[];
+  animations: AnimationType[];
+  cameraMotions: CameraMotionType[];
+  cursorMode: CursorAnimationMode;
 }
 
 export interface GeneratedScriptResult {
@@ -314,2028 +434,612 @@ export interface GeneratedScriptResult {
   suggestedColor: ColorPalette;
   suggestedStyle: StyleSuggestion;
   extractedMeta: ParsedTopicMeta;
-  /** Gaya yang dipilih dari prompt (paket gaya + kata kunci yang terbaca). */
   recipe?: StyleRecipe;
+  synthesizedPackImages?: SynthesizedSceneImage[];
 }
 
 export interface GenerateOptions {
-  customPrice?: string;
-  customOriginalPrice?: string;
-  customProductName?: string;
-  customStoreName?: string;
-  excludeHooks?: string[];
-  forceRandomPalette?: boolean;
-  userImages?: string[];
-  /** Isi angka untuk hasil yang selalu sama (deterministik). */
+  priceOverride?: string;
+  productOverride?: string;
+  storeOverride?: string;
+  cursorMode?: CursorAnimationMode;
+  useDataPackImages?: boolean;
   seed?: number;
-  /** Paksa paket gaya tertentu (id dari STYLE_PACKS). */
-  stylePackId?: string;
-  /** Paksa susunan scene: A = lengkap, B = alternatif, C = ringkas. */
-  variant?: 'A' | 'B' | 'C';
 }
 
 export interface SceneTemplateEntry {
-  text: string;
-  subtext: string;
-  emoji: string;
+  scene2: string;
+  scene2Sub: string;
+  scene3: string;
+  scene3Sub: string;
+  emoji2: string;
+  emoji3: string;
 }
-
-/* -------------------------------------------------------------------------- */
-/* ACAK & TEKS                                                                */
-/* -------------------------------------------------------------------------- */
-
-type Rng = () => number;
-
-function createRng(seed?: number): Rng {
-  if (typeof seed !== 'number' || !Number.isFinite(seed)) return Math.random;
-  let state = Math.floor(seed) >>> 0;
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let t = state;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function pick<T>(list: readonly T[], rng: Rng, fallback: T): T {
-  if (!list.length) return fallback;
-  return list[Math.floor(rng() * list.length)] ?? fallback;
-}
-
-function shuffle<T>(list: readonly T[], rng: Rng): T[] {
-  const out = [...list];
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-}
-
-/** Ambil n item berbeda secara acak. */
-function pickSome<T>(list: readonly T[], n: number, rng: Rng): T[] {
-  return shuffle(Array.from(new Set(list)), rng).slice(0, n);
-}
-
-/** Ambil n item secara acak tapi urutannya tetap seperti daftar aslinya. */
-function pickOrdered<T>(list: readonly T[], n: number, rng: Rng): T[] {
-  if (n >= list.length) return [...list];
-  const idx = shuffle(
-    list.map((_, i) => i),
-    rng
-  )
-    .slice(0, n)
-    .sort((a, b) => a - b);
-  return idx.map((i) => list[i]);
-}
-
-function cleanSpaces(s: string): string {
-  return s
-    .replace(/\s{2,}/g, ' ')
-    .replace(/\s+([,.!?:;])/g, '$1')
-    .trim();
-}
-
-function sentenceCase(s: string): string {
-  const t = s.trim();
-  return t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
-}
-
-const SMALL_WORDS = new Set(['di', 'ke', 'dari', 'dan', 'atau', 'yang', 'untuk', 'dengan', 'pada', '&']);
-
-function titleCase(s: string): string {
-  return s
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w, i) => {
-      if (/[A-Z]/.test(w.slice(1)) || /\d/.test(w) || w.startsWith('@')) return w;
-      const lw = w.toLowerCase();
-      if (i > 0 && SMALL_WORDS.has(lw)) return lw;
-      return lw.charAt(0).toUpperCase() + lw.slice(1);
-    })
-    .join(' ');
-}
-
-function shortenAtWord(s: string, max: number): string {
-  if (s.length <= max) return s;
-  const cut = s.slice(0, max);
-  const lastSpace = cut.lastIndexOf(' ');
-  return `${(lastSpace > max * 0.5 ? cut.slice(0, lastSpace) : cut).trim()}…`;
-}
-
-/* -------------------------------------------------------------------------- */
-/* HARGA                                                                      */
-/* -------------------------------------------------------------------------- */
-
-export interface PriceMatch {
-  text: string;
-  display: string;
-  value: number;
-  start: number;
-  end: number;
-}
-
-// Angka dianggap harga hanya jika ada "Rp", satuan (rb/k/jt), atau pemisah ribuan.
-// Satuan tidak boleh diikuti huruf/angka, jadi "2 kopi" atau "5 kali" tidak dibaca sebagai harga.
-const PRICE_SOURCE =
-  '(\\brp\\.?\\s*)?(\\d{1,3}(?:[.,]\\d{3})+|\\d+(?:[.,]\\d+)?)\\s*(rb|ribu|k|jt|juta)?(?![a-z0-9])';
-
-const UNIT_MULTIPLIER: Record<string, number> = { rb: 1e3, ribu: 1e3, k: 1e3, jt: 1e6, juta: 1e6 };
-
-function parseIdNumber(num: string): number {
-  if (/^\d{1,3}([.,]\d{3})+$/.test(num)) return Number(num.replace(/[.,]/g, ''));
-  return Number(num.replace(',', '.'));
-}
-
-function formatPriceDisplay(num: string, unit: string): string {
-  if (unit === 'rb' || unit === 'ribu' || unit === 'k') return `Rp${num}rb`;
-  if (unit === 'jt' || unit === 'juta') return `Rp${num}jt`;
-  return `Rp${num}`;
-}
-
-export function findPrices(text: string): PriceMatch[] {
-  const out: PriceMatch[] = [];
-  const re = new RegExp(PRICE_SOURCE, 'gi');
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text || '')) !== null) {
-    const full = m[0];
-    const prefix = m[1] || '';
-    const num = m[2] || '';
-    const unit = (m[3] || '').toLowerCase();
-    const hasSeparator = /^\d{1,3}([.,]\d{3})+$/.test(num);
-    if (!prefix && !unit && !hasSeparator) continue;
-    const base = parseIdNumber(num);
-    if (!Number.isFinite(base) || base <= 0) continue;
-    out.push({
-      text: full.trim(),
-      display: formatPriceDisplay(num, unit),
-      value: base * (UNIT_MULTIPLIER[unit] || 1),
-      start: m.index,
-      end: m.index + full.length,
-    });
-  }
-  return out;
-}
-
-/** "Rp18rb" → 18000, "Rp 1,5jt" → 1500000, "18.000" → 18000. null bila bukan harga. */
-export function priceToNumber(text: string): number | null {
-  const hits = findPrices(text || '');
-  if (hits.length) return hits[0].value;
-  const plain = /^\s*(\d[\d.,]*)\s*$/.exec(text || '');
-  if (!plain) return null;
-  const n = parseIdNumber(plain[1]);
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
-
-/* -------------------------------------------------------------------------- */
-/* DATA BAWAAN                                                                */
-/* -------------------------------------------------------------------------- */
-
-export const CUSTOM_IMAGE_ASSETS: CustomImageAsset[] = [
-  {
-    id: 'asset-promo-coffee',
-    title: 'Foto produk minuman',
-    category: 'promo',
-    url: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=1080&q=80',
-  },
-  {
-    id: 'asset-quote-sunset',
-    title: 'Visual tenang',
-    category: 'quote',
-    url: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1080&q=80',
-  },
-  {
-    id: 'asset-edukasi-laptop',
-    title: 'Ilustrasi belajar',
-    category: 'edukasi',
-    url: 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&w=1080&q=80',
-  },
-];
 
 export const COLOR_PALETTES: ColorPalette[] = [
   {
-    id: 'promo-pop',
-    name: 'Kuning Promo',
-    bgPrimary: '#ffe08a',
-    bgSecondary: '#ffc94d',
-    textColor: '#1c1206',
-    accentColor: '#dc2626',
-    badgeTextColor: '#ffffff',
+    id: 'cyber-violet',
+    name: 'Cyber Violet Studio',
+    background: '#070815',
+    secondary: '#1E1B4B',
+    text: '#F8FAFC',
+    accent: '#38BDF8',
+    gradient: 'linear-gradient(135deg, #070815 0%, #1E1B4B 55%, #311042 100%)',
   },
   {
-    id: 'quote-ink',
-    name: 'Tinta Malam',
-    bgPrimary: '#0b1026',
-    bgSecondary: '#241a3d',
-    textColor: '#f8f5ee',
-    accentColor: '#c08a3e',
-    badgeTextColor: '#1f1b2e',
+    id: 'promo-fire',
+    name: 'Promo Merah Kuning UMKM',
+    background: '#1F0606',
+    secondary: '#7F1D1D',
+    text: '#FFFFFF',
+    accent: '#FACC15',
+    gradient: 'linear-gradient(135deg, #1F0606 0%, #991B1B 55%, #CA8A04 100%)',
   },
   {
-    id: 'aurora-mint',
-    name: 'Mint Segar',
-    bgPrimary: '#d1fae5',
-    bgSecondary: '#ecfeff',
-    textColor: '#064e3b',
-    accentColor: '#10b981',
-    badgeTextColor: '#ffffff',
+    id: 'kopi-senja',
+    name: 'Roastery Kopi Aren',
+    background: '#140B05',
+    secondary: '#451A03',
+    text: '#FFFBEB',
+    accent: '#F59E0B',
+    gradient: 'linear-gradient(135deg, #140B05 0%, #451A03 55%, #78350F 100%)',
   },
   {
-    id: 'depup-lavender',
-    name: 'Lavender Pastel',
-    bgPrimary: '#dcd6f7',
-    bgSecondary: '#f3e8ff',
-    textColor: '#18181b',
-    accentColor: '#4f46e5',
-    badgeTextColor: '#ffffff',
+    id: 'edu-electric',
+    name: 'Edukasi Biru Kristal',
+    background: '#040D21',
+    secondary: '#1E3A8A',
+    text: '#F0F9FF',
+    accent: '#22D3EE',
+    gradient: 'linear-gradient(135deg, #040D21 0%, #1E3A8A 55%, #0284C7 100%)',
   },
   {
-    id: 'midnight-indigo',
-    name: 'Indigo Malam',
-    bgPrimary: '#090d16',
-    bgSecondary: '#1e1b4b',
-    textColor: '#f8fafc',
-    accentColor: '#6366f1',
-    badgeTextColor: '#ffffff',
+    id: 'midnight-galau',
+    name: 'Midnight Deep Talk',
+    background: '#060713',
+    secondary: '#1E1B4B',
+    text: '#E2E8F0',
+    accent: '#F472B6',
+    gradient: 'linear-gradient(135deg, #060713 0%, #1E1B4B 60%, #4C1D95 100%)',
   },
   {
-    id: 'cyber-sunset',
-    name: 'Sunset Neon',
-    bgPrimary: '#18181b',
-    bgSecondary: '#4c0519',
-    textColor: '#ffffff',
-    accentColor: '#f43f5e',
-    badgeTextColor: '#ffffff',
+    id: 'emerald-cuan',
+    name: 'Emerald Growth & Finance',
+    background: '#02140C',
+    secondary: '#064E3B',
+    text: '#ECFDF5',
+    accent: '#34D399',
+    gradient: 'linear-gradient(135deg, #02140C 0%, #064E3B 55%, #047857 100%)',
   },
   {
-    id: 'emerald-luxury',
-    name: 'Emerald',
-    bgPrimary: '#064e3b',
-    bgSecondary: '#022c22',
-    textColor: '#ecfdf5',
-    accentColor: '#34d399',
-    badgeTextColor: '#022c22',
+    id: 'sunset-coral',
+    name: 'Sunset Aesthetic Glow',
+    background: '#18071A',
+    secondary: '#701A75',
+    text: '#FDF4FF',
+    accent: '#FB7185',
+    gradient: 'linear-gradient(135deg, #18071A 0%, #701A75 55%, #BE123C 100%)',
   },
-  { id: 'candy-pop', name: 'Candy Pop', bgPrimary: '#ffe4f1', bgSecondary: '#e9d5ff', textColor: '#18181b', accentColor: '#db2777', badgeTextColor: '#ffffff' },
-  { id: 'ocean-fresh', name: 'Biru Segar', bgPrimary: '#e0f2fe', bgSecondary: '#a5f3fc', textColor: '#18181b', accentColor: '#0369a1', badgeTextColor: '#ffffff' },
-  { id: 'mono-noir', name: 'Hitam Tegas', bgPrimary: '#0a0a0a', bgSecondary: '#262626', textColor: '#f8fafc', accentColor: '#facc15', badgeTextColor: '#111827' },
-  { id: 'royal-gold', name: 'Emas Mewah', bgPrimary: '#0c1a14', bgSecondary: '#1c1917', textColor: '#f8fafc', accentColor: '#d4af37', badgeTextColor: '#111827' },
-  { id: 'sunset-warm', name: 'Senja Hangat', bgPrimary: '#ffedd5', bgSecondary: '#fecdd3', textColor: '#18181b', accentColor: '#ea580c', badgeTextColor: '#ffffff' },
-  { id: 'paper-clean', name: 'Kertas Bersih', bgPrimary: '#fafaf9', bgSecondary: '#e7e5e4', textColor: '#18181b', accentColor: '#1d4ed8', badgeTextColor: '#ffffff' },
-  { id: 'cocoa-cream', name: 'Kopi Krim', bgPrimary: '#f5ebe0', bgSecondary: '#e3d5ca', textColor: '#18181b', accentColor: '#7f4f24', badgeTextColor: '#ffffff' },
+  {
+    id: 'brutalist-mono',
+    name: 'Neo-Brutalist High Contrast',
+    background: '#09090B',
+    secondary: '#27272A',
+    text: '#FAFAFA',
+    accent: '#A3E635',
+    gradient: 'linear-gradient(135deg, #09090B 0%, #18181B 60%, #3F3F46 100%)',
+  },
 ];
 
 export const MUSIC_TRACKS: MusicTrack[] = [
   {
-    id: 'track-saas-upbeat',
-    title: 'Future Garage (118 BPM)',
-    mood: 'upbeat',
-    bpm: 118,
-    url: '/music/upbeat.mp3',
-    cdnUrl: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3',
-    description: 'Beat elektronik bersih untuk demo produk',
-  },
-  {
-    id: 'track-energetic-drop',
-    title: 'Kinetic Bass Drop (128 BPM)',
+    id: 'upbeat-phonk',
+    name: 'TikTok Viral Drift & Beats',
     mood: 'energetic',
-    bpm: 128,
-    url: '/music/energetic.mp3',
-    cdnUrl: 'https://cdn.pixabay.com/download/audio/2022/10/25/audio_946b0939c8.mp3',
-    description: 'Ketukan cepat untuk video promo',
+    bpm: 138,
+    url: 'https://cdn.pixabay.com/download/audio/2022/10/25/audio_946b0939c8.mp3',
+    durationSec: 30,
   },
   {
-    id: 'track-chill-lofi',
-    title: 'Lofi Focus (110 BPM)',
-    mood: 'chill',
-    bpm: 110,
-    url: '/music/chill.mp3',
-    cdnUrl: 'https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3',
-    description: 'Suasana santai untuk video edukasi',
-  },
-  {
-    id: 'track-slow-ambient',
-    title: 'Cinematic Warmth (92 BPM)',
+    id: 'lofi-senja',
+    name: 'Midnight Rain Lo-Fi Piano',
     mood: 'slow',
-    bpm: 92,
-    url: '/music/slow.mp3',
-    cdnUrl: 'https://cdn.pixabay.com/download/audio/2021/11/25/audio_91b32e02f9.mp3',
-    description: 'Alunan lembut untuk kutipan',
+    bpm: 78,
+    url: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3',
+    durationSec: 30,
+  },
+  {
+    id: 'chill-synth',
+    name: 'Future Tech & Study Flow',
+    mood: 'chill',
+    bpm: 105,
+    url: 'https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a73467.mp3',
+    durationSec: 30,
+  },
+  {
+    id: 'promo-funk',
+    name: 'UMKM Flash Sale Groove',
+    mood: 'upbeat',
+    bpm: 124,
+    url: 'https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3',
+    durationSec: 30,
+  },
+  {
+    id: 'cinematic-pulse',
+    name: 'Cyberpunk Documentary Pulse',
+    mood: 'dramatic',
+    bpm: 116,
+    url: 'https://cdn.pixabay.com/download/audio/2022/08/02/audio_884fe92c21.mp3',
+    durationSec: 30,
   },
 ];
+
+export const CUSTOM_IMAGE_ASSETS: Record<string, string[]> = {
+  promo: GOOGLE_VISUAL_DATA_PACKS.filter((p) => p.clusterId === 'kuliner-kopi-umkm').map((p) =>
+    synthesizeDataPackSceneImage({ topic: p.title, sceneText: p.badgeLabels[0], sceneIndex: 0, customPackOverride: p }).dataUri
+  ),
+  quote: GOOGLE_VISUAL_DATA_PACKS.filter((p) => p.clusterId === 'quotes-senja-mental').map((p) =>
+    synthesizeDataPackSceneImage({ topic: p.title, sceneText: p.badgeLabels[0], sceneIndex: 1, customPackOverride: p }).dataUri
+  ),
+  edukasi: GOOGLE_VISUAL_DATA_PACKS.filter((p) => p.clusterId === 'edukasi-sains-kampus' || p.clusterId === 'tech-saas-cyber').map((p) =>
+    synthesizeDataPackSceneImage({ topic: p.title, sceneText: p.badgeLabels[0], sceneIndex: 2, customPackOverride: p }).dataUri
+  ),
+};
+
+export function priceToNumber(raw: string, unit?: string): number {
+  const cleaned = raw.replace(',', '.');
+  const num = parseFloat(cleaned);
+  if (isNaN(num)) return 18000;
+  const u = (unit || '').toLowerCase();
+  if (u === 'jt' || u === 'juta') return Math.round(num * 1_000_000);
+  if (u === 'rb' || u === 'ribu' || u === 'k') return Math.round(num * 1_000);
+  return num < 1000 ? Math.round(num * 1000) : Math.round(num);
+}
+
+export function findPrices(text: string): PriceMatch[] {
+  const regex = /(\d+(?:[.,]\d+)?)\s*(rb|ribu|k|jt|juta)?/gi;
+  const matches: PriceMatch[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(text)) !== null) {
+    const val = parseFloat(m[1].replace(',', '.'));
+    if (val <= 0) continue;
+    if (!m[2] && val < 10) continue;
+    const numeric = priceToNumber(m[1], m[2]);
+    const formatted =
+      numeric >= 1_000_000
+        ? `Rp${(numeric / 1_000_000).toFixed(numeric % 1_000_000 === 0 ? 0 : 1)} Juta`
+        : `Rp${(numeric / 1_000).toFixed(0)}.000`;
+    matches.push({ raw: m[0].trim(), numeric, formatted });
+  }
+  return matches;
+}
+
+const HOOK_BANK: Record<CategoryType, string[]> = {
+  promo: [
+    'STOP SCROLL! {produk} cuma {harga} doang?!',
+    'Jangan beli {produk} sebelum liat promo {harga} ini!',
+    'GILA SIH! {produk} seenak ini harganya cuma {harga}!',
+    'Warga lokal wajib tahu: {produk} di {toko} turun jadi {harga}!',
+    'Bikin nagih parah! {produk} {harga} paling worth it bulan ini!',
+    'Seriusan {harga} dapet {produk} seporsi penuh di {toko}?!',
+    'Rahasia hemat anak kos: {produk} premium cuma {harga}!',
+    'Flash Sale {toko}! {produk} favoritmu didiskon jadi {harga}!',
+  ],
+  quote: [
+    'Dengerin ini kalo lu lagi capek soal {topik}...',
+    'Kata-kata soal {topik} ini bakal nampar keras sih...',
+    'Pelan-pelan ya, gak semua tentang {topik} harus selesai hari ini.',
+    'Suatu saat lu bakal paham kenapa {topik} harus terjadi.',
+    'Buat lu yang diem-diem berjuang lewatin {topik} sendirian...',
+    'Jangan nyerah dulu, {topik} ini cuma fase pendewasaan.',
+    'Kadang yang bikin lelah itu bukan {topik}, tapi ekspektasi kita sendiri.',
+    'Baca ini sebelum tidur kalo pikiran lu penuh sama {topik}.',
+  ],
+  edukasi: [
+    '90% orang masih salah paham soal {topik}!',
+    '3 Rahasia {topik} yang jarang dibahas di kampus!',
+    'Cara paling cerdas kuasai {topik} dalam 60 detik!',
+    'Stop lakuin kesalahan ini waktu belajar {topik}!',
+    'Kenapa {topik} bisa ngubah cara kerjamu 10x lebih cepat?',
+    'Bongkar anatomi {topik} dari nol sampai paham!',
+    'Simpan dulu! Ini urutan belajar {topik} biar gak pusing.',
+    'Fakta mengejutkan di balik {topik} yang wajib kamu tahu!',
+  ],
+};
+
+const CTA_BANK: Record<CategoryType, string[]> = {
+  promo: [
+    'Klik keranjang kuning / mampir ke {toko} sebelum kehabisan!',
+    'Komen "MAU {produk}" sekarang biar langsung dikirim promonya!',
+    'Share ke temen nongkrong lu, sikat harga {harga} hari ini!',
+    'Save video ini & tunjukin ke kasir {toko} buat klaim harga {harga}!',
+  ],
+  quote: [
+    'Save video ini buat pengingat dikala lu butuh tenang.',
+    'Share ke seseorang yang lagi butuh denger kalimat ini.',
+    'Follow buat catatan perjalanan & deep talk berikutnya.',
+    'Tulis "SEMBUH" di komentar kalau kamu siap melangkah lagi.',
+  ],
+  edukasi: [
+    'Save materi {topik} ini biar gak ilang pas lagi butuh!',
+    'Follow sekarang buat lanjut ke Part 2 pembahasan {topik}!',
+    'Share ke grup kelas / tim kamu biar sama-sama upgrade skill!',
+    'Komen bagian mana dari {topik} yang paling bikin penasaran!',
+  ],
+};
+
+const SCENE_VARIATIONS: Record<CategoryType, SceneTemplateEntry[]> = {
+  promo: [
+    {
+      scene2: 'Racikan {produk} dibuat fresh setiap hari dengan bahan kualitas utama.',
+      scene2Sub: 'Tekstur dan rasanya konsisten dari suapan pertama sampai habis.',
+      scene3: 'Harga normal dicoret! Khusus hari ini di {toko} cuma {harga} saja.',
+      scene3Sub: 'Kuota promo harian terbatas, garansi puas 100%.',
+      emoji2: '✨',
+      emoji3: '🏷️',
+    },
+    {
+      scene2: 'Banyak yang kira {produk} di {toko} mahal, padahal porsinya melimpah.',
+      scene2Sub: 'Diracik langsung dengan standar higienis & kualitas terbaik.',
+      scene3: 'Cukup bayar {harga} sudah dapet paket komplit tanpa syarat ribet!',
+      scene3Sub: 'Bisa pesan langsung di tempat atau order online sekarang.',
+      emoji2: '🔥',
+      emoji3: '💸',
+    },
+    {
+      scene2: 'Kenapa {produk} dari {toko} selalu antre dan jadi favorit pelanggan?',
+      scene2Sub: 'Karena perpaduan rasa otentik yang gak pelit bumbu maupun topping.',
+      scene3: 'Nikmati {produk} spesial ini cukup dengan {harga} khusus minggu ini!',
+      scene3Sub: 'Ratusan review bintang 5 sudah membuktikan sendiri.',
+      emoji2: '⭐',
+      emoji3: '🚀',
+    },
+  ],
+  quote: [
+    {
+      scene2: 'Kamu sudah berjalan sejauh ini melewati banyak badai tentang {topik}.',
+      scene2Sub: 'Tidak apa-apa kalau hari ini langkahmu terasa sedikit lebih lambat.',
+      scene3: 'Istirahatlah sejenak, hargai setiap proses kecil yang sudah kamu menangkan.',
+      scene3Sub: 'Esok pagi selalu membawa ruang baru untuk tumbuh kembali.',
+      emoji2: '🌧️',
+      emoji3: '🌅',
+    },
+    {
+      scene2: 'Seringkali kita terlalu keras menilai diri sendiri saat menghadapi {topik}.',
+      scene2Sub: 'Padahal setiap luka dan gagal adalah bagian dari peta perjalananmu.',
+      scene3: 'Lepaskan yang di luar kendalimu, fokus pada ketenangan hatimu hari ini.',
+      scene3Sub: 'Kamu jauh lebih tangguh daripada yang kamu bayangkan.',
+      emoji2: '🌙',
+      emoji3: '🤍',
+    },
+  ],
+  edukasi: [
+    {
+      scene2: 'Langkah pertama memahami {topik}: kuasai fondasi intinya, bukan hafalan.',
+      scene2Sub: 'Fokus pada 20% konsep kunci yang menghasilkan 80% dampak nyata.',
+      scene3: 'Terapkan pola {topik} secara bertahap lewat proyek nyata setiap hari.',
+      scene3Sub: 'Konsistensi 15 menit sehari jauh lebih efektif daripada sistem kebut semalam.',
+      emoji2: '🧠',
+      emoji3: '⚡',
+    },
+    {
+      scene2: 'Kesalahan terbesar saat belajar {topik} adalah terlalu banyak teori tanpa praktik.',
+      scene2Sub: 'Gunakan kerangka terstruktur agar alur logikanya langsung menempel.',
+      scene3: 'Kombinasikan latihan {topik} dengan evaluasi berkala untuk hasil maksimal.',
+      scene3Sub: 'Terbukti mempercepat penguasaan materi hingga 3x lipat.',
+      emoji2: '📐',
+      emoji3: '🎯',
+    },
+  ],
+};
 
 /**
- * Kalimat hasil training admin (diisi saat runtime oleh lib/training.ts).
- * Kalimat bawaan ada di konstanta PROMO_*, QUOTE_PACKS, dan EDU_PACKS di bawah.
+ * Mengacak array dengan jaminan elemen berurutan tidak pernah kembar (Non-Repeating Shuffle)
  */
-export const BANK_HOOK: Record<CategoryType, string[]> = { promo: [], quote: [], edukasi: [] };
+export function buildNonRepeatingSequence<T>(pool: T[], count: number, seed: number = Date.now()): T[] {
+  const copy = [...pool];
+  let s = seed >>> 0 || 123456789;
+  const rand = () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
 
-export const BANK_SCENES: Record<
-  CategoryType,
-  { scene2: SceneTemplateEntry[]; scene3: SceneTemplateEntry[] }
-> = {
-  promo: { scene2: [], scene3: [] },
-  quote: { scene2: [], scene3: [] },
-  edukasi: { scene2: [], scene3: [] },
-};
-
-export const BANK_CTA: Record<CategoryType, string[]> = { promo: [], quote: [], edukasi: [] };
-
-export const BANK_HASHTAGS: Record<CategoryType, string[]> = {
-  promo: ['#promo', '#diskon', '#umkm', '#promohariini'],
-  quote: ['#quotes', '#katakata', '#selfreminder', '#quotesindonesia'],
-  edukasi: ['#edukasi', '#tips', '#belajar', '#infobermanfaat'],
-};
-
-/** Kata kunci → hashtag tambahan (bisa ditambah lewat training "keyword_rule"). */
-export const TOPIC_HASHTAG_MAP: Record<string, string[]> = {
-  kopi: ['#kopisusu', '#kopikekinian'],
-};
-
-const trainedVideoPresets: TrainedVideoPreset[] = [];
-
-/* ---------- Promo ---------- */
-
-const PROMO_HOOKS = [
-  'Stop scroll! {product} lagi promo 👀',
-  'Lagi cari {product}? Pas banget, lagi promo!',
-  '{product} favoritmu lagi turun harga 🔥',
-  'Kabar baik buat pencinta {product}!',
-  'Promo {product} cuma {price}!',
-  'Cuma {price} buat {product}? Serius!',
-  'Jangan sampai kehabisan promo {product} di {store}!',
-  'Stop scroll! Ada promo spesial hari ini 👀',
-];
-
-const PROMO_URGENT_HOOKS = [
-  'FLASH SALE! {product} cuma {price} ⚡',
-  'Buruan! Promo {product} terbatas banget',
-  'Diskon {discount}% {product}, jangan sampai kehabisan!',
-  'Cuma sebentar: {product} jadi {price}!',
-];
-
-const PROMO_URGENT_CTA = ['Buruan checkout sebelum kehabisan!', 'Amankan sekarang sebelum promonya habis!'];
-
-const PROMO_HOOK_SUBTEXTS = [
-  'Promo terbatas, simak sampai habis.',
-  'Harga promonya ada sebentar lagi 👇',
-  'Khusus di {store} selama promo berlangsung.',
-];
-
-const PROMO_BENEFIT_TITLES = [
-  'Kenapa harus {product}?',
-  'Ini alasan {product} jadi favorit',
-  'Yang bikin {product} beda:',
-  'Kenapa banyak yang pilih ini?',
-];
-
-const PROMO_PRICE_TITLES = ['Sekarang cuma {price}!', 'Harga promo: {price}', 'Cukup {price} aja!'];
-
-const PROMO_DISCOUNT_TITLES = [
-  'Hemat {discount}%, sekarang {price}!',
-  'Turun dari {original_price} jadi {price}!',
-];
-
-const PROMO_NOPRICE_TITLES = [
-  'Harga spesial selama promo!',
-  'Harga spesialnya cuma di {store}!',
-  'Cek harga spesialnya sekarang!',
-];
-
-const PROMO_CTA_TITLES = [
-  'Pesan sekarang sebelum promonya habis!',
-  'Yuk, order sekarang juga!',
-  'Mampir ke {store} hari ini!',
-  'Klik link di bio buat pesan!',
-];
-
-interface PromoKind {
-  match: RegExp;
-  benefits: string[];
-  hashtags: string[];
-}
-
-const PROMO_KINDS: PromoKind[] = [
-  {
-    match:
-      /kopi|teh\b|susu|boba|jus|minuman|\bes\b|makan|nasi|ayam|bakso|\bmie?\b|soto|sate|kue|roti|donat|martabak|snack|cemilan|camilan|keripik|sambal|seblak|pizza|burger|dimsum|frozen|katering|catering/,
-    benefits: [
-      'Dibuat fresh setiap hari',
-      'Rasa favorit pelanggan',
-      'Porsi pas, harga bersahabat',
-      'Bahan pilihan berkualitas',
-    ],
-    hashtags: ['#kulinerindonesia', '#jajanan'],
-  },
-  {
-    match:
-      /baju|kaos|kemeja|celana|\brok\b|dress|gamis|hijab|jilbab|kerudung|jaket|hoodie|sepatu|sandal|\btas\b|dompet|topi|outfit|batik/,
-    benefits: [
-      'Bahan nyaman dipakai seharian',
-      'Banyak pilihan ukuran dan warna',
-      'Jahitan rapi dan awet',
-      'Cocok buat harian atau acara',
-    ],
-    hashtags: ['#fashionlokal', '#outfit'],
-  },
-  {
-    match: /skincare|serum|sabun|lipstik|parfum|lotion|sunscreen|masker|kosmetik|make ?up/,
-    benefits: [
-      'Praktis dipakai setiap hari',
-      'Kemasan mudah dibawa',
-      'Banyak pilihan varian',
-      'Harga ramah di kantong',
-    ],
-    hashtags: ['#skincarelokal', '#beauty'],
-  },
-  {
-    match: /jasa|servis|service|laundry|\bles\b|kursus|kelas|potong rambut|barbershop|salon|desain|fotografi/,
-    benefits: [
-      'Dikerjakan rapi dan tepat waktu',
-      'Bisa konsultasi dulu',
-      'Harga jelas dari awal',
-      'Pelayanan ramah',
-    ],
-    hashtags: ['#jasa', '#umkmindonesia'],
-  },
-];
-
-const PROMO_DEFAULT_KIND: PromoKind = {
-  match: /$^/,
-  benefits: [
-    'Kualitas terjaga',
-    'Harga bersahabat',
-    'Pelayanan cepat dan ramah',
-    'Promo berlaku terbatas',
-  ],
-  hashtags: ['#umkmindonesia', '#produklokal'],
-};
-
-/* ---------- Quote ---------- */
-
-interface QuotePack {
-  hooks: string[];
-  quotes: string[];
-  hashtags: string[];
-}
-
-const QUOTE_PACKS: Record<QuoteMood, QuotePack> = {
-  capek: {
-    hooks: [
-      'Untuk kamu yang lagi capek, tapi tetap bertahan.',
-      'Kalau hari ini berat, baca ini dulu.',
-      'Capek itu wajar. Berhenti sebentar juga boleh.',
-    ],
-    quotes: [
-      'Istirahat bukan menyerah, itu cara mengisi ulang tenaga.',
-      'Pelan-pelan saja, yang penting tidak berhenti.',
-      'Kamu sudah sejauh ini. Itu bukan hal kecil.',
-      'Tidak semua hari harus produktif. Bertahan juga pencapaian.',
-      'Lelahmu hari ini sedang membentuk dirimu yang besok.',
-    ],
-    hashtags: ['#capek', '#healing'],
-  },
-  galau: {
-    hooks: [
-      'Buat kamu yang lagi nggak baik-baik saja.',
-      'Kalau hatimu lagi berat, ini buat kamu.',
-      'Sedih itu boleh, nggak harus pura-pura kuat.',
-    ],
-    quotes: [
-      'Hari buruk bukan berarti hidupmu buruk.',
-      'Yang pergi jadi pelajaran, yang tinggal jaga baik-baik.',
-      'Hatimu juga butuh waktu untuk pulih.',
-      'Kamu berhak bahagia, mulai dari dirimu sendiri.',
-      'Menangis bukan tanda lemah, itu tanda kamu manusia.',
-    ],
-    hashtags: ['#galau', '#patahhati'],
-  },
-  semangat: {
-    hooks: [
-      'Pengingat buat kamu yang lagi berjuang.',
-      'Simpan ini buat hari-hari malasmu.',
-      'Kalau mulai ragu, baca ini lagi.',
-    ],
-    quotes: [
-      'Mulai dari yang kecil, tapi mulai hari ini.',
-      'Konsisten mengalahkan bakat yang malas.',
-      'Progres kecil tetap progres.',
-      'Mimpi besar dibangun dari kebiasaan kecil.',
-      'Gagal hari ini bukan akhir, cuma bagian dari cerita.',
-    ],
-    hashtags: ['#motivasi', '#semangat'],
-  },
-  cinta: {
-    hooks: [
-      'Buat kamu yang lagi belajar mencintai dengan sehat.',
-      'Pengingat kecil soal cinta.',
-      'Untuk hati yang sedang menunggu.',
-    ],
-    quotes: [
-      'Cinta yang sehat bikin kamu tumbuh, bukan takut.',
-      'Yang tepat tidak akan membuatmu terus menebak-nebak.',
-      'Sayangi dirimu dulu, baru orang lain.',
-      'Cinta itu soal hadir, bukan cuma soal kata.',
-    ],
-    hashtags: ['#cinta', '#relationship'],
-  },
-  syukur: {
-    hooks: [
-      'Pengingat untuk pelan-pelan bersyukur.',
-      'Sebelum mengeluh, baca ini dulu.',
-      'Untuk kamu yang sedang belajar ikhlas.',
-    ],
-    quotes: [
-      'Yang kamu punya hari ini dulu pernah kamu doakan.',
-      'Tenang bukan karena masalah hilang, tapi karena hati ikhlas.',
-      'Cukup itu bukan soal jumlah, tapi soal rasa.',
-      'Bersyukur bikin yang sedikit terasa cukup.',
-    ],
-    hashtags: ['#bersyukur', '#ikhlas'],
-  },
-  netral: {
-    hooks: [
-      'Pengingat kecil untuk hari ini.',
-      'Baca pelan-pelan, ini buat kamu.',
-      'Satu menit untuk dirimu sendiri.',
-    ],
-    quotes: [
-      'Semua yang besar dimulai dari langkah kecil.',
-      'Jangan bandingkan awalmu dengan pertengahan orang lain.',
-      'Hari ini cukup lakukan yang terbaik yang kamu bisa.',
-      'Pelan bukan berarti tertinggal.',
-    ],
-    hashtags: ['#motivasi'],
-  },
-};
-
-const QUOTE_MOOD_RULES: Array<[QuoteMood, RegExp]> = [
-  ['capek', /capek|\bcape\b|lelah|penat|burnout|kerja|lembur/],
-  ['galau', /galau|sedih|patah hati|kecewa|nangis|menangis|kesepian|sendirian|move on|mantan|hancur/],
-  ['cinta', /cinta|sayang|pasangan|jodoh|rindu|kangen|nikah|pacar/],
-  ['syukur', /syukur|bersyukur|ikhlas|sabar|tenang|damai|bahagia/],
-  ['semangat', /semangat|motivasi|sukses|mimpi|usaha|berjuang|konsisten|disiplin|produktif|bangkit|gagal/],
-];
-
-const QUOTE_HOOK_SUBTEXTS = ['Baca pelan-pelan, ya.', 'Simpan kalau ini kena di hati.'];
-const QUOTE_LEADS_1 = ['Ingat ini baik-baik:', 'Satu hal yang perlu kamu tahu:', 'Pegang kalimat ini:'];
-const QUOTE_LEADS_2 = ['Dan jangan lupa:', 'Satu lagi:', 'Yang paling penting:'];
-const QUOTE_CTA_TITLES = [
-  'Simpan untuk pengingat, kirim ke yang butuh.',
-  'Kirim ini ke orang yang lagi butuh.',
-  'Simpan, lalu baca lagi saat hari terasa berat.',
-];
-const QUOTE_CTA_SUBTEXTS = ['Kamu nggak sendirian.', 'Semoga harimu lebih ringan.'];
-
-/* ---------- Edukasi ---------- */
-
-interface EduPack {
-  match: RegExp;
-  steps: string[];
-  tips: string[];
-  hashtags: string[];
-}
-
-const EDU_PACKS: EduPack[] = [
-  {
-    match: /uang|keuangan|nabung|menabung|tabungan|gaji|investasi|budget|anggaran|utang|hutang|cicilan|hemat/,
-    steps: [
-      'Catat semua pengeluaran selama 30 hari',
-      'Bagi gaji pakai pola 50/30/20',
-      'Sisihkan tabungan di awal bulan',
-      'Siapkan dana darurat sebelum investasi',
-      'Hindari cicilan untuk barang konsumtif',
-    ],
-    tips: [
-      'Jangan menunggu sisa gaji untuk menabung.',
-      'Naik gaji boleh, naik gaya hidup jangan dulu.',
-      'Pisahkan rekening tabungan dan rekening harian.',
-    ],
-    hashtags: ['#tipskeuangan', '#keuangan'],
-  },
-  {
-    match: /belajar|ujian|kuliah|sekolah|hafal|menghafal|skripsi|materi|bahasa inggris/,
-    steps: [
-      'Fokus belajar 25 menit, lalu istirahat 5 menit',
-      'Jelaskan ulang materi pakai bahasamu sendiri',
-      'Ulangi materi besok dan minggu depan',
-      'Kerjakan latihan soal, jangan cuma membaca',
-      'Tidur cukup sebelum hari ujian',
-    ],
-    tips: [
-      'Latihan soal lebih efektif daripada membaca ulang.',
-      'Belajar sedikit tiap hari lebih nempel daripada sistem kebut semalam.',
-      'Jauhkan HP saat sedang belajar.',
-    ],
-    hashtags: ['#tipsbelajar', '#pelajar'],
-  },
-  {
-    match: /produktif|produktivitas|fokus|waktu|malas|menunda|prokrastinasi|rutinitas|kerja/,
-    steps: [
-      'Tulis 3 prioritas sebelum mulai kerja',
-      'Kerjakan tugas terberat saat pikiran segar',
-      'Matikan notifikasi saat sedang fokus',
-      'Kelompokkan tugas kecil di satu waktu',
-      'Rencanakan besok sebelum tutup hari',
-    ],
-    tips: [
-      'Kalau bisa selesai dalam 2 menit, kerjakan sekarang.',
-      'Multitasking justru bikin kerja lebih lama.',
-      'Istirahat singkat bikin fokus bertahan lebih lama.',
-    ],
-    hashtags: ['#produktif', '#selfimprovement'],
-  },
-  {
-    match: /sehat|kesehatan|olahraga|tidur|gizi|air putih|jalan kaki|stres|stress/,
-    steps: [
-      'Minum air putih yang cukup setiap hari',
-      'Bergerak minimal 30 menit sehari',
-      'Tidur dan bangun di jam yang sama',
-      'Kurangi layar satu jam sebelum tidur',
-      'Perbanyak sayur dan buah di piringmu',
-    ],
-    tips: [
-      'Konsisten lebih penting daripada langsung berat.',
-      'Mulai dari kebiasaan kecil yang gampang diulang.',
-      'Kalau ada keluhan kesehatan, konsultasikan ke dokter.',
-    ],
-    hashtags: ['#hidupsehat', '#tipssehat'],
-  },
-  {
-    match: /jualan|bisnis|usaha|umkm|toko|pelanggan|marketing|pemasaran|konten|closing|omzet/,
-    steps: [
-      'Kenali satu masalah utama pelangganmu',
-      'Tunjukkan produk saat dipakai, bukan cuma difoto',
-      'Posting rutin di jam pelanggan aktif',
-      'Balas komentar dan DM secepat mungkin',
-      'Minta testimoni dari pelanggan yang puas',
-    ],
-    tips: [
-      'Jual manfaatnya, bukan cuma fiturnya.',
-      'Satu konten yang jelas lebih baik dari sepuluh yang asal.',
-      'Pelanggan lama lebih mudah diajak beli lagi.',
-    ],
-    hashtags: ['#tipsbisnis', '#jualanonline'],
-  },
-  {
-    match: /masak|resep|memasak|dapur|bikin kue|baking/,
-    steps: [
-      'Siapkan semua bahan sebelum mulai memasak',
-      'Panaskan wajan sebelum bahan masuk',
-      'Masak dengan api sedang supaya matang merata',
-      'Cicipi dan koreksi rasa di akhir',
-    ],
-    tips: [
-      'Takar bumbu dulu, jangan langsung dituang.',
-      'Jangan isi wajan terlalu penuh supaya tidak lembek.',
-    ],
-    hashtags: ['#resep', '#masakdirumah'],
-  },
-];
-
-const EDU_DEFAULT: EduPack = {
-  match: /$^/,
-  steps: [
-    'Pahami dasarnya dulu sebelum yang rumit',
-    'Praktik sedikit, tapi setiap hari',
-    'Catat progres dan evaluasi tiap minggu',
-    'Belajar dari orang yang sudah berhasil',
-    'Ulangi bagian yang masih sulit',
-  ],
-  tips: [
-    'Konsisten kecil lebih baik daripada semangat sesaat.',
-    'Jangan takut salah, itu bagian dari belajar.',
-  ],
-  hashtags: ['#belajarbareng'],
-};
-
-// Sengaja ditulis sebagai regex literal: minifier SWC merusak "\\b" di dalam template literal.
-const EDU_COUNT_RE = /^(\d{1,2})\s+(cara|tips|tip|langkah|trik|kebiasaan|hal|rahasia|kesalahan|fakta|alasan|ide)\b\s*(.*)$/i;
-const EDU_COUNT_START_RE = /^\s*\d{1,2}\s+(cara|tips|tip|langkah|trik|kebiasaan|hal|rahasia|kesalahan|fakta|alasan|ide)\b/;
-const EDU_LIST_TITLES = ['Ini langkah-langkahnya:', 'Caranya begini:', 'Coba urutan ini:'];
-const EDU_TIP_TITLES = ['Tips penting:', 'Yang sering dilupakan:', 'Satu lagi:'];
-const EDU_CTA_TITLES = [
-  'Simpan biar nggak lupa!',
-  'Bagikan ke teman yang butuh!',
-  'Follow untuk tips berikutnya!',
-];
-
-/* -------------------------------------------------------------------------- */
-/* TRAINING ADMIN (dipanggil lib/training.ts)                                 */
-/* -------------------------------------------------------------------------- */
-
-export function addTrainedVideoPresetToEngine(preset: TrainedVideoPreset): void {
-  const idx = trainedVideoPresets.findIndex((p) => p.id === preset.id);
-  if (idx >= 0) {
-    trainedVideoPresets[idx] = preset;
-  } else {
-    trainedVideoPresets.unshift(preset);
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
   }
-}
 
-export function getTrainedVideoPresets(): TrainedVideoPreset[] {
-  return trainedVideoPresets;
-}
-
-export function addCustomHookToEngine(category: CategoryType, hookText: string): boolean {
-  const clean = hookText.trim();
-  const list = BANK_HOOK[category];
-  if (!clean || !list) return false;
-  if (!list.includes(clean)) list.push(clean);
-  return true;
-}
-
-export function addCustomSceneToEngine(
-  category: CategoryType,
-  slot: 'scene2' | 'scene3',
-  entry: SceneTemplateEntry
-): boolean {
-  const target = BANK_SCENES[category];
-  if (!entry.text?.trim() || !target) return false;
-  target[slot].push({
-    text: entry.text.trim(),
-    subtext: entry.subtext?.trim() || '',
-    emoji: entry.emoji?.trim() || '✨',
-  });
-  return true;
-}
-
-/** Tanpa kategori = berlaku untuk semua kategori. */
-export function addCustomCtaToEngine(ctaText: string, category?: CategoryType): boolean {
-  const clean = ctaText.trim();
-  if (!clean) return false;
-  const cats: CategoryType[] = category ? [category] : ['promo', 'quote', 'edukasi'];
-  cats.forEach((c) => {
-    if (!BANK_CTA[c].includes(clean)) BANK_CTA[c].push(clean);
-  });
-  return true;
-}
-
-export function addCustomImageAssetToEngine(asset: CustomImageAsset): boolean {
-  if (!asset.url?.trim()) return false;
-  if (!CUSTOM_IMAGE_ASSETS.some((a) => a.id === asset.id)) {
-    CUSTOM_IMAGE_ASSETS.unshift(asset);
-  }
-  return true;
-}
-
-export function addKeywordRuleToEngine(keywords: string[], hashtags: string[]): boolean {
-  if (!keywords.length || !hashtags.length) return false;
-  const formattedTags = hashtags.map((h) => (h.startsWith('#') ? h : `#${h}`));
-  keywords.forEach((kw) => {
-    const k = kw.toLowerCase().trim();
-    if (k) {
-      TOPIC_HASHTAG_MAP[k] = Array.from(new Set([...(TOPIC_HASHTAG_MAP[k] || []), ...formattedTags]));
+  const result: T[] = [];
+  for (let i = 0; i < count; i++) {
+    const candidate = copy[i % copy.length];
+    if (result.length > 0 && candidate === result[result.length - 1] && copy.length > 1) {
+      result.push(copy[(i + 1) % copy.length]);
+    } else {
+      result.push(candidate);
     }
-  });
-  return true;
+  }
+  return result;
 }
 
-/* -------------------------------------------------------------------------- */
-/* PARSER TOPIK                                                               */
-/* -------------------------------------------------------------------------- */
+export function parseTopic(rawTopic: string, opts?: GenerateOptions): ParsedTopicMeta {
+  const raw = (rawTopic || 'Promo Kopi Susu Gula Aren 18rb').trim();
+  const prices = findPrices(raw);
+  const priceText = opts?.priceOverride?.trim() || (prices[0] ? prices[0].formatted : 'Rp18.000');
+  const numericPrice = prices[0] ? prices[0].numeric : 18000;
+  const originalPriceNumeric = Math.round((numericPrice * 1.45) / 1000) * 1000;
+  const originalPriceText = `Rp${(originalPriceNumeric / 1000).toFixed(0)}.000`;
 
-const PROMO_FILLER = new Set([
-  'promo',
-  'diskon',
-  'sale',
-  'cuma',
-  'hanya',
-  'dari',
-  'jadi',
-  'harga',
-  'spesial',
-  'special',
-  'murah',
-  'flash',
-  'hemat',
-  'potongan',
-  'mulai',
-  'only',
-  'turun',
-]);
-const TRAILING_FILLER = new Set(['hari', 'ini', 'aja', 'saja', 'sekarang', 'juga', 'nih', 'yuk', 'guys']);
-const LEADING_FILLER = new Set(['yuk', 'ada', 'lagi', 'beli', 'jual']);
-
-// Kata platform & gaya tidak ikut jadi nama produk/judul ("buat story WA", "aesthetic", "nuansa merah")
-const PLATFORM_PHRASE =
-  /\b(?:buat|untuk|di|ke|konten|video)?\s*(?:story|status|sw|whatsapp|wa|tiktok|reels?|instagram|ig|feed|shorts?|youtube|yt|fyp)(?:\s+(?:ig|wa|instagram|tiktok|youtube|yt))?\b/gi;
-const STYLE_PHRASE = /\b(?:nuansa|gaya|tema|suasana|vibes?|style)\s+\S+(?:\s+(?:dan|&)\s+\S+)?/gi;
-const STYLE_WORDS =
-  /\b(?:aesthetic|estetik|minimalis|retro|vintage|futuristik|neon|colorful|warna-warni|pastel|cozy|playful|gemas|kalem|adem|vibes|tegas|bold|ceria)\b/gi;
-
-function stripStyleWords(text: string): string {
-  return text
-    .replace(STYLE_PHRASE, ' ')
-    .replace(PLATFORM_PHRASE, ' ')
-    .replace(STYLE_WORDS, ' ')
+  const cleanedWords = raw
+    .replace(/(\d+(?:[.,]\d+)?)\s*(rb|ribu|k|jt|juta)?/gi, '')
+    .replace(/\b(promo|diskon|murah|cuma|hanya|kata-kata|tentang|cara|tips|belajar)\b/gi, '')
     .replace(/\s+/g, ' ')
     .trim();
-}
 
-function stripFiller(s: string): string {
-  const tokens = s
-    .replace(/\bhari ini\b|\bflash ?sale\b|\b\d{1,3}\s*%/gi, ' ')
-    .split(/\s+/)
-    .filter(Boolean)
-    .filter((t) => !PROMO_FILLER.has(t.toLowerCase().replace(/[^a-z]/g, '')));
-  while (tokens.length && LEADING_FILLER.has(tokens[0].toLowerCase())) tokens.shift();
-  while (tokens.length && TRAILING_FILLER.has(tokens[tokens.length - 1].toLowerCase())) tokens.pop();
-  return tokens.join(' ').replace(/^[,.!?:;\-–—]+|[,.!?:;\-–—]+$/g, '').trim();
-}
+  const productName = opts?.productOverride?.trim() || (cleanedWords.length >= 2 ? cleanedWords : raw);
+  const storeName = opts?.storeOverride?.trim() || 'Studio Official';
 
-function detectQuoteMood(lower: string): QuoteMood {
-  for (const [mood, re] of QUOTE_MOOD_RULES) {
-    if (re.test(lower)) return mood;
-  }
-  return 'netral';
-}
+  const lower = raw.toLowerCase();
+  let detectedMood: TopicMood = 'neutral';
+  if (/galau|sedih|capek|lelah|rindu|hati|malam|hujan/.test(lower)) detectedMood = 'galau';
+  else if (/promo|diskon|murah|hemat|flash|kopi|ayam|pedas|kuliner/.test(lower)) detectedMood = 'promo';
+  else if (/coding|nextjs|react|cyber|ai|web|server|deploy|aplikasi/.test(lower)) detectedMood = 'tech';
+  else if (/cara|tips|belajar|kuliah|fakta|skripsi|kampus/.test(lower)) detectedMood = 'edukasi';
 
-function findEduPack(lower: string): EduPack {
-  return EDU_PACKS.find((p) => p.match.test(lower)) || EDU_DEFAULT;
-}
-
-function detectPromoKind(lower: string): PromoKind {
-  return PROMO_KINDS.find((k) => k.match.test(lower)) || PROMO_DEFAULT_KIND;
-}
-
-function stripLeadWords(s: string): string {
-  return s.replace(/^(untuk|agar|supaya|biar|buat)\s+/i, '').trim();
-}
-
-function parseEduTopic(topic: string): {
-  count: number | null;
-  exact: boolean;
-  noun: string;
-  subject: string;
-} {
-  const t = topic.trim();
-  const m = t.match(EDU_COUNT_RE);
-  if (m) {
-    const asked = Number(m[1]);
-    const count = Math.min(6, Math.max(2, asked));
-    return { count, exact: count === asked, noun: m[2].toLowerCase(), subject: stripLeadWords(m[3]) };
-  }
-  const m2 = t.match(/^(cara|tips|tutorial|panduan)\s+(.*)$/i);
-  if (m2) {
-    return {
-      count: null,
-      exact: false,
-      noun: m2[1].toLowerCase() === 'tips' ? 'tips' : 'cara',
-      subject: stripLeadWords(m2[2]),
-    };
-  }
-  return { count: null, exact: false, noun: 'cara', subject: stripLeadWords(t) };
-}
-
-/**
- * Baca harga, harga normal, produk, dan toko dari topik.
- * Contoh: "promo kopi susu dari 25rb jadi 18rb di kopi senja"
- *  → produk "Kopi Susu", harga "Rp18rb", harga normal "Rp25rb", toko "Kopi Senja", hemat 28%.
- */
-export function parseTopic(
-  rawTopic: string,
-  options?: GenerateOptions,
-  category?: CategoryType
-): ParsedTopicMeta {
-  const rawClean = (rawTopic || '').replace(/\s+/g, ' ').trim();
-  const cleanTopic = stripStyleWords(rawClean) || rawClean;
-  const lower = rawClean.toLowerCase();
-
-  const prices = findPrices(cleanTopic);
-  let promoHit: PriceMatch | undefined;
-  let originalHit: PriceMatch | undefined;
-  if (prices.length) {
-    const sorted = [...prices].sort((a, b) => a.value - b.value);
-    promoHit = sorted[0];
-    const top = sorted[sorted.length - 1];
-    if (sorted.length > 1 && top.value > promoHit.value) originalHit = top;
-  }
-
-  const priceText = options?.customPrice?.trim() || promoHit?.display || '';
-  const originalPriceText = options?.customOriginalPrice?.trim() || originalHit?.display || '';
-  const pv = priceToNumber(priceText);
-  const ov = priceToNumber(originalPriceText);
-  let discountPercent =
-    pv !== null && ov !== null && pv > 0 && ov > pv ? Math.round((1 - pv / ov) * 100) : null;
-  const pctMatch = category === 'promo' ? cleanTopic.match(/(\d{1,2})\s*%/) : null;
-  if (discountPercent === null && pctMatch) discountPercent = Number(pctMatch[1]);
-
-  // Buang teks harga (dari belakang supaya posisi tetap valid)
-  let rest = cleanTopic;
-  [...prices]
-    .sort((a, b) => b.start - a.start)
-    .forEach((p) => {
-      rest = `${rest.slice(0, p.start)} ${rest.slice(p.end)}`;
-    });
-  rest = rest.replace(/\s+/g, ' ').trim();
-
-  let storeName = options?.customStoreName?.trim() || '';
-  if (category === 'promo') {
-    const handle = rest.match(/(?:^|\s)(@[a-z0-9._]{2,30})\s*$/i);
-    if (handle && handle.index !== undefined) {
-      if (!storeName) storeName = handle[1];
-      rest = rest.slice(0, handle.index).trim();
-    } else {
-      const at = rest.match(
-        /\s+di\s+((?:toko|warung|kedai|kafe|cafe|resto|restoran|outlet|butik|gerai|lapak|kios)\b[^,.!?]{0,40})$/i
-      );
-      if (at && at.index !== undefined) {
-        const store = stripFiller(at[1]);
-        if (store) {
-          if (!storeName) storeName = titleCase(store);
-          rest = rest.slice(0, at.index).trim();
-        }
-      }
-    }
-  }
-
-  const productName = options?.customProductName?.trim() || titleCase(stripFiller(rest)) || '';
-
-  const quoteMood = detectQuoteMood(lower);
-  let detectedMood: ParsedTopicMeta['detectedMood'] = 'netral';
-  let emotionKeyword = 'netral';
-  if (prices.length || /promo|diskon|murah|sale/.test(lower)) {
-    detectedMood = 'promo';
-    emotionKeyword = 'antusias';
-  } else if (/cara|tutorial|langkah|belajar|tips/.test(lower)) {
-    detectedMood = 'edukasi';
-    emotionKeyword = 'informatif';
-  } else if (quoteMood !== 'netral') {
-    detectedMood = 'galau';
-    emotionKeyword = quoteMood;
-  }
-
-  const edu = parseEduTopic(cleanTopic);
+  const matchedPack = matchBestDataPack(raw);
 
   return {
-    cleanTopic,
+    rawTopic: raw,
+    cleanTopic: productName,
     productName,
     priceText,
     originalPriceText,
+    discountPercent: 31,
     storeName,
-    emotionKeyword,
     detectedMood,
-    discountPercent,
-    subject: edu.subject,
-    stepCount: edu.count,
-    stepCountExact: edu.exact,
-    stepNoun: edu.noun,
-    quoteMood,
+    keywords: matchedPack.matchedKeywords,
+    matchedDataPackId: matchedPack.pack.id,
+    matchedDataPackTitle: matchedPack.pack.title,
   };
 }
 
-export const extractTopicMetadata = parseTopic;
-
-/** Tebak kategori dari topik (dipakai bila kategori tidak dipilih). */
-export function detectCategory(topic: string): CategoryType {
-  const lower = (topic || '').toLowerCase();
-  if (findPrices(topic).length > 0 || /\b(promo|diskon|sale|jual|order|grosir|ongkir|harga)\b/.test(lower)) {
-    return 'promo';
-  }
-  if (
-    EDU_COUNT_START_RE.test(lower) ||
-    /\b(cara|tips|tutorial|panduan|belajar)\b/.test(lower)
-  ) {
-    return 'edukasi';
-  }
-  if (/\b(kata-kata|quote|quotes|renungan|pengingat|motivasi)\b/.test(lower) || detectQuoteMood(lower) !== 'netral') {
-    return 'quote';
-  }
-  return 'promo';
-}
-
-/* -------------------------------------------------------------------------- */
-/* PLACEHOLDER                                                                */
-/* -------------------------------------------------------------------------- */
-
-type PlaceholderKey = 'product' | 'price' | 'original' | 'store' | 'topic' | 'discount';
-
-// Mendukung nama Indonesia (dokumentasi lama) dan Inggris.
-const PLACEHOLDERS: Array<[string, PlaceholderKey]> = [
-  ['\\{(?:product|produk)\\}', 'product'],
-  ['\\{(?:price|harga)\\}', 'price'],
-  ['\\{(?:original_price|harga_coret|harga_normal)\\}', 'original'],
-  ['\\{(?:store|toko)\\}', 'store'],
-  ['\\{(?:topic|topik)\\}', 'topic'],
-  ['\\{(?:discount|diskon)\\}', 'discount'],
-];
-
-function placeholderValues(meta: ParsedTopicMeta): Record<PlaceholderKey, string> {
-  return {
-    product: meta.productName || '',
-    price: meta.priceText || '',
-    original: meta.originalPriceText || '',
-    store: meta.storeName || '',
-    topic: meta.cleanTopic || '',
-    discount: meta.discountPercent ? String(meta.discountPercent) : '',
-  };
-}
-
-/** true bila semua placeholder di template punya nilai. */
-export function canFill(template: string, meta: ParsedTopicMeta): boolean {
-  const values = placeholderValues(meta);
-  return PLACEHOLDERS.every(
-    ([source, key]) => !new RegExp(source, 'i').test(template) || values[key].trim() !== ''
-  );
-}
-
-export function interpolateTemplate(template: string, meta: ParsedTopicMeta): string {
-  const values = placeholderValues(meta);
-  let out = template || '';
-  for (const [source, key] of PLACEHOLDERS) {
-    out = out.replace(new RegExp(source, 'gi'), values[key]);
-  }
-  return cleanSpaces(out);
-}
-
-function pickFilled(
-  templates: readonly string[],
-  meta: ParsedTopicMeta,
-  rng: Rng,
-  exclude: readonly string[] = []
-): string {
-  const pool = templates
-    .filter((t) => canFill(t, meta))
-    .filter((t) => !exclude.includes(t) && !exclude.includes(interpolateTemplate(t, meta)));
-  if (!pool.length) return '';
-  return interpolateTemplate(pick(pool, rng, pool[0]), meta);
-}
-
-function pickEntry(
-  builtins: readonly SceneTemplateEntry[],
-  customs: readonly SceneTemplateEntry[],
-  meta: ParsedTopicMeta,
-  rng: Rng
-): SceneTemplateEntry {
-  const pool = [...builtins, ...customs].filter(
-    (e) => canFill(e.text, meta) && canFill(e.subtext || '', meta)
-  );
-  const fallback: SceneTemplateEntry = builtins[0] || { text: '', subtext: '', emoji: '' };
-  const chosen = pick(pool, rng, fallback);
-  return {
-    text: interpolateTemplate(chosen.text, meta),
-    subtext: interpolateTemplate(chosen.subtext || '', meta),
-    emoji: chosen.emoji,
-  };
-}
-
-const asEntries = (list: readonly string[], emoji: string): SceneTemplateEntry[] =>
-  list.map((text) => ({ text, subtext: '', emoji }));
-
-/* -------------------------------------------------------------------------- */
-/* GAYA PER KATEGORI                                                          */
-/* -------------------------------------------------------------------------- */
-
-const CATEGORY_STYLE: Record<
-  CategoryType,
-  { paletteId: string; font: EngineFontName; musicId: string; camera: CameraMotionType }
-> = {
-  promo: {
-    paletteId: 'promo-pop',
-    font: 'Montserrat',
-    musicId: 'track-energetic-drop',
-    camera: 'whip-zoom-spring',
-  },
-  quote: {
-    paletteId: 'quote-ink',
-    font: 'Playfair Display',
-    musicId: 'track-slow-ambient',
-    camera: 'smooth-float',
-  },
-  edukasi: {
-    paletteId: 'aurora-mint',
-    font: 'Poppins',
-    musicId: 'track-chill-lofi',
-    camera: 'spring-slide-vertical',
-  },
-};
-
-export function suggestCameraMotion(category: CategoryType): CameraMotionType {
-  return (CATEGORY_STYLE[category] || CATEGORY_STYLE.promo).camera;
-}
-
-/** Font bawaan per kategori ('saas' dan lainnya → Poppins). */
-export function suggestedFontFor(category: string): EngineFontName {
-  return category === 'promo' || category === 'quote' || category === 'edukasi'
-    ? CATEGORY_STYLE[category].font
-    : 'Poppins';
-}
-
-export function suggestStyle(
-  rawTopic: string,
-  category: CategoryType = 'promo',
-  forceRandom = false,
-  rng: Rng = Math.random
-): StyleSuggestion {
-  void rawTopic;
-  const base = CATEGORY_STYLE[category] || CATEGORY_STYLE.promo;
-  const palette = forceRandom
-    ? pick(COLOR_PALETTES, rng, COLOR_PALETTES[0])
-    : COLOR_PALETTES.find((p) => p.id === base.paletteId) || COLOR_PALETTES[0];
-  const music = MUSIC_TRACKS.find((m) => m.id === base.musicId) || MUSIC_TRACKS[0];
-  return {
-    paletteId: palette.id,
-    colors: palette,
-    font: base.font,
-    musicId: music.id,
-    music,
-    backgroundType: 'gradient',
-    gradientPreset: palette.id,
-    moodLabel: `${palette.name} • ${music.bpm} BPM`,
-  };
-}
-
-/* -------------------------------------------------------------------------- */
-/* PENYUSUN SCENE PER KATEGORI                                                */
-/* -------------------------------------------------------------------------- */
-
-type SceneDraft = Omit<SceneItem, 'id' | 'sceneNumber' | 'imageUrl' | 'cameraMotion' | 'paletteId'>;
-
-const joinItems = (items: Array<string | null | undefined>) =>
-  items.map((s) => (s || '').trim()).filter(Boolean).join(' | ');
-
-function buildPromoScenes(meta: ParsedTopicMeta, rng: Rng, options?: GenerateOptions): SceneDraft[] {
-  const product = meta.productName;
-  const kind = detectPromoKind(`${meta.cleanTopic} ${product}`.toLowerCase());
-  const hasPrice = Boolean(meta.priceText);
-
-  const urgent = /flash ?sale|buruan|terbatas|kilat|gercep|terakhir|habis|hari ini/.test(
-    meta.cleanTopic.toLowerCase()
-  );
-  const hook =
-    pickFilled(
-      [...(urgent ? PROMO_URGENT_HOOKS : PROMO_HOOKS), ...BANK_HOOK.promo],
-      meta,
-      rng,
-      options?.excludeHooks
-    ) ||
-    'Stop scroll! Ada promo spesial hari ini 👀';
-  const hookSub = pickFilled(PROMO_HOOK_SUBTEXTS, meta, rng) || 'Promo terbatas, simak sampai habis.';
-
-  const benefit = pickEntry(asEntries(PROMO_BENEFIT_TITLES, '✅'), BANK_SCENES.promo.scene2, meta, rng);
-  const benefits = pickSome(kind.benefits, 3, rng);
-
-  const priceTitles = hasPrice
-    ? meta.discountPercent
-      ? [...PROMO_PRICE_TITLES, ...PROMO_DISCOUNT_TITLES]
-      : PROMO_PRICE_TITLES
-    : PROMO_NOPRICE_TITLES;
-  const priceScene = pickEntry(asEntries(priceTitles, '🏷️'), BANK_SCENES.promo.scene3, meta, rng);
-  const priceSub =
-    priceScene.subtext ||
-    (meta.originalPriceText
-      ? `Harga normal ${meta.originalPriceText}.`
-      : hasPrice
-      ? 'Selama persediaan masih ada.'
-      : 'Tanya harga promonya lewat DM, ya.');
-  const sticker = meta.discountPercent ? `Hemat ${meta.discountPercent}%` : 'Promo';
-
-  const cta =
-    pickFilled([...(urgent ? PROMO_URGENT_CTA : PROMO_CTA_TITLES), ...BANK_CTA.promo], meta, rng) || 'Pesan sekarang sebelum promonya habis!';
-  const ctaSub = meta.storeName
-    ? `Promo terbatas di ${meta.storeName}.`
-    : 'Promo terbatas, jangan sampai kelewatan.';
-
-  const productLabel = product || 'Promo spesial';
-
-  return [
-    {
-      role: 'Hook / Masalah',
-      text: hook,
-      subtext: hookSub,
-      emoji: '🔥',
-      duration: 3.4,
-      animation: 'pop',
-      stepBadge: 'Lagi promo',
-      widgetType: 'price_tag_card',
-      primaryInput: productLabel,
-      secondaryInput: joinItems([pick(['Promo spesial', 'Spesial hari ini'], rng, 'Promo spesial'), meta.storeName]),
-    },
-    {
-      role: 'Isi / Solusi',
-      text: benefit.text || 'Kenapa banyak yang pilih ini?',
-      subtext: benefit.subtext,
-      emoji: '✅',
-      duration: 3.8,
-      animation: 'slide-up',
-      stepBadge: 'Keunggulan',
-      widgetType: 'checklist_card',
-      primaryInput: '',
-      secondaryInput: joinItems(benefits),
-    },
-    {
-      role: 'Bukti / Harga',
-      text: priceScene.text || 'Harga spesial selama promo!',
-      subtext: priceSub,
-      emoji: '🏷️',
-      duration: 3.6,
-      animation: 'zoom',
-      stepBadge: 'Harga spesial',
-      widgetType: 'price_tag_card',
-      primaryInput: productLabel,
-      secondaryInput: hasPrice
-        ? joinItems([meta.priceText, meta.originalPriceText, sticker, meta.storeName])
-        : joinItems(['Harga spesial', meta.storeName]),
-    },
-    {
-      role: 'CTA Akhir',
-      text: cta,
-      subtext: ctaSub,
-      emoji: '🛒',
-      duration: 3.2,
-      animation: 'bounce',
-      stepBadge: 'Cara order',
-      widgetType: 'cta_button_card',
-      primaryInput: pick(['Pesan Sekarang', 'Order Sekarang'], rng, 'Pesan Sekarang'),
-      secondaryInput: joinItems([meta.storeName, pick(['Link di bio', 'Pesan via DM'], rng, 'Link di bio')]),
-    },
-  ];
-}
-
-function buildQuoteScenes(meta: ParsedTopicMeta, rng: Rng, options?: GenerateOptions): SceneDraft[] {
-  const pack = QUOTE_PACKS[meta.quoteMood || 'netral'] || QUOTE_PACKS.netral;
-  const hook =
-    pickFilled([...pack.hooks, ...BANK_HOOK.quote], meta, rng, options?.excludeHooks) || pack.hooks[0];
-
-  const trainedQuotes = [...BANK_SCENES.quote.scene2, ...BANK_SCENES.quote.scene3]
-    .map((e) => e.text)
-    .filter((t) => canFill(t, meta))
-    .map((t) => interpolateTemplate(t, meta));
-  const quotes = pickSome([...pack.quotes, ...trainedQuotes], 3, rng);
-  for (const extra of QUOTE_PACKS.netral.quotes) {
-    if (quotes.length >= 3) break;
-    if (!quotes.includes(extra)) quotes.push(extra);
-  }
-
-  const signature = meta.storeName;
-  const cta = pickFilled([...QUOTE_CTA_TITLES, ...BANK_CTA.quote], meta, rng) || QUOTE_CTA_TITLES[0];
-
-  return [
-    {
-      role: 'Hook / Masalah',
-      text: hook,
-      subtext: pick(QUOTE_HOOK_SUBTEXTS, rng, ''),
-      emoji: '🤍',
-      duration: 4.0,
-      animation: 'fade',
-      stepBadge: 'Untukmu',
-      widgetType: 'quote_card',
-      primaryInput: quotes[0],
-      secondaryInput: signature,
-    },
-    {
-      role: 'Renungan',
-      text: pick(QUOTE_LEADS_1, rng, QUOTE_LEADS_1[0]),
-      subtext: '',
-      emoji: '🌙',
-      duration: 4.2,
-      animation: 'typewriter',
-      stepBadge: 'Renungan',
-      widgetType: 'quote_card',
-      primaryInput: quotes[1],
-      secondaryInput: signature,
-    },
-    {
-      role: 'Renungan',
-      text: pick(QUOTE_LEADS_2, rng, QUOTE_LEADS_2[0]),
-      subtext: '',
-      emoji: '✨',
-      duration: 4.2,
-      animation: 'typewriter',
-      stepBadge: 'Pengingat',
-      widgetType: 'quote_card',
-      primaryInput: quotes[2],
-      secondaryInput: signature,
-    },
-    {
-      role: 'CTA Akhir',
-      text: cta,
-      subtext: pick(QUOTE_CTA_SUBTEXTS, rng, ''),
-      emoji: '📌',
-      duration: 3.2,
-      animation: 'fade',
-      stepBadge: 'Simpan',
-      widgetType: 'cta_button_card',
-      primaryInput: 'Simpan',
-      secondaryInput: 'Kirim ke teman | Follow untuk lainnya',
-    },
-  ];
-}
-
-function buildEdukasiScenes(meta: ParsedTopicMeta, rng: Rng, options?: GenerateOptions): SceneDraft[] {
-  const lower = meta.cleanTopic.toLowerCase();
-  const pack = findEduPack(lower);
-  const want = meta.stepCount ?? 3;
-  const steps = pickOrdered(pack.steps, Math.min(want, pack.steps.length), rng);
-  for (const extra of EDU_DEFAULT.steps) {
-    if (steps.length >= want) break;
-    if (!steps.includes(extra)) steps.push(extra);
-  }
-  const n = steps.length;
-  const noun = meta.stepNoun || 'cara';
-  const subject = meta.subject || meta.cleanTopic || 'hal baru';
-
-  const builtInHooks = meta.stepCount
-    ? [
-        `${n} ${noun} ${subject} yang jarang dibahas`,
-        `${n} ${noun} ${subject} yang wajib kamu tahu`,
-        ...(meta.stepCountExact ? [meta.cleanTopic] : []),
-      ]
-    : [`Cara ${subject} tanpa ribet`, `Mau ${subject}? Mulai dari sini`, `Panduan singkat ${subject}`];
-  const hook = sentenceCase(
-    pickFilled([...builtInHooks, ...BANK_HOOK.edukasi], meta, rng, options?.excludeHooks) || builtInHooks[0]
-  );
-  const hookSub = pick(
-    meta.stepCount
-      ? ['Simpan dulu biar nggak lupa.', `Nomor ${n} paling sering dilupakan.`, 'Tonton sampai habis, ya.']
-      : ['Simpan dulu biar nggak lupa.', 'Tonton sampai habis, ya.'],
-    rng,
-    ''
-  );
-
-  const listScene = pickEntry(asEntries(EDU_LIST_TITLES, '📝'), BANK_SCENES.edukasi.scene2, meta, rng);
-  const tip = pickEntry(asEntries(pack.tips, '⚠️'), BANK_SCENES.edukasi.scene3, meta, rng);
-  const cta = pickFilled([...EDU_CTA_TITLES, ...BANK_CTA.edukasi], meta, rng) || EDU_CTA_TITLES[0];
-
-  return [
-    {
-      role: 'Hook / Masalah',
-      text: hook,
-      subtext: hookSub,
-      emoji: '💡',
-      duration: 3.4,
-      animation: 'pop',
-      stepBadge: meta.stepCount ? `${n} ${noun}` : 'Edukasi',
-      widgetType: 'step_number_card',
-      primaryInput: String(n),
-      secondaryInput: joinItems([noun, shortenAtWord(subject, 48)]),
-    },
-    {
-      role: 'Langkah',
-      text: listScene.text || EDU_LIST_TITLES[0],
-      subtext: listScene.subtext,
-      emoji: '📝',
-      duration: Math.round((2.8 + 0.7 * n) * 10) / 10,
-      animation: 'slide-up',
-      stepBadge: 'Langkahnya',
-      widgetType: 'checklist_card',
-      primaryInput: '',
-      secondaryInput: steps.map((s, i) => `${i + 1}. ${s}`).join(' | '),
-    },
-    {
-      role: 'Tips Penting',
-      text: pick(EDU_TIP_TITLES, rng, EDU_TIP_TITLES[0]),
-      subtext: tip.subtext,
-      emoji: '⚠️',
-      duration: 3.8,
-      animation: 'zoom',
-      stepBadge: 'Tips penting',
-      widgetType: 'step_number_card',
-      primaryInput: '!',
-      secondaryInput: tip.text,
-    },
-    {
-      role: 'CTA Akhir',
-      text: cta,
-      subtext: 'Biar bisa kamu buka lagi kapan saja.',
-      emoji: '📌',
-      duration: 3.2,
-      animation: 'bounce',
-      stepBadge: 'Simpan',
-      widgetType: 'cta_button_card',
-      primaryInput: pick(['Simpan Video', 'Simpan Sekarang'], rng, 'Simpan Video'),
-      secondaryInput: 'Bagikan | Follow',
-    },
-  ];
-}
-
-/* -------------------------------------------------------------------------- */
-/* GENERATOR UTAMA                                                            */
-/* -------------------------------------------------------------------------- */
-
-/* -------------------------------------------------------------------------- */
-/* PEMBACA PROMPT & PAKET GAYA                                                */
-/* -------------------------------------------------------------------------- */
-
-/** Hal-hal yang terbaca dari prompt dan dipakai untuk memilih gaya visual. */
-export interface PromptKeys {
-  category: CategoryType;
-  /** kuliner, kopi, fashion, beauty, tech, keuangan, belajar, sehat, travel, … */
-  industry: string;
-  /** ceria, mewah, tenang, tegas, retro, minimal, neon, hangat */
-  mood: string;
-  energy: 'calm' | 'medium' | 'high';
-  /** merah, pink, biru, hijau, kuning, oranye, ungu, gelap, terang, emas, pastel, coklat */
-  colorHint: string;
-  styleHints: string[];
-  /** tiktok, reels, shorts, youtube, story, atau '' */
-  platform: string;
-  /** Rasio yang disarankan bila prompt menyebut platform. */
-  aspect: '' | '9:16' | '1:1' | '16:9';
-  urgent: boolean;
-  /** Kata yang ditonjolkan di judul (harga, diskon, nama produk, angka). */
-  emphasis: string[];
-  /** Emoji dekorasi sesuai topik. */
-  icons: string;
-  topicLower: string;
-}
-
-export interface StylePack {
-  id: string;
-  name: string;
-  /** Kata pemicu: suasana, industri, warna, gaya, atau kata bebas dari admin. */
-  tags: string[];
-  categories?: CategoryType[];
-  paletteId: string;
-  /** Warna kustom (mis. hasil ekstraksi video referensi). Studio membuat paletnya dengan id `pack-<id>`. */
-  colors?: { bgStart: string; bgEnd: string; accent: string; isDark: boolean };
-  bgStyle: BackgroundStyle;
-  layout: SceneLayout | 'mixed';
-  transition: SceneTransition;
-  headlineAnim: HeadlineAnim;
-  font: EngineFontName;
-  camera: CameraMotionType;
-  /** Pengali durasi scene: < 1 lebih cepat, > 1 lebih pelan. */
-  pace: number;
-  decor?: string;
-  /** true untuk gaya hasil training admin. */
-  trained?: boolean;
-}
-
-export interface StyleRecipe {
-  packId: string;
-  packName: string;
-  variant: 'A' | 'B' | 'C';
-  keys: PromptKeys;
-}
-
-const INDUSTRY_RULES: Array<[string, RegExp, string]> = [
-  ['kopi', /kopi|coffee|cafe|kafe|latte|espresso/, '☕🤎✨'],
-  ['kuliner', /kue|roti|donat|cake|dessert|brownies|cookies/, '🧁🍰✨'],
-  ['kuliner', /makan|nasi|ayam|bakso|\bmie?\b|soto|sate|seblak|sambal|pizza|burger|dimsum|kuliner|resep|masak|snack|cemilan|camilan|keripik|katering|catering/, '🍜🔥😋'],
-  ['kuliner', /teh\b|boba|jus|minuman|\bes\b|susu|smoothie/, '🧋🍹✨'],
-  ['fashion', /sepatu|sneaker|sandal/, '👟⚡✨'],
-  ['fashion', /baju|kaos|kemeja|celana|dress|gamis|hijab|jilbab|jaket|hoodie|\btas\b|outfit|batik|fashion/, '👗🛍️✨'],
-  ['beauty', /skincare|serum|lipstik|parfum|lotion|sunscreen|kosmetik|make ?up|salon|nail|beauty|kecantikan/, '💄🌸✨'],
-  ['tech', /aplikasi|\bapp\b|website|software|laptop|\bhp\b|gadget|coding|ngoding|teknologi|\bai\b|digital|startup/, '📱⚡💡'],
-  ['keuangan', /uang|keuangan|nabung|menabung|gaji|investasi|saham|budget|cicilan|utang|hutang|bisnis|omzet|jualan/, '💰📈🪙'],
-  ['belajar', /belajar|ujian|kuliah|sekolah|skripsi|kursus|\bles\b|bahasa|buku|materi/, '📚✏️💡'],
-  ['sehat', /sehat|olahraga|gym|fitness|diet|tidur|yoga|lari|kesehatan|gizi/, '💪🥗❤️'],
-  ['travel', /travel|wisata|liburan|hotel|villa|pantai|gunung|tiket|trip|staycation/, '✈️🌴📍'],
-  ['otomotif', /motor|mobil|bengkel|otomotif|sparepart|helm/, '🏍️🚗⚡'],
-  ['properti', /rumah|kos|kost|apartemen|properti|kontrakan|ruko|interior|furniture/, '🏠🔑✨'],
-  ['religi', /doa|ramadan|ramadhan|lebaran|idul|ngaji|sedekah|hijrah|islami|syukur|ikhlas|sabar/, '🌙✨🤲'],
-  ['gaming', /game|gaming|gamer|esport|top ?up|diamond/, '🎮🔥⚡'],
-  ['musik', /musik|lagu|konser|band|gitar|podcast/, '🎧🎵✨'],
-  ['anak', /bayi|anak|mainan|parenting|balita/, '🧸🍼💛'],
-  ['hewan', /kucing|anjing|pet\b|hewan|grooming/, '🐱🐾💛'],
-  ['jasa', /jasa|servis|service|laundry|barbershop|desain|fotografi|percetakan|sablon/, '🛠️✅✨'],
-  ['cinta', /cinta|sayang|pasangan|jodoh|rindu|kangen|nikah|wedding|pacar/, '❤️🌹✨'],
-  ['galau', /galau|sedih|patah hati|kecewa|kesepian|capek|lelah|burnout/, '🌧️🌙🤍'],
-  ['semangat', /semangat|motivasi|sukses|mimpi|berjuang|bangkit|produktif|disiplin/, '🔥🚀💪'],
-];
-
-const MOOD_RULES: Array<[string, RegExp]> = [
-  ['mewah', /mewah|elegan|premium|eksklusif|luxury|exclusive|classy|berkelas/],
-  ['tenang', /tenang|kalem|adem|soft|aesthetic|estetik|lembut|healing|santai/],
-  ['tegas', /tegas|bold|garang|keras|berani|maskulin|gahar/],
-  ['retro', /retro|jadul|vintage|klasik|90an|y2k/],
-  ['minimal', /minimalis|minimal|clean|simple|simpel|rapi|profesional/],
-  ['neon', /neon|futuristik|cyber|glow|gaming/],
-  ['ceria', /ceria|fun|lucu|seru|playful|colorful|warna-warni|gemas|imut/],
-  ['hangat', /hangat|cozy|rumahan|homey|keluarga/],
-];
-
-const COLOR_RULES: Array<[string, RegExp]> = [
-  ['merah', /\bmerah\b(?! muda)|\bred\b|maroon/],
-  ['pink', /pink|merah muda|rose\b/],
-  ['biru', /biru|blue|navy|tosca/],
-  ['hijau', /hijau|green|sage|mint/],
-  ['kuning', /kuning|yellow/],
-  ['oranye', /oranye|orange|jingga/],
-  ['ungu', /ungu|purple|lilac|lavender/],
-  ['gelap', /hitam|gelap|dark|black/],
-  ['terang', /putih|terang|cerah|white/],
-  ['emas', /emas|gold/],
-  ['pastel', /pastel/],
-  ['coklat', /coklat|cokelat|brown|earth ?tone|krem|cream/],
-];
-
-const EMPHASIS_WORDS = /^(gratis|diskon|promo|baru|hemat|cuma|terbatas|sale|bonus|rahasia|wajib|penting|mudah|cepat)$/;
-
-function keyOfWord(word: string): string {
-  return word.toLowerCase().replace(/[^a-z0-9%]/g, '');
-}
-
-/** Baca prompt: industri, suasana, warna, platform, tingkat energi, dan kata yang perlu ditonjolkan. */
-export function analyzePrompt(
-  rawTopic: string,
-  category: CategoryType,
-  meta: ParsedTopicMeta = parseTopic(rawTopic, undefined, category)
-): PromptKeys {
-  const topicLower = (rawTopic || '').toLowerCase();
-  const industryHit = INDUSTRY_RULES.find(([, re]) => re.test(topicLower));
-  const industry = industryHit ? industryHit[0] : '';
-  const icons = industryHit
-    ? industryHit[2]
-    : category === 'quote'
-    ? '✨🌙🤍'
-    : category === 'edukasi'
-    ? '💡📌✨'
-    : '🔥✨🛍️';
-
-  const styleHints = MOOD_RULES.filter(([, re]) => re.test(topicLower)).map(([id]) => id);
-  let mood = styleHints[0] || '';
-  if (!mood) {
-    if (category === 'quote') {
-      mood = meta.quoteMood === 'semangat' ? 'tegas' : meta.quoteMood === 'cinta' ? 'hangat' : 'tenang';
-    } else if (category === 'edukasi') {
-      mood = 'minimal';
-    } else {
-      mood = industry === 'kopi' ? 'hangat' : industry === 'beauty' ? 'ceria' : 'ceria';
-    }
-  }
-
-  const colorHint = (COLOR_RULES.find(([, re]) => re.test(topicLower)) || [''])[0];
-  const urgent = /flash ?sale|hari ini|buruan|terbatas|cepat|kilat|gercep|last|terakhir|besok|habis/.test(topicLower);
-  const platform = /story|status|\bsw\b|\bwa\b|whatsapp/.test(topicLower)
-    ? 'story'
-    : /tiktok/.test(topicLower)
-    ? 'tiktok'
-    : /shorts/.test(topicLower)
-    ? 'shorts'
-    : /reels|\big\b|instagram/.test(topicLower)
-    ? 'reels'
-    : /youtube|\byt\b/.test(topicLower)
-    ? 'youtube'
-    : '';
-  const aspect: PromptKeys['aspect'] = /feed|postingan|persegi|square/.test(topicLower)
-    ? '1:1'
-    : platform === 'youtube'
-    ? '16:9'
-    : platform
-    ? '9:16'
-    : '';
-  const energy: PromptKeys['energy'] =
-    urgent || mood === 'tegas' || mood === 'neon' || (category === 'promo' && mood === 'ceria')
-      ? 'high'
-      : category === 'quote' || mood === 'tenang' || mood === 'mewah'
-      ? 'calm'
-      : 'medium';
-
-  const emphasis = new Set<string>();
-  [meta.priceText, meta.discountPercent ? `${meta.discountPercent}%` : ''].forEach((t) => {
-    (t || '').split(/\s+/).forEach((w) => keyOfWord(w) && emphasis.add(keyOfWord(w)));
-  });
-  if (category === 'promo') {
-    (meta.productName || '').split(/\s+/).slice(0, 2).forEach((w) => keyOfWord(w).length > 2 && emphasis.add(keyOfWord(w)));
-  }
-  (rawTopic || '').split(/\s+/).forEach((w) => {
-    const k = keyOfWord(w);
-    if (EMPHASIS_WORDS.test(k) || /^\d+%$/.test(k)) emphasis.add(k);
-  });
-  if (category === 'edukasi' && meta.stepCount) emphasis.add(String(meta.stepCount));
-
-  return {
-    category,
-    industry,
-    mood,
-    energy,
-    colorHint,
-    styleHints,
-    platform,
-    aspect,
-    urgent,
-    emphasis: Array.from(emphasis).slice(0, 8),
-    icons,
-    topicLower,
-  };
-}
-
-/** Paket gaya bawaan. Admin bisa menambah lewat training (addStylePackToEngine). */
-export const STYLE_PACKS: StylePack[] = [
-  { id: 'poster-promo', name: 'Poster Promo', tags: ['ceria', 'kuliner', 'kuning', 'merah', 'umkm', 'diskon'], categories: ['promo'], paletteId: 'promo-pop', bgStyle: 'sunburst', layout: 'mixed', transition: 'zoom', headlineAnim: 'marker', font: 'Montserrat', camera: 'whip-zoom-spring', pace: 0.95 },
-  { id: 'flash-sale', name: 'Flash Sale', tags: ['tegas', 'urgent', 'flash', 'sale', 'gelap', 'neon', 'merah', 'gaming', 'otomotif'], categories: ['promo'], paletteId: 'cyber-sunset', bgStyle: 'stripes', layout: 'mixed', transition: 'flash', headlineAnim: 'pop', font: 'Anton', camera: 'whip-zoom-spring', pace: 0.85 },
-  { id: 'candy', name: 'Candy Pop', tags: ['ceria', 'pink', 'beauty', 'fashion', 'pastel', 'anak', 'hewan'], categories: ['promo', 'edukasi'], paletteId: 'candy-pop', bgStyle: 'blobs', layout: 'mixed', transition: 'push-up', headlineAnim: 'spring-words', font: 'Poppins', camera: 'spring-slide-vertical', pace: 1 },
-  { id: 'luxe', name: 'Emas Mewah', tags: ['mewah', 'emas', 'gelap', 'properti', 'beauty', 'fashion'], categories: ['promo', 'quote'], paletteId: 'royal-gold', bgStyle: 'spotlight', layout: 'mixed', transition: 'fade', headlineAnim: 'rise-lines', font: 'Playfair Display', camera: 'smooth-float', pace: 1.15 },
-  { id: 'confetti-party', name: 'Pesta Konfeti', tags: ['ceria', 'giveaway', 'ulang tahun', 'lebaran', 'pesta', 'grand opening', 'kuning', 'anak'], categories: ['promo'], paletteId: 'promo-pop', bgStyle: 'confetti', layout: 'mixed', transition: 'zoom', headlineAnim: 'pop', font: 'Montserrat', camera: 'whip-zoom-spring', pace: 0.9 },
-  { id: 'cocoa', name: 'Kopi Krim', tags: ['kopi', 'coklat', 'hangat', 'kuliner', 'retro', 'cinta'], categories: ['promo', 'quote'], paletteId: 'cocoa-cream', bgStyle: 'spotlight', layout: 'mixed', transition: 'slide', headlineAnim: 'spring-words', font: 'Playfair Display', camera: 'smooth-float', pace: 1.05 },
-  { id: 'clean-paper', name: 'Kertas Bersih', tags: ['minimal', 'terang', 'jasa', 'tech', 'keuangan', 'properti'], categories: ['edukasi', 'promo'], paletteId: 'paper-clean', bgStyle: 'grid', layout: 'mixed', transition: 'slide', headlineAnim: 'rise-lines', font: 'Space Grotesk', camera: 'spring-slide-vertical', pace: 1 },
-  { id: 'mint-study', name: 'Mint Belajar', tags: ['tenang', 'hijau', 'belajar', 'sehat', 'keuangan', 'minimal'], categories: ['edukasi'], paletteId: 'aurora-mint', bgStyle: 'waves', layout: 'mixed', transition: 'push-up', headlineAnim: 'spring-words', font: 'Poppins', camera: 'spring-slide-vertical', pace: 1 },
-  { id: 'ocean', name: 'Biru Segar', tags: ['biru', 'tech', 'travel', 'jasa', 'sehat', 'minimal'], categories: ['edukasi', 'promo'], paletteId: 'ocean-fresh', bgStyle: 'waves', layout: 'mixed', transition: 'wipe', headlineAnim: 'marker', font: 'Montserrat', camera: 'perspective-tilt-3d', pace: 1 },
-  { id: 'lavender-app', name: 'Lavender', tags: ['ungu', 'pastel', 'tech', 'belajar', 'tenang'], categories: ['edukasi', 'promo'], paletteId: 'depup-lavender', bgStyle: 'mesh', layout: 'mixed', transition: 'slide', headlineAnim: 'spring-words', font: 'Space Grotesk', camera: 'spring-slide-vertical', pace: 1 },
-  { id: 'noir-bold', name: 'Hitam Tegas', tags: ['tegas', 'gelap', 'semangat', 'gaming', 'otomotif', 'sehat', 'kuning'], categories: ['quote', 'edukasi', 'promo'], paletteId: 'mono-noir', bgStyle: 'stripes', layout: 'mixed', transition: 'flash', headlineAnim: 'pop', font: 'Bebas Neue', camera: 'whip-zoom-spring', pace: 0.9 },
-  { id: 'neon-night', name: 'Neon Malam', tags: ['neon', 'gaming', 'musik', 'gelap', 'ungu', 'tech'], categories: ['promo', 'edukasi', 'quote'], paletteId: 'midnight-indigo', bgStyle: 'grid', layout: 'mixed', transition: 'wipe', headlineAnim: 'typewriter', font: 'Space Grotesk', camera: 'perspective-tilt-3d', pace: 0.95 },
-  { id: 'ink-quote', name: 'Tinta Malam', tags: ['tenang', 'galau', 'gelap', 'ungu', 'musik'], categories: ['quote'], paletteId: 'quote-ink', bgStyle: 'spotlight', layout: 'mixed', transition: 'fade', headlineAnim: 'typewriter', font: 'Playfair Display', camera: 'smooth-float', pace: 1.15 },
-  { id: 'sunset-soft', name: 'Senja Hangat', tags: ['hangat', 'cinta', 'oranye', 'pink', 'travel', 'tenang'], categories: ['quote', 'promo'], paletteId: 'sunset-warm', bgStyle: 'blobs', layout: 'mixed', transition: 'fade', headlineAnim: 'rise-lines', font: 'Playfair Display', camera: 'smooth-float', pace: 1.1 },
-  { id: 'emerald-calm', name: 'Emerald Teduh', tags: ['religi', 'hijau', 'tenang', 'mewah'], categories: ['quote'], paletteId: 'emerald-luxury', bgStyle: 'spotlight', layout: 'mixed', transition: 'fade', headlineAnim: 'rise-lines', font: 'Playfair Display', camera: 'smooth-float', pace: 1.15 },
-];
-
-export function getStylePacks(): StylePack[] {
-  return STYLE_PACKS;
-}
-
-const FONT_NAMES: readonly EngineFontName[] = ['Poppins', 'Montserrat', 'Bebas Neue', 'Playfair Display', 'Space Grotesk', 'Anton'];
-const CAMERA_NAMES: readonly CameraMotionType[] = ['spring-slide-vertical', 'perspective-tilt-3d', 'whip-zoom-spring', 'smooth-float'];
-const isHex = (v: unknown): v is string => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
-const oneOf = <T extends string>(list: readonly T[], v: unknown, fallback: T): T =>
-  typeof v === 'string' && (list as readonly string[]).includes(v) ? (v as T) : fallback;
-
-/** Validasi paket gaya dari database (hasil training admin). null bila tidak layak pakai. */
-export function normalizeStylePack(raw: unknown, id: string, fallbackName = 'Gaya admin'): StylePack | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const r = raw as Record<string, unknown>;
-  const tags = (Array.isArray(r.tags) ? r.tags : String(r.tags || '').split(','))
-    .map((t) => String(t).trim().toLowerCase())
-    .filter(Boolean)
-    .slice(0, 24);
-  const c = (r.colors || null) as Record<string, unknown> | null;
-  const colors =
-    c && isHex(c.bgStart) && isHex(c.bgEnd) && isHex(c.accent)
-      ? { bgStart: c.bgStart, bgEnd: c.bgEnd, accent: c.accent, isDark: Boolean(c.isDark) }
-      : undefined;
-  const cats = (Array.isArray(r.categories) ? r.categories : []).filter(
-    (x): x is CategoryType => x === 'promo' || x === 'quote' || x === 'edukasi'
-  );
-  return {
-    id,
-    name: String(r.name || fallbackName).slice(0, 60),
-    tags,
-    categories: cats.length ? cats : undefined,
-    paletteId: typeof r.paletteId === 'string' && r.paletteId ? r.paletteId : 'promo-pop',
-    colors,
-    bgStyle: oneOf(BACKGROUND_STYLES, r.bgStyle, 'mesh'),
-    layout: r.layout === 'mixed' ? 'mixed' : oneOf(SCENE_LAYOUTS, r.layout, 'stack'),
-    transition: oneOf(SCENE_TRANSITIONS, r.transition, 'fade'),
-    headlineAnim: oneOf(HEADLINE_ANIMS, r.headlineAnim, 'spring-words'),
-    font: oneOf(FONT_NAMES, r.font, 'Poppins'),
-    camera: oneOf(CAMERA_NAMES, r.camera, 'spring-slide-vertical'),
-    pace: Math.min(1.4, Math.max(0.7, Number(r.pace) || 1)),
-    decor: typeof r.decor === 'string' ? r.decor.slice(0, 16) : undefined,
-    trained: true,
-  };
-}
-
-export function addStylePackToEngine(pack: StylePack): void {
-  const idx = STYLE_PACKS.findIndex((p) => p.id === pack.id);
-  if (idx >= 0) STYLE_PACKS[idx] = pack;
-  else STYLE_PACKS.push(pack);
-}
-
-export function removeStylePackFromEngine(id: string): void {
-  const idx = STYLE_PACKS.findIndex((p) => p.id === id && p.trained);
-  if (idx >= 0) STYLE_PACKS.splice(idx, 1);
-}
-
-/** Id palet yang dipakai sebuah paket gaya di studio. */
-export function paletteIdOfPack(pack: StylePack): string {
-  return pack.colors ? `pack-${pack.id}` : pack.paletteId;
-}
-
-/**
- * Pilih paket gaya yang paling cocok dengan prompt. Ada unsur acak di antara 3 kandidat teratas
- * supaya hasil tidak selalu sama, tapi tetap searah dengan nuansa prompt.
- */
-export function pickStylePack(keys: PromptKeys, rng: Rng = Math.random): StylePack {
-  const explicit = new Set(keys.styleHints);
-  const scored = STYLE_PACKS.filter((p) => !p.categories || p.categories.includes(keys.category))
-    .map((p) => {
-      let score = 0;
-      for (const tag of p.tags) {
-        if (explicit.has(tag)) score += 5;
-        else if (tag === keys.mood) score += 1.5;
-        if (keys.colorHint && tag === keys.colorHint) score += 6;
-        if (keys.industry && tag === keys.industry) score += 3;
-        if (keys.urgent && tag === 'urgent') score += 5;
-        if (keys.platform && tag === keys.platform) score += 2;
-        if (tag.length > 2 && !explicit.has(tag) && tag !== keys.industry && keys.topicLower.includes(tag)) {
-          score += p.trained ? 6 : 3;
-        }
-      }
-      return { p, score: score + rng() * 2 };
-    })
-    .sort((a, b) => b.score - a.score);
-  if (!scored.length) return STYLE_PACKS[0];
-  // Biasanya gaya terbaik, sesekali kandidat ke-2/ke-3 supaya tidak monoton
-  // Prompt dengan sinyal kuat → hampir selalu gaya terbaik; prompt samar → lebih bervariasi
-  const strong = scored.length > 1 && scored[0].score - scored[1].score >= 4;
-  const r = rng();
-  const idx = strong ? (r < 0.9 ? 0 : 1) : r < 0.7 ? 0 : r < 0.92 ? 1 : 2;
-  return scored[Math.min(idx, scored.length - 1)].p;
-}
-
-/** Atribut visual satu scene berdasarkan paket gaya. Dipakai generator dan tombol "Acak gaya". */
-export function styleFieldsFor(
-  pack: StylePack,
-  sceneIndex: number,
-  widgetType: string | undefined,
-  hasPriceOrText: boolean,
-  keys: Pick<PromptKeys, 'icons' | 'emphasis'> & Partial<Pick<PromptKeys, 'energy'>>,
-  rng: Rng = Math.random,
-  fixedLayout?: SceneLayout
-): Required<Pick<SceneItem, 'cameraMotion' | 'paletteId' | 'layout' | 'transition' | 'bgStyle' | 'headlineAnim' | 'decor' | 'emphasis'>> {
-  let layout: SceneLayout = fixedLayout || (pack.layout === 'mixed' ? 'stack' : pack.layout);
-  if (!fixedLayout && pack.layout === 'mixed') {
-    const r = rng();
-    if (widgetType === 'cta_button_card' && r < 0.4) layout = 'card-first';
-    else if (widgetType === 'price_tag_card' && sceneIndex === 0 && !hasPriceOrText && r < 0.4) layout = 'center-text';
-    else if (widgetType === 'quote_card' && r < 0.25) layout = 'card-first';
-    else if (widgetType === 'checklist_card' && r < 0.2) layout = 'card-first';
-  }
-  return {
-    cameraMotion: pack.camera,
-    paletteId: paletteIdOfPack(pack),
-    layout,
-    transition: pack.transition,
-    bgStyle: pack.bgStyle,
-    headlineAnim:
-      sceneIndex === 0 && keys.energy === 'high' && pack.headlineAnim !== 'typewriter'
-        ? 'pop'
-        : pack.headlineAnim,
-    decor: pack.decor || keys.icons,
-    emphasis: keys.emphasis.join('|'),
-  };
-}
-
-/* -------------------------------------------------------------------------- */
-/* VARIASI SUSUNAN SCENE                                                      */
-/* -------------------------------------------------------------------------- */
-
-function chooseVariant(
-  category: CategoryType,
-  drafts: SceneDraft[],
-  meta: ParsedTopicMeta,
-  keys: PromptKeys,
-  rng: Rng
-): 'A' | 'B' | 'C' {
-  const r = rng();
-  if (category === 'promo') {
-    if (keys.platform === 'story') return r < 0.6 ? 'C' : 'A';
-    if (meta.priceText && r < 0.3) return 'B';
-    return r < 0.8 ? 'A' : 'C';
-  }
-  if (category === 'quote') return r < 0.45 ? 'A' : r < 0.75 ? 'B' : 'C';
-  const stepCount = (drafts[1]?.secondaryInput || '').split('|').filter((x) => x.trim()).length;
-  if (stepCount <= 4 && r < 0.35) return 'B';
-  return r < 0.75 ? 'A' : 'C';
-}
-
-/** A = susunan lengkap. B = susunan alternatif. C = versi ringkas (cocok untuk story/status). */
-function varyStructure(
-  category: CategoryType,
-  drafts: SceneDraft[],
-  meta: ParsedTopicMeta,
-  variant: 'A' | 'B' | 'C',
-  rng: Rng
-): SceneDraft[] {
-  if (variant === 'A' || drafts.length < 4) return drafts;
-  const [hook, second, third, cta] = drafts;
-
-  if (category === 'promo') {
-    if (variant === 'C') return [{ ...hook, layout: 'center-text' }, third, cta];
-    if (!meta.priceText) return drafts;
-    return [
-      {
-        ...third,
-        role: 'Hook / Masalah',
-        text: `${meta.productName || 'Promo spesial'} sekarang cuma ${meta.priceText}!`,
-        stepBadge: 'Harga spesial',
-        emoji: '🏷️',
-      },
-      second,
-      {
-        role: 'Isi / Solusi',
-        text: pick(['Promonya terbatas!', 'Jangan sampai kehabisan!'], rng, 'Promonya terbatas!'),
-        subtext: 'Selama persediaan masih ada.',
-        emoji: '⏰',
-        duration: 3,
-        animation: 'zoom',
-        stepBadge: 'Terbatas',
-        widgetType: 'step_number_card',
-        primaryInput: '⏰',
-        secondaryInput: 'Promo terbatas | Pesan sebelum kehabisan',
-      },
-      cta,
-    ];
-  }
-
-  if (category === 'quote') {
-    if (variant === 'C') return [hook, second, cta];
-    // B: pembuka berupa teks besar tanpa kartu, lalu kutipan satu per satu
-    return [
-      { ...hook, layout: 'center-text', duration: 3 },
-      { ...second, primaryInput: hook.primaryInput },
-      { ...third, primaryInput: second.primaryInput },
-      cta,
-    ];
-  }
-
-  // edukasi
-  if (variant === 'C') return [hook, second, cta];
-  const steps = (second.secondaryInput || '')
-    .split('|')
-    .map((x) => x.trim().replace(/^\d{1,2}[.)]\s*/, ''))
-    .filter(Boolean);
-  if (!steps.length || steps.length > 4) return drafts;
-  return [
-    hook,
-    ...steps.map(
-      (step, i): SceneDraft => ({
-        role: 'Langkah',
-        text: `${sentenceCase(meta.stepNoun || 'cara')} ke-${i + 1}`,
-        subtext: '',
-        emoji: '📝',
-        duration: 2.8,
-        animation: 'slide-up',
-        stepBadge: `${i + 1} dari ${steps.length}`,
-        widgetType: 'step_number_card',
-        primaryInput: String(i + 1),
-        secondaryInput: step,
-      })
-    ),
-    cta,
-  ];
-}
-
-function normalizeHashtag(tag: string): string {
-  const body = tag.replace(/^#/, '').toLowerCase().replace(/[^a-z0-9_]/g, '');
-  return body.length >= 2 ? `#${body}` : '';
-}
-
-export function generateCaptionAndHashtags(
-  topic: string,
-  category: CategoryType,
-  scenesOrMeta?: SceneItem[] | ParsedTopicMeta,
-  maybeMeta?: ParsedTopicMeta
-): { caption: string; hashtags: string[] } {
-  const scenes = Array.isArray(scenesOrMeta) ? scenesOrMeta : [];
-  const meta =
-    maybeMeta ||
-    (scenesOrMeta && !Array.isArray(scenesOrMeta) ? scenesOrMeta : parseTopic(topic, undefined, category));
-  const lower = (topic || '').toLowerCase();
-
-  const tags: string[] = [...(BANK_HASHTAGS[category] || BANK_HASHTAGS.promo)];
-  let caption: string;
-
-  if (category === 'quote') {
-    const quote =
-      scenes.find((s) => s.widgetType === 'quote_card' && s.primaryInput)?.primaryInput ||
-      scenes[0]?.text ||
-      '';
-    caption = `${quote} 🤍 Simpan dan kirim ke orang yang lagi butuh.`;
-    tags.push(...QUOTE_PACKS[meta.quoteMood || detectQuoteMood(lower)].hashtags);
-  } else if (category === 'edukasi') {
-    const title = scenes[0]?.text || sentenceCase(meta.cleanTopic);
-    caption = `${title} 📌 Simpan biar nggak lupa, bagikan ke teman yang butuh.`;
-    tags.push(...findEduPack(lower).hashtags);
+export function suggestStyle(topic: string, category?: CategoryType): StyleSuggestion {
+  const meta = parseTopic(topic);
+  let palette = COLOR_PALETTES[0];
+  let music = MUSIC_TRACKS[0];
+  let recommendedTemplate: StyleSuggestion['recommendedTemplate'] = 'P1';
+  let recommendedFont: EngineFontName = 'Space Grotesk';
+  let moodReason = `Disesuaikan dengan Data Pack "${meta.matchedDataPackTitle}"`;
+
+  if (meta.detectedMood === 'galau' || category === 'quote') {
+    palette = COLOR_PALETTES[4];
+    music = MUSIC_TRACKS[1];
+    recommendedTemplate = 'Q2';
+    recommendedFont = 'Playfair Display';
+    moodReason = 'Nuansa emosional & sinematik malam dengan instrumen lo-fi slow.';
+  } else if (meta.detectedMood === 'promo' || category === 'promo') {
+    palette = /kopi|aren|cafe|latte/i.test(topic) ? COLOR_PALETTES[2] : COLOR_PALETTES[1];
+    music = MUSIC_TRACKS[3];
+    recommendedTemplate = 'P1';
+    recommendedFont = 'Anton';
+    moodReason = 'Kontras tinggi pemicu konversi UMKM dengan beat cepat.';
+  } else if (meta.detectedMood === 'tech') {
+    palette = COLOR_PALETTES[0];
+    music = MUSIC_TRACKS[4];
+    recommendedTemplate = 'E2';
+    recommendedFont = 'Space Grotesk';
+    moodReason = 'Gaya Cyber Blueprint & AST Terminal modern 60fps.';
   } else {
-    const product = meta.productName || 'Promo spesial';
-    caption = `🔥 ${product}${meta.priceText ? ` cuma ${meta.priceText}` : ' lagi promo'}${
-      meta.originalPriceText ? ` (normal ${meta.originalPriceText})` : ''
-    }${meta.storeName ? ` di ${meta.storeName}` : ''}. Promo terbatas, yuk order sekarang!`;
-    tags.push(...detectPromoKind(`${lower} ${product.toLowerCase()}`).hashtags);
-    const storeTag = normalizeHashtag(meta.storeName || '');
-    if (storeTag.length > 3 && storeTag.length <= 30) tags.push(storeTag);
+    palette = COLOR_PALETTES[3];
+    music = MUSIC_TRACKS[2];
+    recommendedTemplate = 'E1';
+    recommendedFont = 'Montserrat';
+    moodReason = 'Tipografi bersih untuk retensi materi edukasi.';
   }
 
-  Object.entries(TOPIC_HASHTAG_MAP).forEach(([kw, list]) => {
-    if (kw && lower.includes(kw)) tags.push(...list);
-  });
-  tags.push('#fyp');
+  return {
+    palette,
+    music,
+    recommendedTemplate,
+    recommendedFont,
+    moodReason,
+  };
+}
 
-  const unique = Array.from(new Set(tags.map(normalizeHashtag).filter(Boolean)));
-  return { caption: cleanSpaces(caption), hashtags: unique.slice(0, 8) };
+function interpolateTemplate(tpl: string, meta: ParsedTopicMeta): string {
+  return tpl
+    .replace(/\{produk\}/gi, meta.productName)
+    .replace(/\{topik\}/gi, meta.cleanTopic)
+    .replace(/\{harga\}/gi, meta.priceText)
+    .replace(/\{toko\}/gi, meta.storeName);
 }
 
 /**
- * Buat script video lengkap sesuai kategori.
- * Setiap pemanggilan tanpa `seed` menghasilkan variasi kalimat yang berbeda.
+ * Fungsi Utama `generateScript`:
+ * - Membangun 4 Scene dengan Transisi, Animasi, Kamera, dan Layout yang DIJAMIN BERBEDA antar scene!
+ * - Otomatis merakit 4 Gambar Visual unik dari Data Pack Google/Web (`synthesizeAllSceneImagesFromDataPack`).
  */
 export function generateScript(
-  rawTopic: string,
+  topic: string,
   category: CategoryType = 'promo',
   options?: GenerateOptions
 ): GeneratedScriptResult {
-  const rng = createRng(options?.seed);
-  const meta = parseTopic(rawTopic, options, category);
-  const style = suggestStyle(rawTopic, category, options?.forceRandomPalette, rng);
+  const seed = options?.seed ?? Math.floor(Math.random() * 1_000_000) + Date.now();
+  const meta = parseTopic(topic, options);
+  const styleSuggestion = suggestStyle(topic, category);
 
-  const baseDrafts =
-    category === 'quote'
-      ? buildQuoteScenes(meta, rng, options)
-      : category === 'edukasi'
-      ? buildEdukasiScenes(meta, rng, options)
-      : buildPromoScenes(meta, rng, options);
+  const hooks = HOOK_BANK[category] || HOOK_BANK.promo;
+  const ctas = CTA_BANK[category] || CTA_BANK.promo;
+  const variations = SCENE_VARIATIONS[category] || SCENE_VARIATIONS.promo;
 
-  // Gaya visual & susunan scene mengikuti isi prompt
-  const keys = analyzePrompt(rawTopic, category, meta);
-  const forcedPack = options?.stylePackId
-    ? STYLE_PACKS.find((p) => p.id === options.stylePackId)
-    : undefined;
-  const pack = forcedPack || pickStylePack(keys, rng);
-  const variant = options?.variant || chooseVariant(category, baseDrafts, meta, keys, rng);
-  const drafts = varyStructure(category, baseDrafts, meta, variant, rng);
+  const chosenHook = interpolateTemplate(hooks[seed % hooks.length], meta);
+  const chosenCta = interpolateTemplate(ctas[(seed + 3) % ctas.length], meta);
+  const chosenVar = variations[(seed + 5) % variations.length];
 
-  if (!options?.forceRandomPalette) {
-    const packPalette = COLOR_PALETTES.find((p) => p.id === pack.paletteId);
-    style.paletteId = paletteIdOfPack(pack);
-    if (packPalette && !pack.colors) style.colors = packPalette;
-    style.gradientPreset = style.paletteId;
-    style.font = pack.font;
-    style.moodLabel = `${pack.name} • ${style.music.bpm} BPM`;
-  }
+  // Jaminan Anti-Monoton: Setiap scene mendapat Transisi, Animasi, Kamera, Layout, dan HeadlineAnim yang berbeda!
+  const allTransitions: SceneTransition[] = [
+    'whip-left',
+    'iris-wipe',
+    'diagonal-slice',
+    'zoom-punch',
+    'glitch-cut',
+    'morph-card',
+    'shutter-blinds',
+    'blueprint-wire',
+  ];
+  const allAnimations: AnimationType[] = ['pop', 'slide-up', 'typewriter', 'bounce', 'zoom', 'fade'];
+  const allCameras: CameraMotionType[] = [
+    'zoom-in',
+    'dutch-tilt',
+    'orbit-3d',
+    'pan-drift',
+    'handheld-float',
+    'zoom-out',
+  ];
+  const allLayouts: SceneLayout[] = [
+    'center',
+    'split-top',
+    'editorial-left',
+    'card-stack',
+    'diagonal-hero',
+    'bento-grid',
+    'hud-frame',
+  ];
+  const allHeadlineAnims: HeadlineAnim[] = [
+    'word-pop',
+    'kinetic-slide',
+    'typewriter',
+    'elastic-bounce',
+    'blur-reveal',
+    'glitch-decode',
+  ];
+  const allBgStyles: BackgroundStyle[] = [
+    'datapack-synth',
+    'aurora',
+    'grid-cyber',
+    'sunburst',
+    'halftone',
+    'mesh',
+  ];
 
-  const fallbackImage = CUSTOM_IMAGE_ASSETS.find((a) => a.category === category)?.url;
-  const scenes: SceneItem[] = drafts.map((draft, i) => {
-    const visual = styleFieldsFor(
-      pack,
-      i,
-      draft.widgetType,
-      Boolean(meta.priceText),
-      keys,
-      rng,
-      draft.layout
-    );
+  const pickedTransitions = buildNonRepeatingSequence(allTransitions, 4, seed + 11);
+  const pickedAnimations = buildNonRepeatingSequence(allAnimations, 4, seed + 23);
+  const pickedCameras = buildNonRepeatingSequence(allCameras, 4, seed + 37);
+  const pickedLayouts = buildNonRepeatingSequence(allLayouts, 4, seed + 53);
+  const pickedHeadlineAnims = buildNonRepeatingSequence(allHeadlineAnims, 4, seed + 71);
+  const pickedBgStyles = buildNonRepeatingSequence(allBgStyles, 4, seed + 89);
+
+  const rawSceneTexts = [
+    {
+      role: 'hook' as SceneRole,
+      text: chosenHook,
+      subtext: `Data Pack: ${meta.matchedDataPackTitle}`,
+      emoji: category === 'promo' ? '🔥' : category === 'quote' ? '🌙' : '💡',
+      stepBadge: '01 // HOOK UTAMA',
+      widgetType: 'step-paste-card' as WidgetBlueprintType,
+    },
+    {
+      role: 'solution' as SceneRole,
+      text: interpolateTemplate(chosenVar.scene2, meta),
+      subtext: interpolateTemplate(chosenVar.scene2Sub, meta),
+      emoji: chosenVar.emoji2,
+      stepBadge: '02 // EKSPLORASI FITUR',
+      widgetType: 'step-check-card' as WidgetBlueprintType,
+    },
+    {
+      role: 'proof' as SceneRole,
+      text: interpolateTemplate(chosenVar.scene3, meta),
+      subtext: interpolateTemplate(chosenVar.scene3Sub, meta),
+      emoji: chosenVar.emoji3,
+      stepBadge: '03 // BUKTI & NILAI',
+      widgetType: category === 'promo' ? ('price-slash-sticker' as WidgetBlueprintType) : ('metric-flip-counter' as WidgetBlueprintType),
+    },
+    {
+      role: 'cta' as SceneRole,
+      text: chosenCta,
+      subtext: `${meta.storeName} · ${meta.priceText}`,
+      emoji: '🚀',
+      stepBadge: '04 // DEPLOY & ACTION',
+      widgetType: 'step-deploy-card' as WidgetBlueprintType,
+    },
+  ];
+
+  // Rakit 4 gambar kustom dari Google/Web Data Pack secara otomatis!
+  const synthesizedPackImages = synthesizeAllSceneImagesFromDataPack({
+    topic: meta.rawTopic,
+    category,
+    priceLabel: category === 'promo' ? meta.priceText : meta.cleanTopic.slice(0, 14).toUpperCase(),
+    scenes: rawSceneTexts.map((s) => ({ text: s.text, subtext: s.subtext })),
+  });
+
+  const scenes: SceneItem[] = rawSceneTexts.map((rawSc, idx) => {
+    const synthImg = synthesizedPackImages[idx];
     return {
-      id: `scene-${i + 1}`,
-      sceneNumber: i + 1,
-      ...draft,
-      duration: Math.round(draft.duration * pack.pace * 10) / 10,
-      imageUrl: options?.userImages?.[i] || fallbackImage,
-      ...visual,
-      paletteId: options?.forceRandomPalette ? style.paletteId : visual.paletteId,
+      id: `scene-${idx + 1}-${seed}`,
+      sceneNumber: idx + 1,
+      role: rawSc.role,
+      text: rawSc.text,
+      subtext: rawSc.subtext,
+      emoji: rawSc.emoji,
+      duration: idx === 0 ? 3 : idx === 3 ? 3 : 4,
+      animation: pickedAnimations[idx],
+      imageUrl: synthImg.dataUri,
+      stepBadge: rawSc.stepBadge,
+      widgetType: rawSc.widgetType,
+      primaryInput: meta.productName,
+      secondaryInput: meta.priceText,
+      cameraMotion: pickedCameras[idx],
+      paletteId: COLOR_PALETTES[(seed + idx) % COLOR_PALETTES.length].id,
+      layout: pickedLayouts[idx],
+      transition: pickedTransitions[idx],
+      bgStyle: pickedBgStyles[idx],
+      headlineAnim: pickedHeadlineAnims[idx],
+      decor: synthImg.compositionStyle,
+      emphasis: meta.priceText,
+      dataPackMeta: {
+        clusterId: synthImg.clusterId,
+        packTitle: synthImg.packTitle,
+        compositionStyle: synthImg.compositionStyle,
+        matchedKeywords: synthImg.matchedKeywords,
+      },
     };
   });
 
-  const { caption, hashtags } = generateCaptionAndHashtags(rawTopic, category, scenes, meta);
+  const hashtags = [
+    '#fyp',
+    '#motionid',
+    `#${category}`,
+    ...meta.keywords.map((k) => `#${k.replace(/\s+/g, '')}`),
+    '#tiktokindonesia',
+  ].slice(0, 7);
+
+  const caption = `${chosenHook} ${interpolateTemplate(chosenVar.scene2, meta)} ${chosenCta} ${hashtags.join(' ')}`;
 
   return {
-    hook: scenes[0]?.text || '',
+    hook: chosenHook,
     scenes,
     caption,
     hashtags,
-    suggestedMusic: style.music,
-    suggestedColor: style.colors,
-    suggestedStyle: style,
+    suggestedMusic: styleSuggestion.music,
+    suggestedColor: styleSuggestion.palette,
+    suggestedStyle: styleSuggestion,
     extractedMeta: meta,
-    recipe: { packId: pack.id, packName: pack.name, variant, keys },
+    recipe: {
+      id: `recipe-${seed}`,
+      name: `Auto Non-Repeating Rig (${meta.matchedDataPackTitle})`,
+      transitions: pickedTransitions,
+      animations: pickedAnimations,
+      cameraMotions: pickedCameras,
+      cursorMode: options?.cursorMode ?? 'single-pro',
+    },
+    synthesizedPackImages,
   };
 }
 
-/** Kompatibilitas versi lama: kategori ditebak dari prompt. */
-export function generateDynamicMotionScenes(prompt: string, presetId?: string): GeneratedMotionScene[] {
-  void presetId;
-  const result = generateScript(prompt, detectCategory(prompt));
-  return result.scenes.map((s) => ({
-    id: s.id,
-    stepBadge: s.stepBadge || '',
-    title: s.text,
-    subtext: s.subtext,
-    duration: s.duration,
-    paletteId: s.paletteId || result.suggestedStyle.paletteId,
-    widgetType: s.widgetType || 'checklist_card',
-    widgetData: { primaryInput: s.primaryInput, secondaryBadge: s.secondaryInput },
-    cameraMotion: s.cameraMotion || 'spring-slide-vertical',
-    easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
-  }));
-}
-
-export function randomizeHookAndStyle(
-  currentTopic: string,
-  category: CategoryType = 'promo',
-  currentPaletteId = 'promo-pop',
-  options?: GenerateOptions
-): {
-  newScript: GeneratedScriptResult;
-  randomPalette: ColorPalette;
-  randomMusic: MusicTrack;
-} {
-  const otherPalettes = COLOR_PALETTES.filter((p) => p.id !== currentPaletteId);
-  const randomPalette =
-    otherPalettes[Math.floor(Math.random() * otherPalettes.length)] || COLOR_PALETTES[0];
-  const randomMusic = MUSIC_TRACKS[Math.floor(Math.random() * MUSIC_TRACKS.length)];
-
-  const newScript = generateScript(currentTopic, category, {
-    ...options,
-    forceRandomPalette: true,
-  });
-
-  newScript.suggestedColor = randomPalette;
-  newScript.suggestedMusic = randomMusic;
-  newScript.suggestedStyle = {
-    ...newScript.suggestedStyle,
-    paletteId: randomPalette.id,
-    colors: randomPalette,
-    musicId: randomMusic.id,
-    music: randomMusic,
-    gradientPreset: randomPalette.id,
-  };
-  newScript.scenes = newScript.scenes.map((s) => ({ ...s, paletteId: randomPalette.id }));
-
-  return {
-    newScript,
-    randomPalette,
-    randomMusic,
-  };
-}
+export {
+  GOOGLE_VISUAL_DATA_PACKS,
+  matchBestDataPack,
+  synthesizeDataPackSceneImage,
+  synthesizeAllSceneImagesFromDataPack,
+  type GoogleDataPackItem,
+  type SynthesizedSceneImage,
+};
