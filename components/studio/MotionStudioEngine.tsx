@@ -2249,6 +2249,8 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const canvasStageRef = useRef<HTMLDivElement | null>(null);
+  const [canvasStage, setCanvasStage] = useState({ w: 0, h: 0 });
   const timeRef = useRef(0);
   const exportingRef = useRef(false);
   const projectReadyRef = useRef(false);
@@ -2270,6 +2272,35 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
       setToastMsg((prev) => (prev === msg ? null : prev));
     }, 2800);
   }, []);
+
+  useEffect(() => {
+    const el = canvasStageRef.current;
+    if (!el) return;
+    let frame = 0;
+    const update = () => {
+      const next = { w: el.clientWidth, h: el.clientHeight };
+      setCanvasStage((prev) => (prev.w === next.w && prev.h === next.h ? prev : next));
+    };
+    const updateNextFrame = () => {
+      frame = requestAnimationFrame(() => {
+        update();
+        frame = requestAnimationFrame(update);
+      });
+    };
+    update();
+    updateNextFrame();
+    window.addEventListener('resize', update);
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(update);
+      observer.observe(el);
+    }
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('resize', update);
+      observer?.disconnect();
+    };
+  }, [mobilePanel]);
 
   useEffect(() => {
     loadTrainingIntoEngine();
@@ -4319,6 +4350,20 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
       ? { w: 960, h: 540, cssW: 520 * zoom, cssH: 292 * zoom }
       : { w: 540, h: 960, cssW: 315 * zoom, cssH: 560 * zoom };
 
+  // Kanvas selalu diskalakan agar muat di area tengah (lebar DAN tinggi),
+  // lalu zoom pengguna menjadi pengali dari ukuran "fit" tersebut.
+  const stagePadding = 24;
+  const fitScale =
+    canvasStage.w > 0 && canvasStage.h > 0
+      ? Math.min(
+          (canvasStage.w - stagePadding * 2) / canvasDims.w,
+          (canvasStage.h - stagePadding * 2) / canvasDims.h
+        )
+      : 0;
+  const displayScale = fitScale > 0 ? Math.max(0.12, fitScale) * zoom : 0;
+  const canvasCssW = displayScale > 0 ? Math.round(canvasDims.w * displayScale) : canvasDims.cssW;
+  const canvasCssH = displayScale > 0 ? Math.round(canvasDims.h * displayScale) : canvasDims.cssH;
+
   const widgetFields = WIDGET_FIELDS[normalizeWidgetType(activeScene?.widgetType)];
 
   const filteredTemplates = useMemo(() => {
@@ -4369,9 +4414,9 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
   );
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#090a0f] text-slate-100 select-none font-sans pb-14 lg:pb-0 mk-studio">
+    <div className="h-[100dvh] flex flex-col overflow-hidden bg-[#090a0f] text-slate-100 select-none font-sans pb-14 lg:pb-0 mk-studio">
       {/* TOP BAR (IDENTICAL TO IMAGE_892545.JPG) */}
-      <header className="border-b border-[#222636] bg-[#10121a] px-3 py-2 flex flex-wrap items-center justify-between gap-2 z-30">
+      <header className="shrink-0 border-b border-[#222636] bg-[#10121a] px-3 py-2 flex flex-wrap items-center justify-between gap-2 z-30">
         <div className="flex items-center gap-2.5">
           <Link
             href="/create"
@@ -4387,7 +4432,7 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
                 type="text"
                 value={projectTitle}
                 onChange={(e) => setProjectTitle(e.target.value)}
-                className="bg-transparent hover:bg-[#1a1d29] focus:bg-[#1a1d29] focus:outline-none px-2 py-0.5 rounded text-xs font-bold text-white w-56"
+                className="bg-transparent hover:bg-[#1a1d29] focus:bg-[#1a1d29] focus:outline-none px-2 py-0.5 rounded text-xs font-bold text-white w-36 sm:w-56"
               />
               <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-gradient-to-r from-indigo-500/20 to-lime-400/20 text-lime-300 border border-lime-400/30">
                 {CATEGORY_LABEL[studioCategory]}
@@ -4523,9 +4568,9 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
       )}
 
       {/* MAIN 3-COLUMN STUDIO WORKSPACE (SHARED BY USER & ADMIN) */}
-      <main className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+      <main className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
         {/* LEFT SIDEBAR: USER TABS OR ADMIN UNRESTRICTED TRAINING TABS */}
-        <aside className={`${mobilePanel === 'library' ? 'flex' : 'hidden'} lg:flex w-full lg:w-80 border-b lg:border-b-0 lg:border-r border-[#222636] bg-[#11131a] flex-col shrink-0`}>
+        <aside className={`${mobilePanel === 'library' ? 'flex' : 'hidden'} flex-1 lg:flex-none lg:flex w-full lg:w-80 min-h-0 border-b lg:border-b-0 lg:border-r border-[#222636] bg-[#11131a] flex-col shrink-0 overflow-hidden`}>
           {roleMode === 'user' ? (
             <>
               <div className="grid grid-cols-5 border-b border-[#222636] bg-[#0c0e14] p-1 gap-1 text-[10px] font-semibold">
@@ -5574,8 +5619,8 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
         </aside>
 
         {/* CENTER VIEWPORT + KEYFRAME TIMELINE */}
-        <section className={`${mobilePanel === 'canvas' ? 'flex' : 'hidden'} lg:flex flex-1 flex-col min-w-0 bg-[#07080c]`}>
-          <div className="h-10 border-b border-[#1c202e] bg-[#0d0f17]/95 px-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <section className={`${mobilePanel === 'canvas' ? 'flex' : 'hidden'} lg:flex flex-1 min-h-0 flex-col min-w-0 bg-[#07080c]`}>
+          <div className="shrink-0 min-h-10 border-b border-[#1c202e] bg-[#0d0f17]/95 px-3 py-1.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs">
             <div className="flex items-center gap-2">
               <span className="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 font-bold text-[11px]">
                 Scene {activeSceneIndex + 1} • {activeScene?.stepBadge}
@@ -5585,7 +5630,7 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
               </span>
             </div>
 
-            <div className="flex items-center gap-2.5">
+            <div className="flex flex-wrap items-center justify-end gap-x-2.5 gap-y-1">
               <label className="flex items-center gap-1 text-[11px] text-slate-300 cursor-pointer">
                 <input
                   type="checkbox"
@@ -5634,10 +5679,10 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
             </div>
           </div>
 
-          <div className="flex-1 relative flex items-center justify-center p-3 overflow-hidden bg-[#07080c]">
+          <div ref={canvasStageRef} className="flex-1 min-h-0 relative flex overflow-auto p-3 bg-[#07080c]">
             <div
-              className="relative shadow-2xl rounded-2xl overflow-hidden border border-white/15 transition-all duration-200"
-              style={{ width: canvasDims.cssW, maxWidth: '100%', aspectRatio: `${canvasDims.w} / ${canvasDims.h}` }}
+              className="relative m-auto shadow-2xl rounded-2xl overflow-hidden border border-white/15"
+              style={{ width: canvasCssW, height: canvasCssH }}
             >
               <canvas
                 ref={canvasRef}
@@ -5670,7 +5715,7 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
           </div>
 
           {/* Transport Bar */}
-          <div className="h-11 border-t border-b border-[#222533] bg-[#10121a] px-4 flex items-center justify-between gap-3">
+          <div className="shrink-0 h-11 border-t border-b border-[#222533] bg-[#10121a] px-4 flex items-center justify-between gap-3">
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
@@ -5725,7 +5770,7 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
           </div>
 
           {/* Multi-Track Keyframe Timeline */}
-          <div className="h-36 bg-[#0c0e14] px-4 py-2 space-y-1.5 overflow-y-auto shrink-0">
+          <div className="shrink-0 h-24 sm:h-36 bg-[#0c0e14] px-2 sm:px-4 py-2 space-y-1.5 overflow-y-auto">
             <div className="flex items-center gap-3">
               <span className="w-28 shrink-0 text-[10px] font-semibold text-slate-400">
                 🎥 3D Camera Rig
@@ -5782,7 +5827,7 @@ export default function MotionStudioEngine({ initialRole = 'user', projectId }: 
         </section>
 
         {/* RIGHT SIDEBAR: INSPECTOR & ADMIN DATASET CONTROL */}
-        <aside className={`${mobilePanel === 'inspector' ? 'flex' : 'hidden'} lg:flex w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-[#222636] bg-[#11131a] flex-col shrink-0 overflow-y-auto p-3.5 space-y-4 text-xs`}>
+        <aside className={`${mobilePanel === 'inspector' ? 'flex' : 'hidden'} flex-1 lg:flex-none lg:flex w-full lg:w-80 min-h-0 border-t lg:border-t-0 lg:border-l border-[#222636] bg-[#11131a] flex-col shrink-0 overflow-y-auto p-3.5 space-y-4 text-xs`}>
           <div className="flex items-center justify-between border-b border-[#222636] pb-2">
             <span className="font-bold uppercase tracking-wider text-slate-300">
               {roleMode === 'admin' ? 'Admin Telemetry & Inspector' : 'Inspector & Physics Rig'}
