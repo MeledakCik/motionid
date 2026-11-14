@@ -3,13 +3,13 @@
 import React, { useMemo, useState } from 'react';
 import { Shuffle } from 'lucide-react';
 import { useStudio, currentLayer } from '@/store/useStudio';
-import { allTransitions, getTransition, TRANSITION_GROUPS } from '@/lib/studio/packs/transitions';
+import { allTransitions, getTransition, hasTransition, TRANSITION_FX, TRANSITION_GROUPS } from '@/lib/studio/packs/transitions';
 import { allAnimations, ANIM_GROUPS, getAnimation } from '@/lib/studio/packs/animations';
 import { sceneStarts } from '@/lib/studio/renderer';
 import type { PlaybackClock } from '@/lib/studio/clock';
 import { ChipRow, cx, LazyVisible, SearchBox, Section, Segmented, Slider } from './ui';
 import { AnimationThumb, EffectThumb, TransitionThumb } from './Thumbs';
-import { allEffects, EFFECT_GROUPS, effectId, effectKinds, getEffect, INTENSITY_LEVELS, splitEffectId } from '@/lib/studio/packs/effects';
+import { allEffects, EFFECT_GROUPS, EFFECT_PALETTES, effectId, effectKinds, getEffect, INTENSITY_LEVELS, splitEffectId } from '@/lib/studio/packs/effects';
 
 const PAGE = 30;
 
@@ -60,6 +60,18 @@ const KIND_LABEL: Record<string, string> = {
   filmroll: 'Gulungan Film',
   swing: 'Ayun Pintu',
   curtain: 'Tirai Panggung',
+  spotlight: 'Lampu Sorot',
+  flytiles: 'Ubin Terbang',
+  tear: 'Sobek Kertas',
+  roll: 'Gulung Kertas',
+  slats: 'Kerai Putar 3D',
+  pagecurl: 'Lipat Sudut',
+  tilesout: 'Ubin Runtuh',
+  lens: 'Lensa Zoom',
+  brush: 'Sapuan Kuas',
+  melt: 'Leleh',
+  bubbles: 'Gelembung',
+  toss: 'Lempar Foto',
   custom: 'Custom',
 };
 
@@ -75,6 +87,7 @@ export function TransitionPanel({ clock }: { clock: PlaybackClock }) {
   const kinds = useMemo(() => {
     const m = new Map<string, ReturnType<typeof allTransitions>>();
     allTransitions().forEach((t) => {
+      if (t.params.fx) return; // varian aksen dipilih lewat baris "Aksen"
       const key = t.author === 'admin' ? `custom:${t.id}` : t.kind;
       if (!m.has(key)) m.set(key, []);
       m.get(key)!.push(t);
@@ -97,7 +110,12 @@ export function TransitionPanel({ clock }: { clock: PlaybackClock }) {
     setTimeout(preview, 30);
   };
   const cur = getTransition(scene.transition.id);
-  const curKind = kinds.find((k) => k.specs.some((t) => t.id === cur.id));
+  const curFx: string = cur.params.fx || '';
+  const baseId = cur.id.split('~')[0];
+  const curKind = kinds.find((k) => k.specs.some((t) => t.id === baseId));
+  const withFx = (id: string) => (curFx && hasTransition(`${id}~${curFx}`) ? `${id}~${curFx}` : id);
+  const fxOptions = [{ id: '', label: 'Tanpa' }, ...TRANSITION_FX].filter((f) => !f.id || hasTransition(`${baseId}~${f.id}`));
+  const baseCount = kinds.reduce((a, k) => a + k.specs.length, 0);
   return (
     <div>
       <Section title={`Transisi masuk ke scene ${target + 1}`}>
@@ -111,10 +129,22 @@ export function TransitionPanel({ clock }: { clock: PlaybackClock }) {
           {curKind && curKind.specs.length > 1 && (
             <div className="mk-scroll -mx-1 mt-2 flex max-h-36 flex-wrap gap-1.5 overflow-y-auto px-1">
               {curKind.specs.map((t) => (
-                <button key={t.id} type="button" onClick={() => apply(t.id)} className={cx('mk-chip shrink-0 py-1', t.id === cur.id && 'mk-chip-on')}>
+                <button key={t.id} type="button" onClick={() => apply(withFx(t.id))} className={cx('mk-chip shrink-0 py-1', t.id === baseId && 'mk-chip-on')}>
                   {t.name.replace(new RegExp(`^${curKind.label}\\s*`, 'i'), '') || t.name}
                 </button>
               ))}
+            </div>
+          )}
+          {fxOptions.length > 1 && (
+            <div className="mt-2">
+              <div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-mk-dim">Aksen</div>
+              <div className="flex flex-wrap gap-1.5">
+                {fxOptions.map((f) => (
+                  <button key={f.id || 'none'} type="button" onClick={() => apply(f.id ? `${baseId}~${f.id}` : baseId)} className={cx('mk-chip py-1', curFx === f.id && 'mk-chip-on')}>
+                    {f.label}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
           <Slider label="Durasi" value={scene.transition.duration} min={0.15} max={1.6} step={0.05} onChange={(v) => updateScene(target, { transition: { ...scene.transition, duration: v } })} format={(v) => `${v.toFixed(2)} dtk`} />
@@ -146,13 +176,13 @@ export function TransitionPanel({ clock }: { clock: PlaybackClock }) {
         </div>
         <SearchBox value={q} onChange={setQ} placeholder="Cari transisi… (zoom, kaca, sapu)" />
         <ChipRow value={group} onChange={setGroup} options={[{ id: 'all', label: 'Semua' }, ...TRANSITION_GROUPS.filter((g) => g.id !== 'custom')]} />
-        <p className="text-[11px] text-mk-dim">{kinds.length} jenis · {allTransitions().length} variasi arah & gaya</p>
+        <p className="text-[11px] text-mk-dim">{kinds.length} jenis · {baseCount} variasi · {allTransitions().length} total dengan aksen</p>
       </Section>
       <div className="grid grid-cols-3 gap-2 p-3 lg:grid-cols-2">
         {list.map((k) => {
           const on = curKind?.key === k.key;
           return (
-            <button key={k.key} type="button" onClick={() => apply(k.specs[0].id)} className={cx('overflow-hidden rounded-xl border text-left transition', on ? 'border-mk-coral ring-2 ring-mk-coral/30' : 'border-mk-line bg-mk-panel-2 hover:border-mk-line-2')}>
+            <button key={k.key} type="button" onClick={() => apply(withFx(k.specs[0].id))} className={cx('overflow-hidden rounded-xl border text-left transition', on ? 'border-mk-coral ring-2 ring-mk-coral/30' : 'border-mk-line bg-mk-panel-2 hover:border-mk-line-2')}>
               <LazyVisible minH={60} className="aspect-[16/10] bg-mk-ink">
                 <TransitionThumb spec={k.specs[0]} primary={doc.theme.palette.primary} secondary={doc.theme.palette.secondary} />
               </LazyVisible>
@@ -339,12 +369,39 @@ export function EffectsPanel({ clock }: { clock: PlaybackClock }) {
                   {parts && k && (
                     <>
                       <div className="mk-scroll -mx-1 mt-2 flex max-h-36 flex-wrap gap-1.5 overflow-y-auto px-1">
-                        {k.styles.map((st) => (
-                          <button key={st.id} type="button" onClick={() => replace(a.id, effectId(parts.kind, st.id, parts.lvl))} className={cx('mk-chip shrink-0 py-1', parts.style === st.id && 'mk-chip-on')}>
-                            {st.label}
-                          </button>
-                        ))}
+                        {k.styles.map((st) => {
+                          const [base, pal] = parts.style.split('~');
+                          return (
+                            <button key={st.id} type="button" onClick={() => replace(a.id, effectId(parts.kind, pal && st.palettes.includes(pal) ? `${st.id}~${pal}` : st.id, parts.lvl))} className={cx('mk-chip shrink-0 py-1', base === st.id && 'mk-chip-on')}>
+                              {st.label}
+                            </button>
+                          );
+                        })}
                       </div>
+                      {(() => {
+                        const [base, pal = ''] = parts.style.split('~');
+                        const cur = k.styles.find((st) => st.id === base);
+                        if (!cur || !cur.palettes.length) return null;
+                        return (
+                          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                            <span className="mr-0.5 text-[11px] font-bold uppercase tracking-wider text-mk-dim">Palet</span>
+                            <button type="button" onClick={() => replace(a.id, effectId(parts.kind, base, parts.lvl))} className={cx('h-7 rounded-full border px-2.5 text-[11px] font-bold transition', !pal ? 'border-mk-coral bg-mk-coral/15 text-mk-cream' : 'border-mk-line text-mk-dim hover:text-mk-cream')}>
+                              Tema
+                            </button>
+                            {EFFECT_PALETTES.filter((pl) => cur.palettes.includes(pl.id)).map((pl) => (
+                              <button
+                                key={pl.id}
+                                type="button"
+                                title={pl.label}
+                                aria-label={`Palet ${pl.label}`}
+                                onClick={() => replace(a.id, effectId(parts.kind, `${base}~${pl.id}`, parts.lvl))}
+                                className={cx('h-7 w-7 rounded-full border-2 transition', pal === pl.id ? 'border-mk-coral ring-2 ring-mk-coral/30' : 'border-white/15 hover:border-white/40')}
+                                style={{ background: `linear-gradient(135deg, ${pl.colors[0]} 50%, ${pl.colors[1]} 50%)` }}
+                              />
+                            ))}
+                          </div>
+                        );
+                      })()}
                       <div className="mt-2">
                         <Segmented size="sm" value={parts.lvl} onChange={(lv) => replace(a.id, effectId(parts.kind, parts.style, lv))} options={INTENSITY_LEVELS.map((l) => ({ value: l.id, label: l.label }))} />
                       </div>

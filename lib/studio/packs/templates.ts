@@ -1,7 +1,7 @@
 import type { BgPattern, FontId, Intent, Palette } from '../types';
 
 /**
- * Template Pack — 45 tema warna × 24 layout = 1080 template.
+ * Template Pack — 106 tema warna × 48 layout = 5088 template.
  * Tema menentukan palet, font, dan pola latar. Layout menentukan susunan elemen tiap scene,
  * gaya komponen, pilihan animasi, dan transisi. Prompt engine memilih kombinasi terbaik.
  */
@@ -119,6 +119,67 @@ export const THEMES: ThemeDef[] = [
   T('sport-biru', 'Sport Elektrik', ['#06122B', '#0B2A66', '#00A3FF', '#C6FF3D', '#FFFFFF', '#9CB3D9', '#0A1E45'], 'Anton', 'Montserrat', 'stripes', ['olahraga', 'futsal', 'sepak bola', 'bola', 'lari', 'badminton', 'fitness', 'turnamen', 'basket'], ['energik']),
   T('hijab-mauve', 'Mauve Muslimah', ['#F5E9EE', '#E8CFDA', '#9C4F73', '#C9A27E', '#3A1E2B', '#7E6070', '#FFFAFC'], 'Playfair Display', 'Poppins', 'bokeh', ['hijab', 'gamis', 'muslimah', 'fashion muslim', 'mukena', 'kerudung', 'syari'], ['tenang', 'mewah'], 135),
   T('properti-navy', 'Properti Navy', ['#0B1630', '#172A55', '#E2B65C', '#FFFFFF', '#F7F9FF', '#A9B5CF', '#13234A'], 'Montserrat', 'Plus Jakarta Sans', 'grid', ['rumah', 'kpr', 'properti', 'kontrakan', 'kos', 'apartemen', 'tanah', 'perumahan', 'cluster'], ['serius', 'mewah']),
+  // ---- Tema tambahan v8: niche usaha & momen ----
+  T('laundry-biru', 'Laundry Segar', ['#EAF7FF', '#CFEBFF', '#0284C7', '#22D3EE', '#062033', '#4F6B80', '#FFFFFF'], 'Poppins', 'Poppins', 'bubbles', ['laundry', 'cuci', 'setrika', 'kiloan', 'bersih', 'wangi', 'dry clean'], ['tenang', 'serius'], 135),
+  T('bengkel-oli', 'Bengkel Oli', ['#121212', '#2A2A2A', '#F97316', '#FACC15', '#F5F5F5', '#A3A3A3', '#1E1E1E'], 'Anton', 'Montserrat', 'stripes', ['bengkel', 'oli', 'servis motor', 'tune up', 'ban', 'sparepart', 'motor'], ['energik', 'serius']),
+  T('salon-rose', 'Salon Rose Gold', ['#FFF1EE', '#F8D9D3', '#B4535B', '#D4A373', '#3B1E22', '#8A6266', '#FFFFFF'], 'Playfair Display', 'Poppins', 'bokeh', ['salon', 'potong rambut', 'creambath', 'nail art', 'kuku', 'bulu mata', 'lash', 'mua', 'makeup artist'], ['mewah', 'tenang'], 135),
+  T('apotek-hijau', 'Apotek Sehat', ['#ECFDF5', '#D1FAE5', '#059669', '#0EA5E9', '#052E1F', '#4B6B5E', '#FFFFFF'], 'Plus Jakarta Sans', 'Plus Jakarta Sans', 'grid', ['apotek', 'obat', 'vitamin', 'suplemen', 'farmasi', 'imun', 'daya tahan'], ['tenang', 'serius'], 135),
+  T('petshop', 'Petshop Ceria', ['#FFF7E6', '#FFE3B3', '#F97316', '#8B5CF6', '#3A2208', '#7A5A3A', '#FFFFFF'], 'Poppins', 'Poppins', 'dots', ['kucing', 'anjing', 'pet', 'petshop', 'grooming', 'makanan kucing', 'hewan peliharaan'], ['lucu', 'hangat'], 135),
+  T('florist', 'Florist Bunga', ['#FDF2F8', '#FCE7F3', '#DB2777', '#16A34A', '#3B0A23', '#86607A', '#FFFFFF'], 'Playfair Display', 'Poppins', 'blobs', ['florist', 'buket', 'bouquet', 'hand bouquet', 'papan bunga', 'bunga segar'], ['hangat', 'mewah'], 135),
+  T('sushi', 'Sushi Jepang', ['#0F0F0F', '#1F1A17', '#E63946', '#F1FAEE', '#FFFFFF', '#B5B5B5', '#1A1A1A'], 'Bebas Neue', 'Montserrat', 'waves', ['sushi', 'ramen', 'japanese', 'takoyaki', 'onigiri', 'dimsum', 'udon'], ['serius', 'energik']),
+  T('bbq-asap', 'BBQ Asap', ['#170B05', '#3A1A0A', '#FF5A1F', '#FFC145', '#FFF1E6', '#CDAE98', '#26120A'], 'Anton', 'Montserrat', 'noise', ['bbq', 'barbeque', 'grill', 'steak', 'panggang', 'daging', 'korean bbq'], ['energik', 'hangat']),
+  T('martabak', 'Martabak Manis', ['#2A1608', '#4E2A10', '#F59E0B', '#EF4444', '#FFF7E8', '#D9BE98', '#3A200D'], 'Anton', 'Poppins', 'halftone', ['martabak', 'terang bulan', 'roti bakar', 'pisang bakar', 'gorengan', 'jajanan malam'], ['hangat', 'lucu']),
+  T('nasgor', 'Nasi Goreng Kaki Lima', ['#1C1206', '#3B260C', '#EAB308', '#DC2626', '#FFF8E7', '#CDB892', '#2A1C0A'], 'Montserrat', 'Poppins', 'rays', ['nasi goreng', 'mie goreng', 'kaki lima', 'pecel lele', 'angkringan', 'warung tenda'], ['energik', 'hangat']),
+  T('jamu', 'Jamu Tradisional', ['#1D2A0E', '#34501A', '#E9B949', '#A3C35A', '#FBF8E8', '#C3C9A6', '#263713'], 'Playfair Display', 'Montserrat', 'halftone', ['jamu', 'kunyit', 'beras kencur', 'temulawak', 'rempah', 'sehat alami'], ['tenang', 'hangat']),
+  T('durian', 'Durian Montong', ['#1A2208', '#2F3D10', '#FACC15', '#84CC16', '#FEFCE8', '#C6CC9A', '#233010'], 'Anton', 'Poppins', 'dots', ['durian', 'montong', 'pancake durian', 'kebun buah', 'musim durian'], ['energik', 'lucu']),
+  T('seafood-pedas', 'Seafood Pedas', ['#12090A', '#3A1214', '#EF4444', '#FB923C', '#FFF1F0', '#D8AFAB', '#22100F'], 'Anton', 'Montserrat', 'waves', ['kepiting', 'udang', 'cumi', 'kerang', 'saus padang', 'lobster', 'seafood'], ['energik']),
+  T('kopi-tubruk', 'Kopi Tubruk', ['#0E0B08', '#241B13', '#C8A27A', '#E9D8C4', '#F7EFE6', '#A8977F', '#1A140E'], 'Bebas Neue', 'Montserrat', 'noise', ['kopi hitam', 'tubruk', 'espresso', 'robusta', 'arabika', 'biji kopi', 'barista'], ['serius', 'tenang']),
+  T('wo-champagne', 'Wedding Champagne', ['#FBF6EE', '#F1E4CF', '#A67C52', '#C9A96E', '#2E2216', '#7D6A55', '#FFFFFF'], 'Playfair Display', 'Montserrat', 'bokeh', ['wedding organizer', 'pernikahan', 'undangan', 'akad', 'resepsi', 'lamaran', 'prewedding'], ['mewah', 'hangat'], 135),
+  T('fotografer', 'Studio Foto', ['#0B0B0D', '#1C1C22', '#F5F5F5', '#EAB308', '#FFFFFF', '#9CA3AF', '#16161A'], 'Space Grotesk', 'Montserrat', 'noise', ['fotografer', 'foto studio', 'photoshoot', 'videografer', 'dokumentasi', 'kamera'], ['serius', 'mewah']),
+  T('kids-crayon', 'Krayon Anak', ['#FFFBEB', '#FEF3C7', '#EF4444', '#3B82F6', '#1F2937', '#6B7280', '#FFFFFF'], 'Poppins', 'Poppins', 'dots', ['tk', 'paud', 'mainan', 'balita', 'ulang tahun anak', 'sekolah anak', 'kids'], ['lucu', 'energik'], 135),
+  T('tosca-modern', 'Tosca Modern', ['#042F2E', '#0F4C4A', '#2DD4BF', '#FDE68A', '#F0FDFA', '#99C9C3', '#0B3B39'], 'Space Grotesk', 'Plus Jakarta Sans', 'grid', ['fintech', 'dompet digital', 'bank', 'asuransi', 'paylater', 'transfer'], ['serius', 'tenang']),
+  T('genz-ungu', 'Gen Z Ungu', ['#1A0533', '#3B0A6B', '#C084FC', '#FDE047', '#FAF5FF', '#C4B5D9', '#2A0A4F'], 'Anton', 'Space Grotesk', 'halftone', ['gen z', 'viral', 'tren', 'fyp', 'konten', 'meme', 'relate'], ['lucu', 'energik']),
+  T('mega-sale', 'Mega Sale Kuning', ['#FFD60A', '#FFC300', '#000000', '#E5383B', '#000000', '#3D3300', '#FFFFFF'], 'Anton', 'Montserrat', 'rays', ['sale', 'obral', 'cuci gudang', 'harbolnas', '12.12', '11.11', 'promo besar', 'payday'], ['energik'], 135),
+  T('korporat-biru', 'Korporat Biru', ['#F4F7FB', '#E3EAF4', '#1D4ED8', '#0EA5E9', '#0B1B33', '#5A6B85', '#FFFFFF'], 'Plus Jakarta Sans', 'Plus Jakarta Sans', 'grid', ['perusahaan', 'company profile', 'korporat', 'kantor', 'b2b', 'konsultan', 'jasa profesional'], ['serius'], 135),
+  T('gym-power', 'Gym Power', ['#0A0A0A', '#1C1C1C', '#EF233C', '#F8F9FA', '#FFFFFF', '#A0A0A0', '#161616'], 'Anton', 'Montserrat', 'stripes', ['workout', 'binaraga', 'protein', 'personal trainer', 'bulking', 'cutting', 'membership gym'], ['energik', 'serius']),
+  T('sage-calm', 'Sage Calm', ['#EEF2EA', '#DCE5D3', '#6B8F71', '#D9A47B', '#22301F', '#66745F', '#FFFFFF'], 'Playfair Display', 'Poppins', 'waves', ['pilates', 'wellness', 'pijat', 'refleksi', 'aromaterapi', 'massage', 'me time'], ['tenang'], 135),
+  T('tropical-sunset', 'Tropical Sunset', ['#2B0F3A', '#7A1F5C', '#FF7A59', '#FFD166', '#FFF4EC', '#E0B3C5', '#3D1450'], 'Montserrat', 'Poppins', 'rays', ['tropis', 'summer', 'pool party', 'beach club', 'musim panas', 'liburan sekolah'], ['energik', 'hangat']),
+  T('es-teh', 'Es Teh Segar', ['#EFFFF4', '#CFF7DC', '#16A34A', '#F59E0B', '#0F2A18', '#4E6D58', '#FFFFFF'], 'Bebas Neue', 'Poppins', 'bubbles', ['es teh', 'teh jumbo', 'minuman dingin', 'es jeruk', 'segar', 'haus', 'es campur'], ['energik', 'lucu'], 135),
+  T('kue-lebaran', 'Kue Lebaran', ['#FFF8EC', '#FBE7C6', '#B45309', '#15803D', '#3A2108', '#7C6347', '#FFFFFF'], 'Playfair Display', 'Poppins', 'halftone', ['kue kering', 'nastar', 'kastengel', 'hampers lebaran', 'parsel', 'kue lebaran'], ['hangat', 'mewah'], 135),
+  T('natal', 'Natal Merah Hijau', ['#0B2A1A', '#14432A', '#E63946', '#F1C453', '#F8FFF9', '#B5CDBE', '#0F3521'], 'Playfair Display', 'Montserrat', 'bokeh', ['natal', 'christmas', 'santa', 'desember', 'kado natal', 'pohon natal'], ['hangat', 'mewah']),
+  T('halloween', 'Halloween', ['#120A1E', '#2A1340', '#FF7518', '#A3E635', '#FFF7ED', '#BCA9CF', '#1E1030'], 'Anton', 'Space Grotesk', 'halftone', ['halloween', 'horor', 'seram', 'hantu', 'misteri', 'creepy', 'uji nyali'], ['energik', 'lucu']),
+  T('valentine-merah', 'Valentine Merah', ['#3A0412', '#6B0A22', '#FF4D6D', '#FFB3C1', '#FFF0F3', '#E6A9B6', '#4C0718'], 'Playfair Display', 'Poppins', 'bokeh', ['14 februari', 'couple', 'kado pacar', 'anniversary', 'hari kasih sayang'], ['hangat', 'galau']),
+  T('tahun-baru', 'Tahun Baru Emas', ['#070710', '#161630', '#F5C542', '#E5E7EB', '#FFFFFF', '#A6A6C2', '#10102A'], 'Bebas Neue', 'Montserrat', 'rays', ['new year', 'countdown', 'malam tahun baru', 'resolusi', 'akhir tahun'], ['mewah', 'energik']),
+  T('agustusan', 'Lomba Agustusan', ['#FFFFFF', '#FDECEC', '#DC2626', '#1D4ED8', '#1A1A1A', '#6B6B6B', '#FFF5F5'], 'Anton', 'Montserrat', 'stripes', ['lomba', 'agustusan', '17an', 'panjat pinang', 'balap karung', 'tujuh belasan'], ['energik', 'lucu'], 135),
+  T('sekolah-hijau', 'Sekolah Hijau', ['#F0FDF4', '#DCFCE7', '#15803D', '#EAB308', '#052E16', '#4D6B57', '#FFFFFF'], 'Montserrat', 'Plus Jakarta Sans', 'grid', ['ppdb', 'pendaftaran sekolah', 'pesantren', 'madrasah', 'sd', 'smp', 'sma'], ['serius', 'tenang'], 135),
+  T('kursus-coding', 'Kursus Coding', ['#0B1020', '#141B34', '#60A5FA', '#F472B6', '#EEF2FF', '#9AA5C6', '#111832'], 'Space Grotesk', 'Space Grotesk', 'grid', ['bootcamp', 'kursus coding', 'belajar programming', 'python', 'javascript', 'ui ux', 'data science'], ['serius', 'energik']),
+  T('indie-gig', 'Indie Gig', ['#1B1B1B', '#2E2A24', '#F2C14E', '#F78154', '#F9F4EA', '#B8AE9C', '#24221E'], 'Bebas Neue', 'Space Grotesk', 'noise', ['gigs', 'band', 'indie', 'akustik', 'live music', 'open mic', 'konser kecil'], ['energik', 'galau']),
+  T('podcast', 'Podcast Studio', ['#111827', '#1F2937', '#A78BFA', '#34D399', '#F9FAFB', '#9CA3AF', '#1A2232'], 'Space Grotesk', 'Plus Jakarta Sans', 'dots', ['podcast', 'episode', 'obrolan', 'talkshow', 'siniar', 'ngobrol santai'], ['serius', 'tenang']),
+  T('esport-merah', 'Esport Merah', ['#0D0507', '#2A0B12', '#FF2D55', '#00E5FF', '#FFFFFF', '#B3A0A6', '#1E0A0F'], 'Anton', 'Space Grotesk', 'grid', ['turnamen', 'scrim', 'free fire', 'ff', 'mlbb', 'top up diamond', 'rank'], ['energik']),
+  T('thrift-vintage', 'Thrift Vintage', ['#EFE6D8', '#DCCBB0', '#8C3B2E', '#2F5D50', '#2B2118', '#75654F', '#F8F2E8'], 'Bebas Neue', 'Poppins', 'noise', ['thrift', 'preloved', 'second', 'bekas', 'jaket jadul', 'kemeja vintage'], ['hangat', 'lucu'], 135),
+  T('sneaker-hype', 'Sneaker Hype', ['#F5F5F5', '#E5E5E5', '#111111', '#FF3B30', '#111111', '#555555', '#FFFFFF'], 'Anton', 'Space Grotesk', 'stripes', ['sepatu', 'nike', 'adidas', 'original', 'drop', 'hype', 'jordan'], ['energik', 'serius'], 135),
+  T('showroom-mobil', 'Showroom Mobil', ['#0A0F1A', '#18233A', '#E2E8F0', '#EF4444', '#FFFFFF', '#94A3B8', '#121A2C'], 'Montserrat', 'Montserrat', 'rays', ['mobil', 'showroom', 'rental mobil', 'dealer', 'kredit mobil', 'mobil bekas'], ['serius', 'mewah']),
+  T('umrah', 'Umrah Haji', ['#0A2A24', '#12463C', '#D4AF37', '#F5F5DC', '#FFFDF5', '#B8C7BD', '#0E352E'], 'Playfair Display', 'Montserrat', 'halftone', ['umrah', 'haji', 'travel umrah', 'makkah', 'madinah', 'ibadah', 'manasik'], ['tenang', 'mewah']),
+  T('pagi-cerah', 'Pagi Cerah', ['#FFF9EF', '#FFEFD2', '#F59E0B', '#10B981', '#2B2010', '#776A55', '#FFFFFF'], 'Poppins', 'Poppins', 'rays', ['pagi', 'sarapan', 'breakfast', 'bubur', 'nasi uduk', 'selamat pagi'], ['hangat', 'energik'], 135),
+  T('malam-bintang', 'Malam Berbintang', ['#050B1F', '#0E1B44', '#FCD34D', '#93C5FD', '#F1F5FF', '#A3B1D1', '#0B1736'], 'Playfair Display', 'Poppins', 'bokeh', ['bintang', 'tidur', 'mimpi', 'renungan', 'selamat malam', 'doa malam'], ['galau', 'tenang']),
+  T('kpop-pink', 'K-Pop Pink', ['#FFE4F1', '#FFC2DE', '#FF2E93', '#6C3BFF', '#2B0A1E', '#7E4B66', '#FFFFFF'], 'Anton', 'Poppins', 'dots', ['kpop', 'korea', 'idol', 'bias', 'drakor', 'oppa', 'photocard'], ['lucu', 'energik'], 135),
+  T('army-outdoor', 'Army Outdoor', ['#1B1F14', '#2E3522', '#A3B14B', '#E0A458', '#F2F0E6', '#B3B49C', '#24291A'], 'Bebas Neue', 'Montserrat', 'noise', ['outdoor', 'survival', 'army', 'tactical', 'adventure', 'pendakian', 'carrier'], ['serius', 'energik']),
+  T('kolam-renang', 'Kolam Renang', ['#E0F7FF', '#B9ECFF', '#0077B6', '#FFB703', '#023047', '#4C7488', '#FFFFFF'], 'Montserrat', 'Poppins', 'waves', ['kolam renang', 'les renang', 'waterpark', 'renang anak', 'water park'], ['energik', 'lucu'], 135),
+  T('perhiasan-putih', 'Perhiasan Putih', ['#FFFFFF', '#F4EFE6', '#B8860B', '#1F2937', '#1A1A1A', '#6B6B6B', '#FAF7F0'], 'Playfair Display', 'Montserrat', 'none', ['cincin', 'kalung', 'emas murni', 'toko emas', 'gelang', 'anting'], ['mewah'], 135),
+  T('sambal', 'Sambal Bawang', ['#B91C1C', '#7F1D1D', '#FDE047', '#FFFFFF', '#FFFFFF', '#FECACA', '#991B1B'], 'Anton', 'Montserrat', 'halftone', ['sambal', 'sambel', 'cabe', 'bumbu', 'sambal bawang', 'sambal botol', 'level pedas'], ['energik']),
+  T('daun-pisang', 'Daun Pisang', ['#0F3D1E', '#1B5E2E', '#F4D35E', '#EE964B', '#F5FFF5', '#A8C8AE', '#144A25'], 'Playfair Display', 'Poppins', 'blobs', ['nasi bakar', 'pepes', 'nasi liwet', 'sunda', 'daun pisang', 'kuliner nusantara'], ['hangat', 'tenang']),
+  T('abu-minimal', 'Abu Minimalis', ['#EDEDED', '#DADADA', '#222222', '#FF5F1F', '#111111', '#5E5E5E', '#FFFFFF'], 'Space Grotesk', 'Plus Jakarta Sans', 'grid', ['portfolio', 'arsitektur', 'interior', 'minimalis', 'studio desain', 'freelance'], ['serius', 'tenang'], 135),
+  T('kayu-jati', 'Kayu Jati', ['#2A1B10', '#4A311C', '#D9A066', '#8FB996', '#FFF6EA', '#CDB59A', '#36231A'], 'Playfair Display', 'Montserrat', 'noise', ['furniture', 'mebel', 'kayu', 'jati', 'kerajinan kayu', 'interior rustic'], ['hangat', 'mewah']),
+  T('es-kristal', 'Es Kristal', ['#E8F4FF', '#D0E8FF', '#2563EB', '#06B6D4', '#0B1F3A', '#5B7393', '#FFFFFF'], 'Montserrat', 'Poppins', 'bubbles', ['es batu', 'air mineral', 'galon', 'depot air', 'isi ulang', 'air minum'], ['tenang', 'serius'], 135),
+  T('kurir', 'Kurir Kilat', ['#FFF4E5', '#FFE0B2', '#F97316', '#16A34A', '#2A1605', '#7A5530', '#FFFFFF'], 'Anton', 'Poppins', 'stripes', ['kurir', 'ojek', 'antar jemput', 'delivery', 'ekspedisi', 'pengiriman', 'cod'], ['energik'], 135),
+  T('marun-kebaya', 'Marun Kebaya', ['#3A0A14', '#5E1323', '#E9C46A', '#F4A3A8', '#FFF5F0', '#D8B2AE', '#4A0E1A'], 'Playfair Display', 'Montserrat', 'halftone', ['kebaya', 'kain', 'tenun', 'songket', 'busana adat', 'sewa kebaya'], ['mewah', 'hangat']),
+  T('lime-fresh', 'Lime Fresh', ['#F7FEE7', '#ECFCCB', '#65A30D', '#F43F5E', '#1A2E05', '#5F7044', '#FFFFFF'], 'Poppins', 'Poppins', 'blobs', ['salad buah', 'jus sehat', 'detox', 'smoothie bowl', 'sayur segar', 'buah potong'], ['lucu', 'energik'], 135),
+  T('film-noir', 'Film Noir', ['#050505', '#161616', '#E50914', '#F5F5F1', '#FFFFFF', '#9E9E9E', '#121212'], 'Bebas Neue', 'Montserrat', 'noise', ['bioskop', 'trailer', 'review film', 'sinema', 'nonton', 'series'], ['serius', 'galau']),
+  T('baby-mint', 'Baby Mint', ['#F0FFF8', '#D7F9EA', '#34D399', '#F9A8D4', '#1F3A30', '#6A8A7C', '#FFFFFF'], 'Poppins', 'Poppins', 'bubbles', ['baby shop', 'perlengkapan bayi', 'popok', 'susu formula', 'newborn', 'aqiqah'], ['lucu', 'tenang'], 135),
+  T('synthwave', 'Synthwave', ['#0D0221', '#261447', '#FF2A6D', '#05D9E8', '#F7F7FF', '#A99BC7', '#1A0B38'], 'Space Grotesk', 'Space Grotesk', 'grid', ['synthwave', 'edm', 'rave', 'neon party', 'clubbing', 'dj set'], ['energik']),
+  T('laporan-keuangan', 'Laporan Keuangan', ['#F8FAFC', '#E2E8F0', '#0F766E', '#F59E0B', '#0F172A', '#64748B', '#FFFFFF'], 'Plus Jakarta Sans', 'Plus Jakarta Sans', 'grid', ['pajak', 'akuntansi', 'laporan keuangan', 'pembukuan', 'konsultan pajak', 'umkm naik kelas'], ['serius'], 135),
+  T('bata-merah', 'Bata Merah', ['#3B1A12', '#5C2A1E', '#E07A5F', '#F2CC8F', '#FFF4EC', '#D1A99A', '#48211A'], 'Anton', 'Montserrat', 'stripes', ['kontraktor', 'tukang bangunan', 'material', 'semen', 'bata', 'renovasi rumah', 'bangun rumah'], ['serius', 'energik']),
+  T('wisuda-ungu', 'Wisuda Ungu', ['#2E1065', '#4C1D95', '#FBBF24', '#E9D5FF', '#FAF5FF', '#C4B5FD', '#3B1584'], 'Playfair Display', 'Montserrat', 'bokeh', ['wisuda', 'graduation', 'toga', 'sarjana', 'lulus', 'selamat lulus'], ['mewah', 'hangat']),
 ];
 
 const ALL_INTENTS: Intent[] = ['promo-produk', 'flash-sale', 'menu-kuliner', 'launching', 'event', 'tips', 'tutorial', 'fakta', 'quote-motivasi', 'quote-galau', 'testimoni', 'before-after', 'lowongan', 'pengumuman', 'ucapan', 'travel', 'cerita'];
@@ -271,17 +332,60 @@ export const LAYOUTS: LayoutDef[] = [
   },
 ];
 
+// ---- Layout tambahan v8: turunan dari layout induk dengan gaya komponen, dekor, pola & transisi berbeda ----
+const V = (baseId: string, o: Partial<LayoutDef> & { id: string; name: string; desc: string }): LayoutDef => {
+  const b = LAYOUTS.find((l) => l.id === baseId) || LAYOUTS[0];
+  return { ...b, ...o, base: b.base || b.id };
+};
+LAYOUTS.push(
+  V('bold', { id: 'bold-clay', name: 'Bold Clay 3D', desc: 'Judul besar dengan kartu clay timbul & gelembung.', compStyle: 'clay', decor: 'bubbles', pattern: 'blobs', headAnim: ['gaya-meletus-normal', 'teks-word-pop-cepat'], transitions: ['bubbles-circle-16-polos', 'flytiles-up-6-rows-lurus', 'lens-center-ringan-polos', 'push-up-pegas'] }),
+  V('editorial', { id: 'editorial-koran', name: 'Editorial Koran', desc: 'Kartu ala koran, serif & lipatan halaman.', compStyle: 'koran', decor: 'lines', pattern: 'noise', headAnim: ['teks-line-naik-normal', 'teks-word-muncul-normal'], transitions: ['pagecurl-br-0-kertas-halus', 'roll-up-tipis-halus', 'tear-left-14-halus-polos', 'wipe-left-soft'] }),
+  V('kaca', { id: 'kaca-salju', name: 'Kaca Salju', desc: 'Kartu kaca terang yang bersih, transisi lensa.', compStyle: 'salju', decor: 'bubbles', pattern: 'bokeh', transitions: ['blur-sedang', 'lens-center-ringan-white', 'bubbles-circle-28-white', 'zoom-masuk-halus'] }),
+  V('brutal', { id: 'stiker-pop', name: 'Stiker Pop', desc: 'Kartu berbingkai stiker putih, lempar & ubin terbang.', compStyle: 'stiker', decor: 'stickers', pattern: 'dots', elemAnim: ['gaya-stempel-cepat', 'fisika-snap-kiri-kuat'], transitions: ['toss-right-15-polos-cepat', 'flytiles-left-6-random-putar', 'dots-star-9-random', 'slide-left-sentak'] }),
+  V('neon', { id: 'cyber-lime', name: 'Cyber Lime', desc: 'Terminal hijau limau, garis pindai & kerai acak.', compStyle: 'cyber', decor: 'corners', pattern: 'grid', headAnim: ['teks-decode-cepat', 'gaya-kedip-masuk-normal'], transitions: ['scan-down-white-tebal', 'glitch-rgb-sedang', 'slats-left-10-acak-hitam', 'pixel-kasar'] }),
+  V('minimal', { id: 'minimal-krem', name: 'Minimal Krem', desc: 'Kartu krem hangat, sapuan kuas lembut.', compStyle: 'krem', decor: 'none', pattern: 'none', transitions: ['fade-none-lambat', 'brush-left-3-0-halus', 'wipe-up-soft', 'roll-down-tipis-halus'] }),
+  V('majalah', { id: 'majalah-tinta', name: 'Majalah Tinta', desc: 'Blok tinta hitam tegas, halftone & sobekan.', compStyle: 'tinta', decor: 'grid', pattern: 'halftone', transitions: ['slats-up-6-urut-hitam', 'diagblinds-45-8-tegas', 'push-left-sentak', 'tear-up-8-kasar-white'] }),
+  V('split', { id: 'split-kapsul', name: 'Split Kapsul', desc: 'Foto setengah layar dengan kartu kapsul warna brand.', compStyle: 'kapsul', decor: 'blobs', pattern: 'blobs', transitions: ['carousel-left-dekat-membal', 'swing-left-pegas', 'push-up-kenyal', 'lens-br-ringan-primary'] }),
+  V('chat', { id: 'chat-pastel', name: 'Chat Pastel', desc: 'Bubble chat pastel lembut, gelembung hati.', compStyle: 'pastel', decor: 'bubbles', pattern: 'bubbles', transitions: ['bubbles-heart-16-white', 'slide-up-pegas', 'carousel-up-dekat-halus', 'zoom-masuk-halus'] }),
+  V('listicle', { id: 'langkah-tegas', name: 'Langkah Tegas', desc: 'Kartu putih bergaris brand, langkah demi langkah.', compStyle: 'putih-tegas', decor: 'lines', pattern: 'grid', transitions: ['flytiles-up-4-rows-lurus', 'push-left-pegas', 'checker-6-y-catur-membal', 'pie-6-urut-halus'] }),
+  V('jualan', { id: 'promo-sunset', name: 'Promo Sunset', desc: 'Gradien sunset, balok warna & ubin berputar.', compStyle: 'sunset', decor: 'stickers', pattern: 'rays', transitions: ['colorbars-left-3-secondary', 'zoom-masuk-kuat', 'burst-5', 'tilesout-6-diagonal-spin'] }),
+  V('sinema', { id: 'sinema-emas', name: 'Sinema Hitam Emas', desc: 'Letterbox, kartu hitam-emas, lampu sorot.', compStyle: 'hitam-emas', decor: 'letterbox', pattern: 'noise', transitions: ['fade-black-lambat', 'spotlight-left-1-soft-polos', 'curtain-left-black-lipit-halus', 'dolly-dramatis'] }),
+  V('kertas', { id: 'catatan-malam', name: 'Catatan Malam', desc: 'Kaca gelap di atas bokeh, kuas & lipatan.', compStyle: 'kaca-gelap', decor: 'lines', pattern: 'bokeh', transitions: ['brush-up-4-0-halus', 'fade-none-normal', 'pagecurl-tr-20-kertas-lembut', 'wave-up-3-landai-halus'] }),
+  V('ombak', { id: 'ombak-biru', name: 'Ombak Biru', desc: 'Gradien laut, leleh & gelombang tinggi.', compStyle: 'laut', decor: 'bubbles', pattern: 'waves', transitions: ['melt-down-24-rata-pelan', 'wave-left-5-tinggi-halus', 'bubbles-circle-45-white', 'rings-center-8'] }),
+  V('retro-tv', { id: 'retro-80an', name: 'Retro 80an', desc: 'Kartu ungu-pink 80an, kerai putar & film.', compStyle: 'retro-80', decor: 'corners', pattern: 'stripes', transitions: ['filmroll-up-membal', 'slats-up-10-urut-primary', 'scan-left-primary-tebal', 'checker-8-x-catur-membal'] }),
+  V('poster', { id: 'poster-miring', name: 'Poster Miring', desc: 'Kartu miring dinamis, geser miring & lempar.', compStyle: 'miring', decor: 'stickers', pattern: 'rays', transitions: ['tilt-right-35-tegas', 'stretch-right-sedang-tegas', 'colorbars-right-3-primary', 'toss-left-40-polos-cepat'] }),
+  V('feed-app', { id: 'feed-gradien', name: 'Feed Gradien', desc: 'Kartu gradien terbalik, karusel & ayun.', compStyle: 'gradien-balik', decor: 'bubbles', pattern: 'blobs', transitions: ['carousel-left-jauh-membal', 'swing-right-membal', 'lens-center-kuat-polos', 'flytiles-up-9-diagonal-lurus'] }),
+  V('undangan', { id: 'undangan-garis', name: 'Undangan Garis', desc: 'Bingkai garis warna, tirai atas-bawah.', compStyle: 'garis-warna', decor: 'lines', pattern: 'bokeh', headAnim: ['gaya-tirai-turun-normal', 'teks-line-muncul-lambat'], transitions: ['curtain-up-secondary-lipit-halus', 'rings-center-5', 'fade-white-lambat', 'pagecurl-bl-0-primary-halus'] }),
+  V('pasar', { id: 'pasar-blok', name: 'Pasar Blok Warna', desc: 'Blok warna aksen, ubin berjatuhan & gerigi.', compStyle: 'blok-aksen', decor: 'stickers', pattern: 'halftone', transitions: ['colorbars-up-3-primary', 'zigzag-right-8-tajam-primary', 'tilesout-8-random-fall', 'toss-up-15-foto-cepat'] }),
+  V('tekno', { id: 'data-neon', name: 'Data Neon', desc: 'Grid data dengan garis neon aksen.', compStyle: 'neon-aksen', decor: 'grid', pattern: 'grid', transitions: ['scan-right-secondary-tipis', 'diagblinds-135-14-halus', 'slats-left-16-acak-hitam', 'fan-center-4'] }),
+  V('komik', { id: 'komik-bayang', name: 'Komik Bayangan', desc: 'Panel komik dengan bayangan aksen & sobekan.', compStyle: 'bayang-aksen', decor: 'stickers', pattern: 'halftone', elemAnim: ['gaya-bumerang-cepat', 'fisika-jatuh-pantul-kuat'], transitions: ['tear-left-8-kasar-white', 'dots-circle-9-diagonal', 'slide-right-sentak', 'shatter-tl'] }),
+  V('papan-info', { id: 'info-polos', name: 'Info Polos', desc: 'Teks tanpa kartu, rapi untuk info penting.', compStyle: 'polos', decor: 'lines', pattern: 'none', transitions: ['pie-8-urut-halus', 'wipe-down-soft', 'roll-left-tipis-cepat', 'push-down-halus'] }),
+  V('galeri', { id: 'galeri-polaroid', name: 'Galeri Polaroid', desc: 'Foto berbingkai stiker, dilempar seperti polaroid.', compStyle: 'stiker', photo: 'frame', decor: 'none', pattern: 'noise', transitions: ['toss-right-15-foto-ayun', 'toss-left-15-foto-ayun', 'filmroll-left-halus', 'carousel-right-dekat-halus'] }),
+  V('neon-jalan', { id: 'neon-pink', name: 'Neon Pink', desc: 'Neon aksen malam, pindai & bintang.', compStyle: 'neon-aksen', decor: 'corners', pattern: 'grid', transitions: ['scan-up-secondary-tebal', 'glitch-iris-berat', 'stretch-up-ekstrem-tegas', 'bubbles-star-28-primary'] })
+);
+
+/** Template = layout × tema. Nama & tag dihitung saat diakses supaya ribuan template tetap ringan dimuat. */
+class Tpl implements TemplateDef {
+  constructor(
+    public id: string,
+    public themeId: string,
+    public layoutId: string,
+    private L: LayoutDef,
+    private th: ThemeDef
+  ) {}
+  get name() {
+    return `${this.th.name} · ${this.L.name}`;
+  }
+  get tags() {
+    return [...this.L.intents, ...this.th.keywords, ...this.th.moods];
+  }
+  toJSON() {
+    return { id: this.id, name: this.name, themeId: this.themeId, layoutId: this.layoutId, tags: this.tags };
+  }
+}
 export const TEMPLATES: TemplateDef[] = [];
 for (const L of LAYOUTS) {
-  for (const th of THEMES) {
-    TEMPLATES.push({
-      id: `${L.id}--${th.id}`,
-      name: `${th.name} · ${L.name}`,
-      themeId: th.id,
-      layoutId: L.id,
-      tags: [...L.intents, ...th.keywords, ...th.moods],
-    });
-  }
+  for (const th of THEMES) TEMPLATES.push(new Tpl(`${L.id}--${th.id}`, th.id, L.id, L, th));
 }
 
 const THEME_BY = new Map(THEMES.map((t) => [t.id, t]));
@@ -305,38 +409,48 @@ export interface RankInput {
   hasPhotos: boolean;
 }
 
-/** Skor template untuk prompt tertentu (makin tinggi makin cocok). */
+/** Skor template untuk prompt tertentu (makin tinggi makin cocok).
+ *  Skor tema & layout dihitung sekali per tema/layout (bukan per template), lalu dijumlahkan —
+ *  tetap cepat walau jumlah template ribuan. */
+const JITTER = new Map(TEMPLATES.map((tp) => [tp.id, ((tp.id.length * 7 + tp.id.charCodeAt(0)) % 5) * 0.5]));
 export function rankTemplates(input: RankInput, limit = 24): Array<TemplateDef & { score: number; reason: string }> {
   const kw = input.keywords.map((k) => k.toLowerCase());
-  const scored = TEMPLATES.map((tp) => {
-    const th = THEME_BY.get(tp.themeId)!;
-    const L = LAYOUT_BY.get(tp.layoutId)!;
-    let score = 0;
-    const reasons: string[] = [];
+  const themeScore = new Map<string, { s: number; r: string | null }>();
+  for (const th of THEMES) {
+    let sc = 0;
+    let r: string | null = null;
+    const hits = th.keywords.filter((k) => kw.some((w) => w === k || (w.length > 3 && (k.includes(w) || w.includes(k)))));
+    if (hits.length) {
+      sc += 30 + hits.length * 6;
+      r = `warna pas untuk "${hits[0]}"`;
+    }
+    if (th.moods.includes(input.mood)) sc += 14;
+    if (th.id === 'sunset-coral') sc += 4;
+    themeScore.set(th.id, { s: sc, r });
+  }
+  const layoutScore = new Map<string, { s: number; r: string | null }>();
+  for (const L of LAYOUTS) {
+    let sc = 0;
+    let r: string | null = null;
     const li = L.intents.indexOf(input.intent);
     if (li >= 0) {
-      score += 40 - li * 6;
-      reasons.push('cocok untuk jenis konten ini');
+      sc += 40 - li * 6;
+      r = 'cocok untuk jenis konten ini';
     }
-    const themeHits = th.keywords.filter((k) => kw.some((w) => w === k || (w.length > 3 && (k.includes(w) || w.includes(k)))));
-    if (themeHits.length) {
-      score += 30 + themeHits.length * 6;
-      reasons.push(`warna pas untuk "${themeHits[0]}"`);
-    }
-    if (th.moods.includes(input.mood)) score += 14;
-    if (input.hasPhotos && (L.photo === 'split' || L.photo === 'frame' || L.photo === 'phone')) score += 8;
-    if (th.id === 'sunset-coral') score += 4;
-    // variasi kecil yang stabil agar urutan tidak monoton
-    score += ((tp.id.length * 7 + tp.id.charCodeAt(0)) % 5) * 0.5;
-    return { ...tp, score, reason: reasons.join(' · ') || 'alternatif gaya' };
-  });
-  scored.sort((a, b) => b.score - a.score);
+    if (input.hasPhotos && (L.photo === 'split' || L.photo === 'frame' || L.photo === 'phone')) sc += 8;
+    layoutScore.set(L.id, { s: sc, r });
+  }
+  const scored = TEMPLATES.map((tp) => ({ tp, s: themeScore.get(tp.themeId)!.s + layoutScore.get(tp.layoutId)!.s + (JITTER.get(tp.id) || 0) }));
+  scored.sort((a, b) => b.s - a.s);
   // jaga keberagaman: maksimal 3 template per layout di daftar teratas
   const perLayout: Record<string, number> = {};
   const out: Array<TemplateDef & { score: number; reason: string }> = [];
-  for (const s of scored) {
-    perLayout[s.layoutId] = (perLayout[s.layoutId] || 0) + 1;
-    if (perLayout[s.layoutId] <= 3) out.push(s);
+  for (const { tp, s: sc } of scored) {
+    perLayout[tp.layoutId] = (perLayout[tp.layoutId] || 0) + 1;
+    if (perLayout[tp.layoutId] <= 3) {
+      const reasons = [layoutScore.get(tp.layoutId)!.r, themeScore.get(tp.themeId)!.r].filter(Boolean);
+      out.push({ id: tp.id, name: tp.name, themeId: tp.themeId, layoutId: tp.layoutId, tags: tp.tags, score: sc, reason: reasons.join(' · ') || 'alternatif gaya' });
+    }
     if (out.length >= limit) break;
   }
   return out;

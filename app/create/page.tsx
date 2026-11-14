@@ -12,10 +12,10 @@ import { getLayout, rankTemplates, TEMPLATES } from '@/lib/studio/packs/template
 import { compressImage, saveProject } from '@/lib/studio/persist';
 import { loadTraining } from '@/lib/studio/training';
 import { allIcons } from '@/lib/studio/packs/icons';
-import { allComponents } from '@/lib/studio/packs/components';
-import { allTransitions } from '@/lib/studio/packs/transitions';
+import { componentCount } from '@/lib/studio/packs/components';
+import { transitionCount } from '@/lib/studio/packs/transitions';
 import { allAnimations } from '@/lib/studio/packs/animations';
-import { allEffects, effectKinds, getEffect, suggestEffects } from '@/lib/studio/packs/effects';
+import { effectCount, effectKinds, getEffect, suggestEffects } from '@/lib/studio/packs/effects';
 import { cx, Dropdown, LazyVisible, Logo } from '@/components/studio/ui';
 import { TemplateThumb } from '@/components/studio/Thumbs';
 import LivePreview from '@/components/studio/LivePreview';
@@ -133,7 +133,13 @@ export default function CreatePage() {
     router.push(`/editor/${r.id}`);
   };
 
-  const counts = { t: TEMPLATES.length, c: allComponents().length, i: allIcons().length, tr: allTransitions().length, a: allAnimations().length, e: allEffects().length };
+  // angka pustaka dihitung setelah halaman tampil (pustaka animasi lengkap dibuat saat itu, tidak menahan render pertama)
+  const [counts, setCounts] = useState<{ t: number; c: number; i: number; tr: number; a: number; e: number } | null>(null);
+  useEffect(() => {
+    const id = window.setTimeout(() => setCounts({ t: TEMPLATES.length, c: componentCount(), i: allIcons().length, tr: transitionCount(), a: allAnimations().length, e: effectCount() }), 600);
+    return () => window.clearTimeout(id);
+  }, []);
+  const nf = (n: number) => n.toLocaleString('id-ID');
 
   return (
     <div className="mk-page">
@@ -144,7 +150,7 @@ export default function CreatePage() {
           </Link>
           <Logo className="text-sm" />
           <span className="ml-auto hidden text-[11px] text-mk-dim sm:block">
-            {counts.t} template · {counts.c} komponen · {counts.i} ikon · {counts.tr} transisi · {counts.a} animasi · {counts.e} efek
+            {counts ? `${nf(counts.t)} template · ${nf(counts.c)} komponen · ${nf(counts.i)} ikon · ${nf(counts.tr)} transisi · ${nf(counts.a)} animasi · ${nf(counts.e)} efek` : 'Memuat pustaka…'}
           </span>
         </div>
       </header>

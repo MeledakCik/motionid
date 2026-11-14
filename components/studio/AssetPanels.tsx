@@ -12,7 +12,7 @@ import { applyTemplate, makeComponent, makeIcon, makeImage, makeText, recolorDoc
 import { MUSIC_TRACKS } from '@/lib/studio/music';
 import { compressImage } from '@/lib/studio/persist';
 import { FONT_LIST, fontLabel, fontStack } from '@/lib/studio/fonts';
-import { ChipRow, ColorField, cx, LazyVisible, SearchBox, Section, Segmented, Slider } from './ui';
+import { ChipRow, ColorField, cx, Dropdown, LazyVisible, SearchBox, Section, Segmented, Slider } from './ui';
 import { ComponentThumb, TemplateThumb } from './Thumbs';
 
 const PAGE = 24;
@@ -56,8 +56,32 @@ export function TemplatePanel() {
         <Segmented value={tab} onChange={(v) => (setTab(v), setLimit(PAGE))} options={[{ value: 'cocok', label: 'Cocok untuk prompt' }, { value: 'semua', label: `Semua (${TEMPLATES.length})` }]} />
         {tab === 'semua' && (
           <div className="space-y-2">
-            <ChipRow value={layout} onChange={(v) => (setLayout(v), setLimit(PAGE))} options={[{ id: 'all', label: 'Semua layout' }, ...LAYOUTS.map((l) => ({ id: l.id, label: l.name }))]} />
-            <ChipRow value={theme} onChange={(v) => (setTheme(v), setLimit(PAGE))} options={[{ id: 'all', label: 'Semua warna' }, ...THEMES.map((t) => ({ id: t.id, label: t.name }))]} />
+            <div className="grid grid-cols-2 gap-2">
+              <Dropdown
+                label="Layout"
+                value={layout}
+                onChange={(v) => (setLayout(v), setLimit(PAGE))}
+                options={[{ value: 'all', label: `Semua layout (${LAYOUTS.length})` }, ...LAYOUTS.map((l) => ({ value: l.id, label: l.name, desc: l.desc }))]}
+                className="w-full"
+                menuWidth={300}
+              />
+              <Dropdown
+                label="Warna"
+                value={theme}
+                onChange={(v) => (setTheme(v), setLimit(PAGE))}
+                options={[
+                  { value: 'all', label: `Semua warna (${THEMES.length})` },
+                  ...THEMES.map((t) => ({
+                    value: t.id,
+                    label: t.name,
+                    icon: <span className="h-5 w-5 rounded-md border border-white/20" style={{ background: `linear-gradient(135deg, ${t.palette.bg} 0 50%, ${t.palette.primary} 50% 100%)` }} />,
+                  })),
+                ]}
+                className="w-full"
+                menuWidth={280}
+                align="right"
+              />
+            </div>
           </div>
         )}
         <p className="text-[11px] text-mk-dim">Ganti template = susunan & warna baru, teks dan fotomu tetap dipakai.</p>
@@ -231,7 +255,14 @@ export function ElementsPanel() {
       <Section>
         <SearchBox value={q} onChange={(v) => (setQ(v), setLimit(PAGE))} placeholder={`Cari ${allComponents().length} komponen… (harga, tombol, chat)`} />
         <ChipRow value={group} onChange={(v) => (setGroup(v), setLimit(PAGE))} options={[{ id: 'all', label: 'Semua' }, ...COMPONENT_GROUPS]} />
-        <ChipRow value={style} onChange={(v) => (setStyle(v), setLimit(PAGE))} options={[{ id: 'all', label: 'Semua gaya' }, ...COMPONENT_STYLES]} />
+        <Dropdown
+          label="Gaya kartu"
+          value={style}
+          onChange={(v) => (setStyle(v), setLimit(PAGE))}
+          options={[{ value: 'all', label: `Semua gaya (${COMPONENT_STYLES.length})` }, ...COMPONENT_STYLES.map((s) => ({ value: s.id, label: s.label }))]}
+          className="w-full"
+          menuWidth={280}
+        />
       </Section>
       <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-3 lg:grid-cols-2">
         {list.slice(0, limit).map((c) => (

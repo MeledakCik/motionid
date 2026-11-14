@@ -102,6 +102,42 @@ export const COMPONENT_STYLES: Array<{ id: string; label: string }> = [
   { id: 'salju', label: 'Kaca Salju' },
 ];
 
+/* Gaya prosedural v8: 12 isian × 4 bentuk sudut × 4 kedalaman = 192 gaya */
+const PROC_FILLS: Array<[string, string]> = [
+  ['surface', 'Permukaan'],
+  ['putih', 'Putih'],
+  ['hitam', 'Hitam'],
+  ['krem', 'Krem'],
+  ['kaca', 'Kaca'],
+  ['gelap', 'Gelap Transparan'],
+  ['utama', 'Warna Utama'],
+  ['kedua', 'Warna Kedua'],
+  ['gradien', 'Gradien'],
+  ['garis', 'Garis'],
+  ['pastel', 'Pastel'],
+  ['malam', 'Biru Malam'],
+];
+const PROC_SHAPES: Array<[string, string, number]> = [
+  ['tajam', 'Sudut Tajam', 4],
+  ['sedang', 'Sudut Sedang', 20],
+  ['bulat', 'Sudut Bulat', 44],
+  ['kapsul', 'Kapsul', 999],
+];
+const PROC_DEPTHS: Array<[string, string]> = [
+  ['datar', 'Datar'],
+  ['lembut', 'Bayangan Lembut'],
+  ['tegas', 'Bayangan Tegas'],
+  ['cahaya', 'Bercahaya'],
+];
+const PROC = new Map<string, [string, number, string]>();
+for (const [f, fl] of PROC_FILLS)
+  for (const [sh, sl, r] of PROC_SHAPES)
+    for (const [d, dl] of PROC_DEPTHS) {
+      const id = `${f}-${sh}-${d}`;
+      PROC.set(id, [f, r, d]);
+      COMPONENT_STYLES.push({ id, label: `${fl} · ${sl} · ${dl}` });
+    }
+
 function tokens(style: string, c: CompColors): Tokens {
   const base: Tokens = {
     bg: c.surface,
@@ -189,9 +225,79 @@ function tokens(style: string, c: CompColors): Tokens {
       return { ...base, bg: c.primary, fg: readableOn(c.primary), sub: rgba(readableOn(c.primary), 0.8), accent: '#111111', accentFg: '#FFFFFF', radius: 14, tilt: -4, shadow: { x: 8, y: 8, blur: 0, color: '#111111' }, upper: true, weight: 900 };
     case 'salju':
       return { ...base, bg: 'rgba(255,255,255,0.72)', fg: '#152030', sub: '#4B5A6A', border: 'rgba(255,255,255,0.95)', borderW: 2, radius: 32, sheen: true, shadow: { x: 0, y: 18, blur: 40, color: 'rgba(0,0,0,0.25)' } };
-    default:
-      return base;
+    default: {
+      const pr = PROC.get(style);
+      return pr ? procTokens(pr, base, c) : base;
+    }
   }
+}
+
+function procTokens([f, r, d]: [string, number, string], base: Tokens, c: CompColors): Tokens {
+  let t: Tokens = { ...base, radius: r };
+  switch (f) {
+    case 'putih':
+      t = { ...t, bg: '#FFFFFF', fg: '#151515', sub: '#5C5C5C' };
+      break;
+    case 'hitam':
+      t = { ...t, bg: '#101010', fg: '#FFFFFF', sub: 'rgba(255,255,255,0.7)' };
+      break;
+    case 'krem':
+      t = { ...t, bg: '#F6ECDD', fg: '#33241A', sub: '#7A6150' };
+      break;
+    case 'kaca':
+      t = { ...t, bg: 'rgba(255,255,255,0.14)', fg: '#FFFFFF', sub: 'rgba(255,255,255,0.75)', border: 'rgba(255,255,255,0.35)', borderW: 2, sheen: true };
+      break;
+    case 'gelap':
+      t = { ...t, bg: 'rgba(0,0,0,0.5)', fg: '#FFFFFF', sub: 'rgba(255,255,255,0.72)' };
+      break;
+    case 'utama': {
+      const fg = readableOn(c.primary);
+      t = { ...t, bg: c.primary, fg, sub: rgba(fg, 0.8), accent: fg, accentFg: c.primary };
+      break;
+    }
+    case 'kedua': {
+      const fg = readableOn(c.secondary);
+      t = { ...t, bg: c.secondary, fg, sub: rgba(fg, 0.8), accent: c.primary, accentFg: readableOn(c.primary) };
+      break;
+    }
+    case 'gradien': {
+      const fg = readableOn(c.primary);
+      t = { ...t, bg: null, grad: [c.primary, c.secondary], fg, sub: rgba(fg, 0.8), accent: '#FFFFFF', accentFg: '#111111' };
+      break;
+    }
+    case 'garis':
+      t = { ...t, bg: null, border: c.text, borderW: 4, fg: c.text, sub: rgba(c.text, 0.72) };
+      break;
+    case 'pastel':
+      t = { ...t, bg: '#FDF2F8', fg: '#3A2A40', sub: '#7A6A80' };
+      break;
+    case 'malam':
+      t = { ...t, bg: '#0F1A33', fg: '#EAF0FF', sub: 'rgba(234,240,255,0.7)' };
+      break;
+    default:
+      break;
+  }
+  switch (d) {
+    case 'datar':
+      t.shadow = null;
+      break;
+    case 'lembut':
+      t.shadow = { x: 0, y: 16, blur: 40, color: 'rgba(0,0,0,0.3)' };
+      break;
+    case 'tegas':
+      t.shadow = { x: 10, y: 10, blur: 0, color: '#111111' };
+      if (!t.border) {
+        t.border = '#111111';
+        t.borderW = 4;
+      }
+      t.weight = 900;
+      break;
+    case 'cahaya':
+      t.shadow = null;
+      t.glow = c.primary;
+      break;
+  }
+  return t;
 }
 
 function pathRR(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
@@ -950,29 +1056,55 @@ export const COMPONENT_GROUPS: Array<{ id: string; label: string }> = [
 
 const KIND_BY = new Map(KINDS.map((k) => [k.kind, k]));
 const REGISTRY: ComponentDef[] = [];
+const makeDef = (k: (typeof KINDS)[number], s: { id: string; label: string }): ComponentDef => ({
+  id: `${k.kind}-${s.id}`,
+  name: `${k.label} · ${s.label}`,
+  kind: k.kind,
+  styleId: s.id,
+  group: k.group,
+  tags: [...k.tags, s.id],
+  size: k.size,
+  defaults: k.defaults,
+  fields: k.fields,
+  author: 'builtin',
+});
+// gaya bernama dibuat langsung; gaya prosedural (isian × sudut × kedalaman) dibuat saat dibutuhkan
 KINDS.forEach((k) =>
-  COMPONENT_STYLES.forEach((s) =>
-    REGISTRY.push({
-      id: `${k.kind}-${s.id}`,
-      name: `${k.label} · ${s.label}`,
-      kind: k.kind,
-      styleId: s.id,
-      group: k.group,
-      tags: [...k.tags, s.id],
-      size: k.size,
-      defaults: k.defaults,
-      fields: k.fields,
-      author: 'builtin',
-    })
+  COMPONENT_STYLES.filter((s) => !PROC.has(s.id)).forEach((s) =>
+    REGISTRY.push(makeDef(k, s))
   )
 );
 const BY_ID = new Map(REGISTRY.map((c) => [c.id, c]));
-
+const PROC_STYLE_LIST = COMPONENT_STYLES.filter((s) => PROC.has(s.id));
+const PROC_DEFS = new Map<string, ComponentDef>();
+function procDefOf(id: string): ComponentDef | undefined {
+  const hit = PROC_DEFS.get(id);
+  if (hit) return hit;
+  for (const k of KINDS) {
+    if (!id.startsWith(`${k.kind}-`)) continue;
+    const st = PROC_STYLE_LIST.find((s) => s.id === id.slice(k.kind.length + 1));
+    if (!st) continue;
+    const def = makeDef(k, st);
+    PROC_DEFS.set(id, def);
+    return def;
+  }
+  return undefined;
+}
+let FULL: ComponentDef[] | null = null;
+/** Semua komponen termasuk gaya prosedural (dibuat sekali saat pertama dipanggil). */
 export function allComponents(): ComponentDef[] {
-  return REGISTRY;
+  if (!FULL) {
+    FULL = [...REGISTRY];
+    for (const k of KINDS) for (const st of PROC_STYLE_LIST) FULL.push(procDefOf(`${k.kind}-${st.id}`)!);
+  }
+  return FULL;
+}
+/** Jumlah semua komponen (tanpa membuat daftar lengkap). */
+export function componentCount(): number {
+  return FULL ? FULL.length : REGISTRY.length + KINDS.length * PROC_STYLE_LIST.length;
 }
 export function getComponent(id: string): ComponentDef | undefined {
-  return BY_ID.get(id);
+  return BY_ID.get(id) || procDefOf(id);
 }
 export function componentKinds() {
   return KINDS.map((k) => ({ kind: k.kind, label: k.label, group: k.group }));
@@ -982,14 +1114,16 @@ export function registerComponent(def: ComponentDef) {
   if (idx >= 0) REGISTRY[idx] = def;
   else REGISTRY.unshift(def);
   BY_ID.set(def.id, def);
+  FULL = null;
 }
 export function unregisterComponent(id: string) {
   const idx = REGISTRY.findIndex((c) => c.id === id);
   if (idx >= 0) REGISTRY.splice(idx, 1);
   BY_ID.delete(id);
+  FULL = null;
 }
 export function componentIdFor(kind: string, style: string): string {
-  return BY_ID.has(`${kind}-${style}`) ? `${kind}-${style}` : `${kind}-gelap`;
+  return getComponent(`${kind}-${style}`) ? `${kind}-${style}` : `${kind}-gelap`;
 }
 
 export function drawComponent(ctx: CanvasRenderingContext2D, def: ComponentDef, w: number, h: number, props: Record<string, string>, colors: CompColors, R: CompRenderCtx) {
