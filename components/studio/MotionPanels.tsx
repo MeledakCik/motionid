@@ -130,7 +130,7 @@ export function TransitionPanel({ clock }: { clock: PlaybackClock }) {
         </div>
         <SearchBox value={q} onChange={setQ} placeholder="Cari transisi… (zoom, kaca, sapu)" />
         <ChipRow value={group} onChange={setGroup} options={[{ id: 'all', label: 'Semua' }, ...TRANSITION_GROUPS.filter((g) => g.id !== 'custom')]} />
-        <p className="text-[10px] text-mk-dim">{kinds.length} jenis · {allTransitions().length} variasi arah & gaya</p>
+        <p className="text-[11px] text-mk-dim">{kinds.length} jenis · {allTransitions().length} variasi arah & gaya</p>
       </Section>
       <div className="grid grid-cols-3 gap-2 p-3 lg:grid-cols-2">
         {list.map((k) => {
@@ -142,7 +142,7 @@ export function TransitionPanel({ clock }: { clock: PlaybackClock }) {
               </LazyVisible>
               <div className="flex items-center justify-between gap-1 px-1.5 py-1">
                 <span className="truncate text-[11px] font-bold text-mk-cream">{k.label}</span>
-                {k.specs.length > 1 && <span className="shrink-0 text-[9px] text-mk-dim">{k.specs.length}</span>}
+                {k.specs.length > 1 && <span className="shrink-0 text-[10px] text-mk-dim">{k.specs.length}</span>}
               </div>
             </button>
           );
@@ -207,11 +207,11 @@ export function AnimationPanel({ clock }: { clock: PlaybackClock }) {
   return (
     <div>
       <Section title={`Animasi: ${layer.name}`}>
-        <Segmented value={slot} onChange={(v) => (setSlot(v), setLimit(PAGE), setGroup('all'))} options={[{ value: 'in', label: 'Masuk' }, { value: 'out', label: 'Keluar' }, { value: 'loop', label: 'Loop' }]} />
+        <Segmented value={slot} onChange={(v) => (setSlot(v), setLimit(PAGE), setGroup('all'))} options={[{ value: 'in', label: 'Saat muncul' }, { value: 'out', label: 'Saat hilang' }, { value: 'loop', label: 'Gerak terus' }]} />
         {ref && (
           <div className="grid grid-cols-2 gap-3">
             <Slider label="Durasi" value={ref.duration} min={0.1} max={3} step={0.05} onChange={(v) => updateLayer(layer.id, slot === 'in' ? { animIn: { ...ref, duration: v } } : { animOut: { ...ref, duration: v } })} format={(v) => `${v.toFixed(2)}s`} />
-            {slot === 'in' && <Slider label="Jeda" value={ref.delay || 0} min={0} max={3} step={0.05} onChange={(v) => updateLayer(layer.id, { animIn: { ...ref, delay: v } })} format={(v) => `${v.toFixed(2)}s`} />}
+            {slot === 'in' && <Slider label="Mulai setelah" value={ref.delay || 0} min={0} max={3} step={0.05} onChange={(v) => updateLayer(layer.id, { animIn: { ...ref, delay: v } })} format={(v) => `${v.toFixed(2)}s`} />}
           </div>
         )}
         <div className="flex gap-1.5">
@@ -238,7 +238,7 @@ export function AnimationPanel({ clock }: { clock: PlaybackClock }) {
         )}
         <SearchBox value={q} onChange={(v) => (setQ(v), setLimit(PAGE))} placeholder="Cari animasi… (pop, ketik, pantul)" />
         {kind === 'in' && (mode === 'pro' || showAll) && <ChipRow value={group} onChange={(v) => (setGroup(v), setLimit(PAGE))} options={[{ id: 'all', label: 'Semua' }, ...ANIM_GROUPS.filter((g) => g.id !== 'loop')]} />}
-        {curated && <p className="text-[10px] text-mk-dim">Menampilkan animasi paling sering dipakai.</p>}
+        {curated && <p className="text-[11px] text-mk-dim">Menampilkan animasi paling sering dipakai.</p>}
       </Section>
       <div className="grid grid-cols-3 gap-2 p-3 lg:grid-cols-2">
         {list.slice(0, limit).map((a) => (
@@ -246,7 +246,7 @@ export function AnimationPanel({ clock }: { clock: PlaybackClock }) {
             <LazyVisible minH={60} className="aspect-[16/10] bg-mk-ink">
               <AnimationThumb spec={a} color={doc.theme.palette.primary} />
             </LazyVisible>
-            <div className="truncate px-1.5 py-1 text-[10px] font-semibold text-mk-muted">{a.name}</div>
+            <div className="truncate px-1.5 py-1 text-[11px] font-semibold text-mk-muted">{a.name}</div>
           </button>
         ))}
       </div>
@@ -361,7 +361,7 @@ export function EffectsPanel({ clock }: { clock: PlaybackClock }) {
         )}
         <SearchBox value={q} onChange={setQ} placeholder="Cari efek… (hujan, kaca pecah, pasir)" />
         <ChipRow value={group} onChange={setGroup} options={[{ id: 'all', label: 'Semua' }, ...EFFECT_GROUPS.filter((g) => g.id !== 'custom')]} />
-        <p className="text-[10px] text-mk-dim">{kinds.length} jenis efek · tiap jenis punya beberapa gaya & 3 tingkat kekuatan ({allEffects().length} kombinasi)</p>
+        <p className="text-[11px] text-mk-dim">{kinds.length} jenis efek · tiap jenis punya beberapa gaya & 3 tingkat kekuatan ({allEffects().length} kombinasi)</p>
       </Section>
       <div className="grid grid-cols-3 gap-2 p-3 lg:grid-cols-2">
         {list.map((k) => {
@@ -375,9 +375,9 @@ export function EffectsPanel({ clock }: { clock: PlaybackClock }) {
               </LazyVisible>
               <div className="flex items-center justify-between gap-1 px-1.5 py-1">
                 <span className="truncate text-[11px] font-bold text-mk-cream">{k.label}</span>
-                <span className="shrink-0 text-[9px] text-mk-dim">{k.styles.length} gaya</span>
+                <span className="shrink-0 text-[10px] text-mk-dim">{k.styles.length} gaya</span>
               </div>
-              {on && <span className="absolute right-1 top-1 rounded-full bg-mk-coral px-1.5 text-[9px] font-extrabold text-mk-ink">AKTIF</span>}
+              {on && <span className="absolute right-1 top-1 rounded-full bg-mk-coral px-1.5 text-[10px] font-extrabold text-mk-ink">AKTIF</span>}
             </button>
           );
         })}

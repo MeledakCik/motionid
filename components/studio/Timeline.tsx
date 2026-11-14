@@ -128,8 +128,8 @@ export default function Timeline({ clock, onOpenTool }: { clock: PlaybackClock; 
                 </div>
                 {w > 90 && (
                   <div className="min-w-0">
-                    <div className="truncate text-[10px] font-bold">{s.name.replace(/^\d+\.\s*/, '')}</div>
-                    <div className="text-[10px] text-mk-dim">{s.duration.toFixed(1)}s</div>
+                    <div className="truncate text-[11px] font-bold">{s.name.replace(/^\d+\.\s*/, '')}</div>
+                    <div className="text-[11px] text-mk-dim">{s.duration.toFixed(1)}s</div>
                   </div>
                 )}
                 {/* tarik untuk ubah durasi */}
@@ -160,7 +160,7 @@ export default function Timeline({ clock, onOpenTool }: { clock: PlaybackClock; 
                       st.selectScene(i);
                       onOpenTool('transisi');
                     }}
-                    className="absolute -left-0.5 top-1/2 z-10 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-md border border-mk-line-2 bg-mk-ink text-[10px] text-mk-amber shadow"
+                    className="absolute -left-0.5 top-1/2 z-10 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-md border border-mk-line-2 bg-mk-ink text-[11px] text-mk-amber shadow"
                   >
                     ⇄
                   </button>
@@ -185,7 +185,7 @@ export default function Timeline({ clock, onOpenTool }: { clock: PlaybackClock; 
             const e = (l.end ?? scene.duration) / scene.duration;
             return (
               <div key={l.id} className="flex items-center gap-2 py-0.5">
-                <span onClick={() => st.selectLayer(l.id)} className={cx('w-24 shrink-0 cursor-pointer truncate text-[10px] font-semibold', layerId === l.id ? 'text-mk-coral' : 'text-mk-muted')}>
+                <span onClick={() => st.selectLayer(l.id)} className={cx('w-24 shrink-0 cursor-pointer truncate text-[11px] font-semibold', layerId === l.id ? 'text-mk-coral' : 'text-mk-muted')}>
                   {l.kind === 'text' ? l.text : l.name}
                 </span>
                 <div className="relative h-5 flex-1 rounded bg-mk-ink" style={{ maxWidth: trackW }}>

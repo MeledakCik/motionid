@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { INTENT_LABELS } from '@/lib/studio/prompt';
 import type { Intent } from '@/lib/studio/types';
 import { cx, Logo } from '@/components/studio/ui';
+import ExampleGallery from '@/components/landing/ExampleGallery';
 
 interface ProjectRow {
   id: string;
@@ -96,7 +97,7 @@ export default function DashboardPage() {
           <p className="mt-1 text-sm text-mk-muted">Mau bikin video apa hari ini?</p>
           <div className="mt-4 flex flex-wrap gap-1.5">
             {QUICK.map((qq) => (
-              <Link key={qq} href={`/create?prompt=${encodeURIComponent(qq)}`} className="mk-chip">
+              <Link key={qq} href={`/create?prompt=${encodeURIComponent(qq)}&auto=1`} className="mk-chip">
                 <Sparkles className="h-3 w-3 text-mk-coral" /> {qq}
               </Link>
             ))}
@@ -126,13 +127,20 @@ export default function DashboardPage() {
             ))}
           </div>
         ) : !list.length ? (
-          <div className="mk-card flex flex-col items-center gap-3 p-10 text-center">
-            <Film className="h-8 w-8 text-mk-coral" />
-            <p className="text-sm text-mk-muted">{projects.length ? 'Tidak ada proyek yang cocok.' : 'Belum ada video. Yuk bikin yang pertama!'}</p>
-            <Link href="/create" className="mk-btn-primary">
-              <Plus className="h-4 w-4" /> Buat video
-            </Link>
-          </div>
+          projects.length ? (
+            <div className="mk-card flex flex-col items-center gap-3 p-10 text-center">
+              <Film className="h-8 w-8 text-mk-coral" />
+              <p className="text-sm text-mk-muted">Tidak ada proyek yang cocok.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="mk-card p-5">
+                <div className="text-base font-extrabold">Belum ada video. Mulai dari contoh?</div>
+                <p className="mt-1 text-sm text-mk-muted">Ketuk salah satu, videonya langsung jadi dan bisa kamu ubah sesukamu.</p>
+              </div>
+              <ExampleGallery />
+            </div>
+          )
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             <Link href="/create" className="flex aspect-[9/14] flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-mk-line-2 text-mk-muted transition hover:border-mk-coral hover:text-mk-coral">
@@ -149,13 +157,13 @@ export default function DashboardPage() {
                     ) : (
                       <div className="flex h-full items-center justify-center bg-mk-grad/20 p-3 text-center text-xs font-bold text-mk-muted">{p.title}</div>
                     )}
-                    <span className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[9px] font-bold text-mk-cream backdrop-blur">
+                    <span className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-bold text-mk-cream backdrop-blur">
                       {p.style_json?.intent ? INTENT_LABELS[p.style_json.intent] : p.category}
                     </span>
                   </div>
                   <div className="p-2.5">
                     <div className="truncate text-xs font-bold">{p.title}</div>
-                    <div className="text-[10px] text-mk-dim">{new Date(p.updated_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}{p.style_json?.scenes ? ` · ${p.style_json.scenes} scene` : ''}</div>
+                    <div className="text-[11px] text-mk-dim">{new Date(p.updated_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}{p.style_json?.scenes ? ` · ${p.style_json.scenes} scene` : ''}</div>
                   </div>
                 </Link>
                 <button type="button" onClick={() => setConfirmId(p.id)} className="absolute right-2 top-2 hidden h-7 w-7 items-center justify-center rounded-lg bg-black/60 text-mk-cream backdrop-blur hover:bg-red-500 group-hover:flex" aria-label="Hapus proyek">

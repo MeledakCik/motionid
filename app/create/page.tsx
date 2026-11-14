@@ -15,7 +15,7 @@ import { allIcons } from '@/lib/studio/packs/icons';
 import { allComponents } from '@/lib/studio/packs/components';
 import { allTransitions } from '@/lib/studio/packs/transitions';
 import { allAnimations } from '@/lib/studio/packs/animations';
-import { allEffects } from '@/lib/studio/packs/effects';
+import { allEffects, effectKinds, getEffect, suggestEffects } from '@/lib/studio/packs/effects';
 import { cx, LazyVisible, Logo } from '@/components/studio/ui';
 import { TemplateThumb } from '@/components/studio/Thumbs';
 import LivePreview from '@/components/studio/LivePreview';
@@ -81,19 +81,24 @@ export default function CreatePage() {
   useEffect(() => {
     loadTraining();
     try {
-      const p = new URLSearchParams(window.location.search).get('prompt');
-      if (p) setPrompt(p);
+      const q = new URLSearchParams(window.location.search);
+      const p = q.get('prompt');
+      if (p) {
+        setPrompt(p);
+        if (q.get('auto') === '1') setTimeout(() => runAnalyze({ text: p, scroll: true, intent: null, count: null }), 50);
+      }
     } catch {
       // abaikan
     }
   }, []);
 
-  const runAnalyze = (opts: { intent?: Intent | null; count?: number | null; seed?: number; scroll?: boolean; ov?: typeof overrides } = {}) => {
-    if (!prompt.trim()) return;
+  const runAnalyze = (opts: { intent?: Intent | null; count?: number | null; seed?: number; scroll?: boolean; ov?: typeof overrides; text?: string } = {}) => {
+    const promptText = opts.text ?? prompt;
+    if (!promptText.trim()) return;
     const it = opts.intent === undefined ? intent : opts.intent;
     const cnt = opts.count === undefined ? sceneCount : opts.count;
-    const p = analyzePrompt(prompt, { seed: opts.seed ?? seed, intentOverride: it || undefined, sceneCount: cnt || undefined, ...(opts.ov || overrides) });
-    setPlan(p);
+    const p = analyzePrompt(promptText, { seed: opts.seed ?? seed, intentOverride: it || undefined, sceneCount: cnt || undefined, ...(opts.ov || overrides) });
+    setPlan((old) => (!opts.scroll && old?.effects ? { ...p, effects: old.effects } : p));
     if (opts.intent !== undefined || !templateId || opts.scroll) setTemplateId(null);
     if (opts.scroll) setTimeout(() => resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
   };
@@ -280,17 +285,35 @@ export default function CreatePage() {
                     ))}
                   </div>
                 )}
+                {(() => {
+                  const fx = plan.effects ?? suggestEffects([plan.prompt, ...plan.keywords], plan.mood, plan.intent);
+                  const label = (id: string) => effectKinds().find((k) => k.kind === getEffect(id)?.kind)?.label || id;
+                  return (
+                    <div className="mt-4 flex flex-wrap items-center gap-1.5 text-xs">
+                      <span className="mk-label mb-0 mr-1">Efek otomatis</span>
+                      {fx.length ? (
+                        fx.map((id) => (
+                          <button key={id} type="button" className="mk-chip mk-chip-on" title="Ketuk untuk menghapus" onClick={() => setPlan((p) => (p ? { ...p, effects: fx.filter((x) => x !== id) } : p))}>
+                            {label(id)} <X className="h-3 w-3" />
+                          </button>
+                        ))
+                      ) : (
+                        <span className="text-mk-dim">Tidak ada — bisa ditambah nanti di menu Efek</span>
+                      )}
+                    </div>
+                  );
+                })()}
                 <ol className="mt-4 space-y-1.5">
                   {plan.items.map((it, i) => (
                     <li key={i} className="flex items-start gap-2.5 rounded-xl bg-mk-ink px-3 py-2">
-                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-mk-coral/20 text-[10px] font-extrabold text-mk-coral">{i + 1}</span>
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-mk-coral/20 text-[11px] font-extrabold text-mk-coral">{i + 1}</span>
                       <input
                         className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none"
                         value={it.title}
                         onChange={(e) => setPlan((p) => (p ? { ...p, items: p.items.map((x, j) => (j === i ? { ...x, title: e.target.value, placeholder: false } : x)) } : p))}
                       />
-                      {it.placeholder && <span className="shrink-0 rounded bg-mk-amber/15 px-1.5 py-0.5 text-[10px] font-bold text-mk-amber">contoh · ganti</span>}
-                      <span className="shrink-0 rounded bg-mk-panel-3 px-1.5 py-0.5 text-[10px] font-bold text-mk-dim">{ROLE_LABEL[it.role] || it.role}</span>
+                      {it.placeholder && <span className="shrink-0 rounded bg-mk-amber/15 px-1.5 py-0.5 text-[11px] font-bold text-mk-amber">contoh · ganti</span>}
+                      <span className="shrink-0 rounded bg-mk-panel-3 px-1.5 py-0.5 text-[11px] font-bold text-mk-dim">{ROLE_LABEL[it.role] || it.role}</span>
                     </li>
                   ))}
                 </ol>
@@ -309,7 +332,7 @@ export default function CreatePage() {
                       <LazyVisible minH={110} className="aspect-[9/14] bg-mk-ink">
                         <TemplateThumb plan={plan} templateId={t.id} aspect={aspect} assets={assets} />
                       </LazyVisible>
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-1.5 pb-1 pt-4 text-[9px] font-bold leading-tight">{t.name}</div>
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-1.5 pb-1 pt-4 text-[10px] font-bold leading-tight">{t.name}</div>
                       {activeTemplate === t.id && (
                         <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-mk-coral text-mk-ink">
                           <Check className="h-2.5 w-2.5" />

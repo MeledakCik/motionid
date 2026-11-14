@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { ArrowRight, Film, Layers, MonitorSmartphone, MousePointer2, Smartphone, Sparkles, Wand2, Zap } from 'lucide-react';
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from '@/lib/site';
 import HeroDemo from '@/components/landing/HeroDemo';
+import ExampleGallery from '@/components/landing/ExampleGallery';
 import { Logo } from '@/components/studio/ui';
 
 export const metadata: Metadata = {
@@ -81,15 +82,13 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section className="mx-auto max-w-6xl px-5 pb-16" aria-label="Jumlah aset">
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-            {STATS.map(([n, l]) => (
-              <div key={l} className="mk-card px-4 py-4 text-center">
-                <div className="text-3xl font-extrabold text-mk-coral">{n}+</div>
-                <div className="text-xs text-mk-muted">{l}</div>
-              </div>
-            ))}
+        <section className="mx-auto max-w-6xl px-5 pb-16" aria-labelledby="contoh">
+          <h2 id="contoh" className="text-2xl font-extrabold tracking-tight sm:text-3xl">Contoh hasil dari satu kalimat</h2>
+          <p className="mt-1 text-sm text-mk-muted">Ketuk salah satu untuk langsung membuat versimu sendiri.</p>
+          <div className="mt-5">
+            <ExampleGallery />
           </div>
+          <p className="mt-4 text-xs text-mk-dim">{STATS.map(([n, l]) => `${n}+ ${l}`).join(' · ')}</p>
         </section>
 
         <section id="fitur" className="mx-auto max-w-6xl scroll-mt-24 px-5 pb-20">

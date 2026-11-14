@@ -177,10 +177,11 @@ function schedule(ctx: BaseAudioContext, out: AudioNode, id: string, duration: n
 
 const cache = new Map<string, Promise<AudioBuffer | null>>();
 
-export function renderMusic(id: string, duration: number, sampleRate = 44100): Promise<AudioBuffer | null> {
+export function renderMusic(id: string, duration: number, sampleRate = 44100, upload?: string | null): Promise<AudioBuffer | null> {
   if (!id || id === 'none' || typeof window === 'undefined') return Promise.resolve(null);
   const OAC = window.OfflineAudioContext || (window as unknown as { webkitOfflineAudioContext?: typeof OfflineAudioContext }).webkitOfflineAudioContext;
   if (!OAC) return Promise.resolve(null);
+  if (id === 'upload') return upload ? renderUpload(OAC, upload, duration, sampleRate) : Promise.resolve(null);
   const key = `${id}:${duration.toFixed(2)}:${sampleRate}`;
   let p = cache.get(key);
   if (!p) {
@@ -195,6 +196,39 @@ export function renderMusic(id: string, duration: number, sampleRate = 44100): P
     })();
     cache.set(key, p);
     if (cache.size > 6) cache.delete(cache.keys().next().value as string);
+  }
+  return p;
+}
+
+const uploadCache = new Map<string, Promise<AudioBuffer | null>>();
+/** Lagu unggahan: dipotong/diulang sesuai durasi video, dengan fade in/out. */
+function renderUpload(OAC: typeof OfflineAudioContext, data: string, duration: number, sampleRate: number): Promise<AudioBuffer | null> {
+  const key = `${data.length}:${data.slice(-32)}:${duration.toFixed(2)}:${sampleRate}`;
+  let p = uploadCache.get(key);
+  if (!p) {
+    p = (async () => {
+      try {
+        const bytes = await (await fetch(data)).arrayBuffer();
+        const tmp = new OAC(2, 1, sampleRate);
+        const src = await tmp.decodeAudioData(bytes);
+        const ctx = new OAC(2, Math.ceil(sampleRate * (duration + 0.05)), sampleRate);
+        const node = ctx.createBufferSource();
+        node.buffer = src;
+        node.loop = src.duration < duration;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0, 0);
+        g.gain.linearRampToValueAtTime(1, 0.3);
+        g.gain.setValueAtTime(1, Math.max(0.4, duration - 1));
+        g.gain.linearRampToValueAtTime(0, duration);
+        node.connect(g).connect(ctx.destination);
+        node.start(0);
+        return await ctx.startRendering();
+      } catch {
+        return null;
+      }
+    })();
+    uploadCache.set(key, p);
+    if (uploadCache.size > 3) uploadCache.delete(uploadCache.keys().next().value as string);
   }
   return p;
 }

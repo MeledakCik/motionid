@@ -32,7 +32,7 @@ export default function HeroDemo() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            router.push(`/create?prompt=${encodeURIComponent(text || DEMOS[active])}`);
+            router.push(`/create?prompt=${encodeURIComponent(text || DEMOS[active])}&auto=1`);
           }}
           className="mk-card flex flex-col gap-2 p-2 sm:flex-row"
         >

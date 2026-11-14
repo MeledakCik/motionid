@@ -119,15 +119,15 @@ export default function ExportDialog({
             <div className="mk-card-2 grid grid-cols-3 divide-x divide-mk-line text-center">
               <div className="p-2.5">
                 <div className="text-sm font-extrabold">{docDuration(doc).toFixed(1)}s</div>
-                <div className="text-[10px] text-mk-dim">durasi</div>
+                <div className="text-[11px] text-mk-dim">durasi</div>
               </div>
               <div className="p-2.5">
                 <div className="text-sm font-extrabold">{doc.scenes.length}</div>
-                <div className="text-[10px] text-mk-dim">scene</div>
+                <div className="text-[11px] text-mk-dim">scene</div>
               </div>
               <div className="p-2.5">
                 <div className="text-sm font-extrabold">{doc.aspect}</div>
-                <div className="text-[10px] text-mk-dim">rasio</div>
+                <div className="text-[11px] text-mk-dim">rasio</div>
               </div>
             </div>
             <div>
@@ -182,6 +182,11 @@ export default function ExportDialog({
                   </button>
                 )}
               </div>
+              {result.audioCodec === 'opus' && (
+                <p className="rounded-xl bg-mk-amber/10 px-3 py-2 text-xs text-mk-amber">
+                  Browser ini menyimpan suara dalam format Opus. Kalau suaranya tidak keluar di iPhone/WhatsApp, export ulang lewat Chrome di Android/PC, atau tambahkan musik langsung di TikTok.
+                </p>
+              )}
               <div className="rounded-xl bg-mk-ink p-3 text-[11px] text-mk-muted">
                 <div className="mb-1 font-bold text-mk-cream">Caption siap tempel</div>
                 <p className="select-all">{doc.plan.caption} {doc.plan.hashtags.join(' ')}</p>

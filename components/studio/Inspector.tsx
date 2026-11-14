@@ -12,6 +12,8 @@ import { getTransition } from '@/lib/studio/packs/transitions';
 import { FONT_LIST, fontLabel, fontStack } from '@/lib/studio/fonts';
 import { ColorField, cx, Field, NumberField, Section, Segmented, Slider } from './ui';
 
+const KIND_ID: Record<string, string> = { text: 'Teks', image: 'Foto', icon: 'Ikon', component: 'Komponen', shape: 'Bentuk' };
+
 function useSwatches() {
   const p = useStudio((s) => s.doc!.theme.palette);
   return [p.text, p.primary, p.secondary, p.bg, p.muted, '#FFFFFF', '#111111'];
@@ -73,7 +75,7 @@ function LayerInspector({ layer, pro, onOpenTool, aspect }: { layer: Layer; pro:
           </button>
         </div>
       )}
-      <Section title={layer.name} right={<span className="rounded bg-mk-panel-3 px-1.5 py-0.5 text-[10px] font-bold uppercase text-mk-muted">{layer.kind}</span>}>
+      <Section title={layer.name} right={<span className="rounded bg-mk-panel-3 px-1.5 py-0.5 text-[11px] font-bold uppercase text-mk-muted">{KIND_ID[layer.kind] || layer.kind}</span>}>
         <LayerActions layer={layer} />
       </Section>
 
@@ -86,10 +88,10 @@ function LayerInspector({ layer, pro, onOpenTool, aspect }: { layer: Layer; pro:
       <Section title="Animasi">
         <button type="button" onClick={() => onOpenTool('animasi')} className="flex w-full items-center justify-between rounded-xl border border-mk-line bg-mk-ink px-3 py-2.5 text-left text-xs hover:border-mk-coral/60">
           <span>
-            <span className="block font-bold">{animName || 'Tanpa animasi masuk'}</span>
-            <span className="text-[10px] text-mk-dim">
-              {layer.animLoop ? `Loop: ${getAnimation(layer.animLoop)?.name}` : 'Tanpa loop'}
-              {layer.animOut ? ` · Keluar: ${getAnimation(layer.animOut.id)?.name}` : ''}
+            <span className="block font-bold">{animName || 'Tanpa animasi muncul'}</span>
+            <span className="text-[11px] text-mk-dim">
+              {layer.animLoop ? `Gerak terus: ${getAnimation(layer.animLoop)?.name}` : 'Tanpa gerak terus'}
+              {layer.animOut ? ` · Saat hilang: ${getAnimation(layer.animOut.id)?.name}` : ''}
             </span>
           </span>
           <Wand2 className="h-4 w-4 text-mk-coral" />
@@ -340,7 +342,7 @@ function ShapeProps({ layer }: { layer: ShapeLayer }) {
     <Section title="Bentuk">
       <div className="grid grid-cols-4 gap-1">
         {(['rect', 'circle', 'triangle', 'star', 'blob', 'arrow', 'line'] as const).map((sh) => (
-          <button key={sh} type="button" onClick={() => up(layer.id, { shape: sh })} className={cx('rounded-lg border px-1 py-1.5 text-[10px] font-bold capitalize', layer.shape === sh ? 'border-mk-coral bg-mk-coral/15' : 'border-mk-line bg-mk-panel-2 text-mk-muted')}>
+          <button key={sh} type="button" onClick={() => up(layer.id, { shape: sh })} className={cx('rounded-lg border px-1 py-1.5 text-[11px] font-bold capitalize', layer.shape === sh ? 'border-mk-coral bg-mk-coral/15' : 'border-mk-line bg-mk-panel-2 text-mk-muted')}>
             {sh}
           </button>
         ))}
@@ -408,7 +410,7 @@ export function LayersPanel() {
       <div className="space-y-1">
         {layers.map((l) => (
           <div key={l.id} onClick={() => st.selectLayer(l.id)} className={cx('flex cursor-pointer items-center gap-2 rounded-xl border px-2.5 py-2', layerId === l.id ? 'border-mk-coral/70 bg-mk-coral/10' : 'border-transparent hover:bg-mk-panel-2')}>
-            <span className="w-14 shrink-0 rounded bg-mk-panel-3 px-1 py-0.5 text-center text-[9px] font-bold uppercase text-mk-muted">{l.kind}</span>
+            <span className="w-16 shrink-0 rounded bg-mk-panel-3 px-1 py-0.5 text-center text-[11px] font-bold text-mk-muted">{KIND_ID[l.kind] || l.kind}</span>
             <span className={cx('min-w-0 flex-1 truncate text-xs font-semibold', l.hidden && 'opacity-40')}>{l.kind === 'text' ? l.text : l.name}</span>
             <button type="button" className="mk-btn-icon h-7 w-7" onClick={(e) => (e.stopPropagation(), st.updateLayer(l.id, { hidden: !l.hidden }))} title="Sembunyikan">
               {l.hidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
