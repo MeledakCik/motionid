@@ -14,7 +14,7 @@ import { EffectThumb } from '@/components/studio/Thumbs';
 import { applyRow, loadTraining, removeRow, TrainingRow } from '@/lib/studio/training';
 import { canvasFamily, ensureFonts } from '@/lib/studio/fonts';
 import { EASINGS } from '@/lib/studio/easing';
-import { cx, Logo, Segmented } from '@/components/studio/ui';
+import { cx, Dropdown, Logo, Segmented } from '@/components/studio/ui';
 
 type Tab = 'icon_pack' | 'component_pack' | 'transition_pack' | 'animation_pack' | 'effect_pack' | 'teks';
 
@@ -556,15 +556,21 @@ export default function TrainingStudio() {
               </>
             )}
 
-            <label className="block">
+            <div>
               <span className="mk-label">Kategori konten</span>
-              <select value={category} onChange={(e) => setCategory(e.target.value)} className="mk-input py-2">
-                <option value="all">Semua</option>
-                <option value="promo">Promo</option>
-                <option value="edukasi">Edukasi</option>
-                <option value="quote">Quote</option>
-              </select>
-            </label>
+              <Dropdown
+                label="Kategori konten"
+                value={category}
+                onChange={setCategory}
+                className="w-full py-2.5 text-sm"
+                options={[
+                  { value: 'all', label: 'Semua' },
+                  { value: 'promo', label: 'Promo' },
+                  { value: 'edukasi', label: 'Edukasi' },
+                  { value: 'quote', label: 'Quote' },
+                ]}
+              />
+            </div>
 
             <div className="flex gap-2">
               <button type="button" onClick={save} disabled={saving || !v.ok} className="mk-btn-primary flex-1">
