@@ -157,8 +157,8 @@ export function TransitionThumb({ spec, primary, secondary }: { spec: Transition
       const c = ref.current;
       if (!c) return;
       const ctx = c.getContext('2d')!;
-      const A = demoFrame('A', '#3A2A24', '#FFF3EA', c.width, c.height);
-      const B = demoFrame('B', primary, '#120E0C', c.width, c.height);
+      const A = demoFrame('A', '#2A1F5C', '#F4F1FF', c.width, c.height);
+      const B = demoFrame('B', primary, '#120B2E', c.width, c.height);
       const q = Math.min(1, Math.max(0, (p - 0.15) / 0.7));
       ctx.clearRect(0, 0, c.width, c.height);
       drawTransition(ctx, spec, q, A, B, c.width, c.height, { primary, secondary }, false);
@@ -219,7 +219,7 @@ export function AnimationThumb({ spec, color }: { spec: AnimSpec; color: string 
             ctx.translate((i - 1) * W * 0.27 + (f.x ?? 0) * k * 0.4 * (1 - ip), (f.y ?? 0) * k * 0.4 * (1 - ip));
             const sc = (f.scale ?? 1) + (1 - (f.scale ?? 1)) * ip;
             ctx.scale(sc, sc);
-            ctx.fillStyle = i === 1 ? color : '#FFF3EA';
+            ctx.fillStyle = i === 1 ? color : '#F4F1FF';
             ctx.fillText(w, 0, 0);
             ctx.restore();
           });
@@ -232,7 +232,7 @@ export function AnimationThumb({ spec, color }: { spec: AnimSpec; color: string 
       ctx.roundRect(-W * 0.22, -H * 0.3, W * 0.44, H * 0.6, 12);
       ctx.fillStyle = color;
       ctx.fill();
-      ctx.fillStyle = '#120E0C';
+      ctx.fillStyle = '#120B2E';
       ctx.font = `900 ${H * 0.26}px ${canvasFamily('Plus Jakarta Sans')}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -323,7 +323,7 @@ export function EffectThumb({ spec, primary, secondary, autoplay, w = 160, h = 1
       ctx.beginPath();
       ctx.roundRect(W * 0.2, H * 0.36, W * 0.6, H * 0.28, 40);
       ctx.fill();
-      ctx.fillStyle = '#120E0C';
+      ctx.fillStyle = '#120B2E';
       ctx.font = `900 ${H * 0.13}px ${canvasFamily('Plus Jakarta Sans')}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';

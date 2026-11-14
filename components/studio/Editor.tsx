@@ -301,7 +301,7 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
             </nav>
             {tool && tool !== 'properti' && (
               <aside className="mk-scroll w-[320px] shrink-0 overflow-y-auto border-r border-mk-line bg-mk-panel">
-                <div className="sticky top-0 z-10 flex items-center justify-between border-b border-mk-line bg-mk-panel/95 px-4 py-2.5 backdrop-blur">
+                <div className="mk-glass sticky top-0 z-10 flex items-center justify-between border-b border-mk-line px-4 py-2.5">
                   <h3 className="text-sm font-extrabold">{TOOL_TITLE[tool]}</h3>
                   <button type="button" className="mk-btn-icon h-7 w-7" onClick={() => openTool(null)} aria-label="Tutup panel">
                     <X className="h-4 w-4" />
@@ -329,20 +329,20 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
             )}
           </div>
           {coach > 0 && (
-            <div className="absolute inset-x-3 bottom-3 z-20 mx-auto max-w-sm animate-mk-up rounded-2xl border border-mk-coral/40 bg-mk-panel/95 p-4 shadow-2xl backdrop-blur">
-              <div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-mk-coral">Panduan singkat {coach}/3</div>
+            <div className="mk-glass-deep absolute inset-x-3 bottom-3 z-20 mx-auto max-w-sm animate-mk-up rounded-2xl border border-white/15 p-4 text-white shadow-2xl">
+              <div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-mk-lime">Panduan singkat {coach}/3</div>
               <p className="text-sm font-semibold">
                 {coach === 1 && 'Ketuk teks, gambar, atau stiker di video untuk memilihnya. Seret untuk pindah, tarik titik sudut untuk ubah ukuran.'}
                 {coach === 2 && (desktop ? 'Pakai menu di kiri untuk ganti template, tambah teks, foto, komponen, dan ikon.' : 'Pakai menu di bawah untuk ganti template, tambah teks, foto, komponen, dan ikon.')}
                 {coach === 3 && 'Sudah oke? Tekan tombol Export untuk menyimpan video MP4 yang mulus. Mode Pro membuka transisi, animasi & timeline lengkap.'}
               </p>
               <div className="mt-3 flex justify-between">
-                <button type="button" className="text-xs text-mk-dim" onClick={() => (setCoach(0), localStorage.setItem('motionku:coach', '1'))}>
+                <button type="button" className="text-xs text-white/60 hover:text-white" onClick={() => (setCoach(0), localStorage.setItem('motionku:coach', '1'))}>
                   Lewati
                 </button>
                 <button
                   type="button"
-                  className="mk-btn-primary px-3 py-1.5 text-xs"
+                  className="mk-btn-lime px-3 py-1.5 text-xs"
                   onClick={() => {
                     if (coach >= 3) {
                       setCoach(0);
@@ -360,7 +360,7 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
         {/* ------------------------- desktop: inspector ------------------------- */}
         {desktop && (
           <aside className="mk-scroll w-[300px] shrink-0 overflow-y-auto border-l border-mk-line bg-mk-panel">
-            <div className="sticky top-0 z-10 border-b border-mk-line bg-mk-panel/95 px-4 py-2.5 backdrop-blur">
+            <div className="mk-glass sticky top-0 z-10 border-b border-mk-line px-4 py-2.5">
               <h3 className="text-sm font-extrabold">{layer ? 'Edit elemen' : 'Pengaturan scene'}</h3>
             </div>
             <Inspector onOpenTool={openTool} />

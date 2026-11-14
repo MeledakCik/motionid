@@ -93,9 +93,17 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#120E0C',
-  colorScheme: 'dark',
+  themeColor: '#EEE9FF',
+  colorScheme: 'light',
 };
+
+/**
+ * Menandai tingkat perangkat di <html> sebelum halaman tampil (aturannya sama dengan lib/studio/device.ts):
+ * mk-lite = RAM ≤ 3 GB, CPU ≤ 4 inti, hemat data, atau "kurangi transparansi" → tanpa blur
+ * mk-mid  = HP lain / RAM ≤ 6 GB / CPU ≤ 6 inti → blur tipis
+ * mk-hi   = sisanya → blur penuh
+ */
+const FX_TIER_SCRIPT = `(function(){try{var n=navigator,d=document.documentElement,m=n.deviceMemory||4,c=n.hardwareConcurrency||4,s=n.connection&&n.connection.saveData,mob=/Android|iPhone|iPad|Mobi/i.test(n.userAgent),rt=window.matchMedia&&window.matchMedia('(prefers-reduced-transparency: reduce)').matches;d.classList.add(m<=3||c<=4||s||rt?'mk-lite':mob||m<=6||c<=6?'mk-mid':'mk-hi')}catch(e){document.documentElement.classList.add('mk-mid')}})();`;
 
 export default function RootLayout({
   children,
@@ -105,9 +113,13 @@ export default function RootLayout({
   return (
     <html
       lang="id"
-      className={`dark ${poppins.variable} ${montserrat.variable} ${bebasNeue.variable} ${playfair.variable} ${spaceGrotesk.variable} ${anton.variable} ${jakarta.variable}`}
+      suppressHydrationWarning
+      className={`${poppins.variable} ${montserrat.variable} ${bebasNeue.variable} ${playfair.variable} ${spaceGrotesk.variable} ${anton.variable} ${jakarta.variable}`}
     >
-      <body className="min-h-screen bg-mk-ink font-sans text-mk-cream antialiased">
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: FX_TIER_SCRIPT }} />
+      </head>
+      <body className="min-h-screen bg-mk-night font-sans text-mk-cream antialiased">
         {children}
       </body>
     </html>

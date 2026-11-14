@@ -143,7 +143,7 @@ export default function CreatePage() {
 
   return (
     <div className="mk-page">
-      <header className="sticky top-0 z-30 border-b border-mk-line bg-mk-ink/90 backdrop-blur">
+      <header className="mk-glass sticky top-0 z-30 border-b border-white/70">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4">
           <Link href={guest ? '/' : '/dashboard'} className="mk-btn-icon" aria-label="Kembali">
             <ArrowLeft className="h-4 w-4" />
@@ -334,9 +334,9 @@ export default function CreatePage() {
                       <LazyVisible minH={110} className="aspect-[9/14] bg-mk-ink">
                         <TemplateThumb plan={plan} templateId={t.id} aspect={aspect} assets={assets} />
                       </LazyVisible>
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-1.5 pb-1 pt-4 text-[10px] font-bold leading-tight">{t.name}</div>
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-1.5 pb-1 pt-4 text-[10px] font-bold leading-tight text-white">{t.name}</div>
                       {activeTemplate === t.id && (
-                        <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-mk-coral text-mk-ink">
+                        <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-mk-coral text-white">
                           <Check className="h-2.5 w-2.5" />
                         </span>
                       )}

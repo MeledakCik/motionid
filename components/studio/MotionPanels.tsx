@@ -362,7 +362,7 @@ export function EffectsPanel({ clock }: { clock: PlaybackClock }) {
                 <div key={a.id} className="rounded-xl border border-mk-coral/40 bg-mk-ink p-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-extrabold">{k?.label || e.name}</span>
-                    <button type="button" className="text-xs font-bold text-mk-dim hover:text-red-300" onClick={() => setEffects(active.filter((x) => x !== a), false)}>
+                    <button type="button" className="text-xs font-bold text-mk-dim hover:text-red-600" onClick={() => setEffects(active.filter((x) => x !== a), false)}>
                       Hapus
                     </button>
                   </div>
@@ -395,7 +395,7 @@ export function EffectsPanel({ clock }: { clock: PlaybackClock }) {
                                 title={pl.label}
                                 aria-label={`Palet ${pl.label}`}
                                 onClick={() => replace(a.id, effectId(parts.kind, `${base}~${pl.id}`, parts.lvl))}
-                                className={cx('h-7 w-7 rounded-full border-2 transition', pal === pl.id ? 'border-mk-coral ring-2 ring-mk-coral/30' : 'border-white/15 hover:border-white/40')}
+                                className={cx('h-7 w-7 rounded-full border-2 transition', pal === pl.id ? 'border-mk-coral ring-2 ring-mk-coral/30' : 'border-black/10 hover:border-black/25')}
                                 style={{ background: `linear-gradient(135deg, ${pl.colors[0]} 50%, ${pl.colors[1]} 50%)` }}
                               />
                             ))}
@@ -450,7 +450,7 @@ export function EffectsPanel({ clock }: { clock: PlaybackClock }) {
                 <span className="truncate text-[11px] font-bold text-mk-cream">{k.label}</span>
                 <span className="shrink-0 text-[10px] text-mk-dim">{k.styles.length} gaya</span>
               </div>
-              {on && <span className="absolute right-1 top-1 rounded-full bg-mk-coral px-1.5 text-[10px] font-extrabold text-mk-ink">AKTIF</span>}
+              {on && <span className="absolute right-1 top-1 rounded-full bg-mk-coral px-1.5 text-[10px] font-extrabold text-white">AKTIF</span>}
             </button>
           );
         })}

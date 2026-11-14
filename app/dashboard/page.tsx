@@ -46,10 +46,10 @@ const QUICK = ['Promo produk baru', '5 tips hemat', 'Kata-kata motivasi', 'Menu 
 
 /** Pintasan format ala Canva/CapCut: ukuran kanvas populer */
 const FORMATS = [
-  { label: 'TikTok', sub: '9:16', w: 18, h: 32, color: 'from-[#FF6A3D] to-[#FF3D7F]', prompt: 'Video TikTok promo produk baru' },
+  { label: 'TikTok', sub: '9:16', w: 18, h: 32, color: 'from-[#FF3D7F] to-[#7B50FF]', prompt: 'Video TikTok promo produk baru' },
   { label: 'Reels', sub: '9:16', w: 18, h: 32, color: 'from-[#B04DFF] to-[#FF4D9D]', prompt: 'Reels tips singkat yang bermanfaat' },
   { label: 'Shorts', sub: '9:16', w: 18, h: 32, color: 'from-[#FF3D3D] to-[#FF8A3D]', prompt: 'Shorts fakta unik yang jarang diketahui' },
-  { label: 'Story', sub: '9:16', w: 18, h: 32, color: 'from-[#FFB547] to-[#FF6A3D]', prompt: 'Story pengumuman toko buka hari ini' },
+  { label: 'Story', sub: '9:16', w: 18, h: 32, color: 'from-[#7B50FF] to-[#C6F432]', prompt: 'Story pengumuman toko buka hari ini' },
   { label: 'Feed', sub: '1:1', w: 26, h: 26, color: 'from-[#3EE6B0] to-[#5AB8FF]', prompt: 'Postingan feed kata-kata motivasi' },
   { label: 'Portrait', sub: '4:5', w: 22, h: 28, color: 'from-[#5AB8FF] to-[#7A5CFF]', prompt: 'Poster promo flash sale akhir pekan' },
   { label: 'YouTube', sub: '16:9', w: 32, h: 18, color: 'from-[#FF4D4D] to-[#B21F1F]', prompt: 'Intro video tutorial langkah demi langkah' },
@@ -185,23 +185,23 @@ export default function DashboardPage() {
     <section className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="mr-auto text-lg font-extrabold">{tab === 'home' ? 'Proyek terbaru' : 'Semua proyek'}</h2>
-        <div className="flex items-center gap-1 rounded-xl border border-mk-line bg-mk-panel p-1">
+        <div className="flex items-center gap-1 rounded-xl border border-white/80 bg-white/70 p-1 shadow-mk-card">
           {FILTERS.map((f) => (
             <button
               key={f.id}
               type="button"
               onClick={() => setFilter(f.id)}
-              className={cx('rounded-lg px-3 py-1.5 text-xs font-bold transition', filter === f.id ? 'bg-mk-panel-3 text-mk-cream' : 'text-mk-dim hover:text-mk-cream')}
+              className={cx('rounded-lg px-3 py-1.5 text-xs font-bold transition', filter === f.id ? 'bg-mk-coral text-white' : 'text-mk-dim hover:text-mk-cream')}
             >
               {f.label}
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-1 rounded-xl border border-mk-line bg-mk-panel p-1">
-          <button type="button" onClick={() => changeView('grid')} className={cx('rounded-lg p-1.5 transition', view === 'grid' ? 'bg-mk-panel-3 text-mk-cream' : 'text-mk-dim hover:text-mk-cream')} aria-label="Tampilan grid">
+        <div className="flex items-center gap-1 rounded-xl border border-white/80 bg-white/70 p-1 shadow-mk-card">
+          <button type="button" onClick={() => changeView('grid')} className={cx('rounded-lg p-1.5 transition', view === 'grid' ? 'bg-mk-coral text-white' : 'text-mk-dim hover:text-mk-cream')} aria-label="Tampilan grid">
             <LayoutGrid className="h-4 w-4" />
           </button>
-          <button type="button" onClick={() => changeView('list')} className={cx('rounded-lg p-1.5 transition', view === 'list' ? 'bg-mk-panel-3 text-mk-cream' : 'text-mk-dim hover:text-mk-cream')} aria-label="Tampilan daftar">
+          <button type="button" onClick={() => changeView('list')} className={cx('rounded-lg p-1.5 transition', view === 'list' ? 'bg-mk-coral text-white' : 'text-mk-dim hover:text-mk-cream')} aria-label="Tampilan daftar">
             <List className="h-4 w-4" />
           </button>
         </div>
@@ -242,7 +242,7 @@ export default function DashboardPage() {
             href="/create"
             className="group flex aspect-[9/14] flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-mk-line-2 bg-mk-panel/40 text-mk-muted transition hover:border-mk-coral hover:bg-mk-coral/5 hover:text-mk-coral"
           >
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-mk-panel-3 transition group-hover:bg-mk-grad group-hover:text-mk-ink">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-mk-panel-3 transition group-hover:bg-mk-grad group-hover:text-white">
               <Plus className="h-6 w-6" />
             </span>
             <span className="text-sm font-bold">Video baru</span>
@@ -253,15 +253,15 @@ export default function DashboardPage() {
                 <div className="relative aspect-[9/14] overflow-hidden rounded-xl border border-mk-line bg-mk-ink shadow-mk-card transition group-hover:border-mk-coral/70 group-hover:ring-2 group-hover:ring-mk-coral/30">
                   <ProjectThumb p={p} />
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30 opacity-0 transition group-hover:opacity-100" />
-                  <span className="absolute left-2 top-2 rounded-md bg-black/65 px-2 py-0.5 text-[10px] font-bold text-mk-cream backdrop-blur">
+                  <span className="absolute left-2 top-2 rounded-md bg-black/55 px-2 py-0.5 text-[10px] font-bold text-white backdrop-blur">
                     {p.style_json?.intent ? INTENT_LABELS[p.style_json.intent] : p.category}
                   </span>
                   {p.style_json?.scenes ? (
-                    <span className="absolute bottom-2 right-2 flex items-center gap-1 rounded-md bg-black/65 px-1.5 py-0.5 text-[10px] font-bold text-mk-cream backdrop-blur">
+                    <span className="absolute bottom-2 right-2 flex items-center gap-1 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-bold text-white backdrop-blur">
                       <Film className="h-3 w-3" /> {p.style_json.scenes}
                     </span>
                   ) : null}
-                  <span className="absolute bottom-2 left-2 flex translate-y-2 items-center gap-1 rounded-lg bg-mk-grad px-2.5 py-1 text-[11px] font-extrabold text-mk-ink opacity-0 transition group-hover:translate-y-0 group-hover:opacity-100">
+                  <span className="absolute bottom-2 left-2 flex translate-y-2 items-center gap-1 rounded-lg bg-mk-grad px-2.5 py-1 text-[11px] font-extrabold text-white opacity-0 transition group-hover:translate-y-0 group-hover:opacity-100">
                     <Pencil className="h-3 w-3" /> Edit
                   </span>
                 </div>
@@ -279,7 +279,7 @@ export default function DashboardPage() {
                   setMenuId(menuId === p.id ? null : p.id);
                 }}
                 className={cx(
-                  'absolute right-2 top-2 h-7 w-7 items-center justify-center rounded-md bg-black/65 text-mk-cream backdrop-blur hover:bg-black/85',
+                  'absolute right-2 top-2 h-7 w-7 items-center justify-center rounded-md bg-black/55 text-white backdrop-blur hover:bg-black/75',
                   menuId === p.id ? 'flex' : 'hidden group-hover:flex'
                 )}
                 aria-label="Menu proyek"
@@ -287,8 +287,8 @@ export default function DashboardPage() {
                 <MoreHorizontal className="h-4 w-4" />
               </button>
               {menuId === p.id && (
-                <div onClick={(e) => e.stopPropagation()} className="absolute right-2 top-10 z-20 w-40 overflow-hidden rounded-xl border border-mk-line-2 bg-mk-panel-2 p-1 shadow-mk-card">
-                  <Link href={`/editor/${p.id}`} className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold hover:bg-mk-panel-3">
+                <div onClick={(e) => e.stopPropagation()} className="mk-glass absolute right-2 top-10 z-20 w-40 overflow-hidden rounded-xl border border-white/80 p-1 shadow-mk-card">
+                  <Link href={`/editor/${p.id}`} className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold hover:bg-white">
                     <Pencil className="h-3.5 w-3.5" /> Buka di editor
                   </Link>
                   <button
@@ -297,20 +297,20 @@ export default function DashboardPage() {
                       setMenuId(null);
                       setConfirmId(p.id);
                     }}
-                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-red-300 hover:bg-red-500/15"
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-red-600 hover:bg-red-500/10"
                   >
                     <Trash2 className="h-3.5 w-3.5" /> Hapus
                   </button>
                 </div>
               )}
               {confirmId === p.id && (
-                <div className="absolute inset-x-0 top-0 flex aspect-[9/14] flex-col items-center justify-center gap-2 rounded-xl bg-black/85 p-3 text-center backdrop-blur-sm">
+                <div className="absolute inset-x-0 top-0 flex aspect-[9/14] flex-col items-center justify-center gap-2 rounded-xl bg-mk-deep/85 p-3 text-center text-white backdrop-blur-sm">
                   <span className="text-xs font-semibold">Hapus proyek ini?</span>
                   <div className="flex gap-1.5">
                     <button type="button" onClick={() => remove(p.id)} className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-bold">
                       Hapus
                     </button>
-                    <button type="button" onClick={() => setConfirmId(null)} className="rounded-lg bg-mk-panel-3 px-3 py-1.5 text-xs font-bold">
+                    <button type="button" onClick={() => setConfirmId(null)} className="rounded-lg bg-white/15 px-3 py-1.5 text-xs font-bold">
                       Batal
                     </button>
                   </div>
@@ -374,7 +374,7 @@ export default function DashboardPage() {
   return (
     <div className="flex min-h-screen bg-mk-night text-mk-cream">
       {/* ---------- Sidebar (desktop) ---------- */}
-      <aside className="sticky top-0 hidden h-screen w-[232px] shrink-0 flex-col border-r border-mk-line bg-mk-ink/80 px-3 py-4 backdrop-blur lg:flex">
+      <aside className="mk-glass sticky top-0 hidden h-screen w-[232px] shrink-0 flex-col border-r border-white/70 px-3 py-4 lg:flex">
         <Link href="/" className="px-2">
           <Logo />
         </Link>
@@ -389,16 +389,16 @@ export default function DashboardPage() {
               onClick={() => setTab(n.id)}
               className={cx(
                 'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition',
-                tab === n.id ? 'bg-mk-panel-3 text-mk-cream' : 'text-mk-muted hover:bg-mk-panel-2 hover:text-mk-cream'
+                tab === n.id ? 'bg-mk-coral text-white shadow-mk-glow' : 'text-mk-muted hover:bg-white/80 hover:text-mk-cream'
               )}
             >
-              <n.icon className={cx('h-[18px] w-[18px]', tab === n.id && 'text-mk-coral')} />
+              <n.icon className="h-[18px] w-[18px]" />
               {n.label}
-              {n.id === 'projects' && projects.length > 0 && <span className="ml-auto rounded-md bg-mk-panel px-1.5 text-[10px] font-bold text-mk-dim">{projects.length}</span>}
+              {n.id === 'projects' && projects.length > 0 && <span className={cx('ml-auto rounded-md px-1.5 text-[10px] font-bold', tab === n.id ? 'bg-white/20 text-white' : 'bg-mk-panel-3 text-mk-dim')}>{projects.length}</span>}
             </button>
           ))}
           {isAdmin && (
-            <Link href="/admin" className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-mk-muted transition hover:bg-mk-panel-2 hover:text-mk-cream">
+            <Link href="/admin" className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-mk-muted transition hover:bg-white/80 hover:text-mk-cream">
               <Brain className="h-[18px] w-[18px]" /> Admin Training
             </Link>
           )}
@@ -407,14 +407,14 @@ export default function DashboardPage() {
         <div className="mt-6 px-3 text-[11px] font-bold uppercase tracking-wider text-mk-dim">Ide cepat</div>
         <div className="mt-2 space-y-0.5">
           {QUICK.map((qq) => (
-            <button key={qq} type="button" onClick={() => go(qq)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] text-mk-muted transition hover:bg-mk-panel-2 hover:text-mk-cream">
+            <button key={qq} type="button" onClick={() => go(qq)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] text-mk-muted transition hover:bg-white/80 hover:text-mk-cream">
               <Sparkles className="h-3.5 w-3.5 shrink-0 text-mk-coral" /> <span className="truncate">{qq}</span>
             </button>
           ))}
         </div>
 
-        <div className="mt-auto flex items-center gap-2.5 rounded-xl border border-mk-line bg-mk-panel p-2">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-mk-grad text-sm font-extrabold text-mk-ink">{initial}</span>
+        <div className="mt-auto flex items-center gap-2.5 rounded-xl border border-white/80 bg-white/70 p-2 shadow-mk-card">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-mk-grad text-sm font-extrabold text-white">{initial}</span>
           <div className="min-w-0 flex-1">
             <div className="truncate text-xs font-bold">{name || 'Akun saya'}</div>
             <div className="truncate text-[10px] text-mk-dim">{email}</div>
@@ -428,7 +428,7 @@ export default function DashboardPage() {
       {/* ---------- Area utama ---------- */}
       <div className="min-w-0 flex-1">
         {/* Topbar */}
-        <header className="sticky top-0 z-30 border-b border-mk-line bg-mk-night/85 backdrop-blur">
+        <header className="mk-glass sticky top-0 z-30 border-b border-white/70">
           <div className="flex h-14 items-center gap-3 px-4 lg:px-8">
             <Link href="/" className="lg:hidden">
               <Logo />
@@ -442,7 +442,7 @@ export default function DashboardPage() {
                   if (e.target.value && tab === 'templates') setTab('projects');
                 }}
                 placeholder="Cari proyek…"
-                className="w-full rounded-lg border border-mk-line bg-mk-panel py-2 pl-9 pr-3 text-sm placeholder:text-mk-dim focus:border-mk-coral focus:outline-none focus:ring-2 focus:ring-mk-coral/25"
+                className="w-full rounded-xl border border-mk-line bg-white/80 py-2 pl-9 pr-3 text-sm placeholder:text-mk-dim focus:border-mk-coral focus:outline-none focus:ring-2 focus:ring-mk-coral/20"
               />
             </div>
             <div className="ml-auto hidden items-center gap-2 lg:flex">
@@ -457,27 +457,30 @@ export default function DashboardPage() {
         </header>
 
         <main className="mx-auto max-w-[1400px] space-y-10 px-4 pb-28 pt-6 lg:px-8 lg:pb-16">
-          {error && <div className="rounded-xl bg-red-500/10 px-4 py-3 text-xs text-red-300">{error}</div>}
+          {error && <div className="rounded-xl bg-red-500/10 px-4 py-3 text-xs text-red-600">{error}</div>}
 
           {tab === 'home' && (
             <>
               {/* Hero ala Canva: sapaan + kolom ide + pintasan format */}
-              <section className="relative overflow-hidden rounded-3xl border border-mk-line bg-gradient-to-br from-[#3A1A10] via-[#22140F] to-[#1A1230] px-5 py-8 text-center sm:px-10 sm:py-12">
-                <div className="pointer-events-none absolute -left-20 -top-24 h-72 w-72 rounded-full bg-mk-coral/30 blur-3xl" />
-                <div className="pointer-events-none absolute -bottom-28 -right-16 h-80 w-80 rounded-full bg-[#7A5CFF]/25 blur-3xl" />
+              <section className="relative overflow-hidden rounded-3xl bg-mk-deep px-5 py-8 text-center text-white shadow-mk-card sm:px-10 sm:py-12">
+                {/* cahaya lembut memakai gradien (tanpa filter blur, ringan di HP) */}
+                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(520px_circle_at_0%_0%,rgba(123,80,255,0.55),transparent_60%),radial-gradient(480px_circle_at_100%_100%,rgba(151,117,255,0.35),transparent_60%)]" />
+                <svg className="pointer-events-none absolute right-6 top-6 hidden h-12 w-44 sm:block" viewBox="0 0 208 56" fill="none" aria-hidden>
+                  <path d="M3 40c12 0 14-34 28-34s14 44 28 44 14-38 28-38 14 32 28 32 14-26 28-26 14 18 28 18 14-30 35-34" stroke="#C6F432" strokeWidth="4" strokeLinecap="round" />
+                </svg>
                 <div className="relative">
                   <h1 className="text-2xl font-extrabold tracking-tight sm:text-4xl">
-                    {name ? `Halo ${name}, ` : ''}mau bikin <span className="mk-grad-text">video apa</span> hari ini?
+                    {name ? `Halo ${name}, ` : ''}mau bikin <span className="text-mk-lime">video apa</span> hari ini?
                   </h1>
-                  <form onSubmit={submitPrompt} className="mx-auto mt-6 flex max-w-2xl items-center gap-2 rounded-2xl border border-mk-line-2 bg-mk-ink/80 p-1.5 pl-4 shadow-mk-card backdrop-blur focus-within:border-mk-coral focus-within:ring-4 focus-within:ring-mk-coral/20">
-                    <Wand2 className="h-5 w-5 shrink-0 text-mk-coral" />
+                  <form onSubmit={submitPrompt} className="mk-glass-deep mx-auto mt-6 flex max-w-2xl items-center gap-2 rounded-2xl border border-white/15 p-1.5 pl-4 focus-within:border-mk-lime/70 focus-within:ring-4 focus-within:ring-mk-lime/20">
+                    <Wand2 className="h-5 w-5 shrink-0 text-mk-lime" />
                     <input
                       value={prompt}
                       onChange={(e) => setPrompt(e.target.value)}
                       placeholder="Tulis idemu… mis. Promo kopi susu gula aren 18rb"
-                      className="min-w-0 flex-1 bg-transparent py-2.5 text-sm placeholder:text-mk-dim focus:outline-none sm:text-base"
+                      className="min-w-0 flex-1 bg-transparent py-2.5 text-sm text-white placeholder:text-white/50 focus:outline-none sm:text-base"
                     />
-                    <button type="submit" className="mk-btn-primary shrink-0 px-4 py-2.5 text-sm">
+                    <button type="submit" className="mk-btn-lime shrink-0 rounded-xl px-4 py-2.5 text-sm">
                       <Sparkles className="h-4 w-4" /> <span className="hidden sm:inline">Buat</span>
                     </button>
                   </form>
@@ -486,11 +489,11 @@ export default function DashboardPage() {
                   <div className="mk-noscroll mx-auto mt-8 flex max-w-3xl gap-4 overflow-x-auto pb-1 sm:justify-center sm:gap-6">
                     {FORMATS.map((f) => (
                       <button key={f.label} type="button" onClick={() => go(f.prompt)} className="group flex w-16 shrink-0 flex-col items-center gap-2">
-                        <span className={cx('flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br shadow-lg transition group-hover:-translate-y-1 group-hover:shadow-mk-glow', f.color)}>
+                        <span className={cx('flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br shadow-lg ring-1 ring-white/20 transition group-hover:-translate-y-1 group-hover:ring-mk-lime/70', f.color)}>
                           <span className="rounded-[3px] border-2 border-white/90" style={{ width: f.w * 0.75, height: f.h * 0.75 }} />
                         </span>
-                        <span className="text-xs font-semibold text-mk-cream/90">{f.label}</span>
-                        <span className="-mt-1.5 text-[10px] text-mk-dim">{f.sub}</span>
+                        <span className="text-xs font-semibold text-white/90">{f.label}</span>
+                        <span className="-mt-1.5 text-[10px] text-white/55">{f.sub}</span>
                       </button>
                     ))}
                   </div>
@@ -517,7 +520,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ---------- Bottom nav (mobile) ---------- */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-around border-t border-mk-line bg-mk-ink/95 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
+      <nav className="mk-glass fixed inset-x-0 bottom-0 z-40 flex items-center justify-around border-t border-white/70 px-2 pb-[env(safe-area-inset-bottom)] lg:hidden">
         {NAV.slice(0, 1).map((n) => (
           <button key={n.id} type="button" onClick={() => setTab(n.id)} className={cx('flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-semibold', tab === n.id ? 'text-mk-coral' : 'text-mk-dim')}>
             <n.icon className="h-5 w-5" /> {n.label}
@@ -526,7 +529,7 @@ export default function DashboardPage() {
         <button type="button" onClick={() => setTab('projects')} className={cx('flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-semibold', tab === 'projects' ? 'text-mk-coral' : 'text-mk-dim')}>
           <FolderOpen className="h-5 w-5" /> Proyek
         </button>
-        <Link href="/create" className="-mt-5 flex h-12 w-12 items-center justify-center rounded-full bg-mk-grad text-mk-ink shadow-mk-glow" aria-label="Buat video">
+        <Link href="/create" className="-mt-5 flex h-12 w-12 items-center justify-center rounded-full bg-mk-grad text-white shadow-mk-glow" aria-label="Buat video">
           <Plus className="h-6 w-6" />
         </Link>
         <button type="button" onClick={() => setTab('templates')} className={cx('flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-semibold', tab === 'templates' ? 'text-mk-coral' : 'text-mk-dim')}>

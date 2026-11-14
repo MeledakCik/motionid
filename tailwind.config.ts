@@ -1,8 +1,11 @@
 import type { Config } from 'tailwindcss';
 
 /**
- * Warna khas MotionKu: "Sunset Coral" — coral hangat + amber di atas tinta cokelat gelap.
- * Dipakai konsisten di landing, dashboard, create, editor, dan admin.
+ * Warna khas MotionKu: "Depup Violet" — selaras dengan depup.cloud.
+ * Violet-biru #7B50FF di atas lavender terang, kartu kaca putih, panel gelap #1E1150, aksen limau #C6F432.
+ * Nama token lama dipertahankan supaya semua komponen tetap jalan, dengan makna:
+ *   coral = warna utama · amber = peringatan · mint = sukses · ink = kolom/input
+ *   night = latar halaman · panel* = kartu · cream = teks utama · muted/dim = teks sekunder
  */
 const config: Config = {
   darkMode: 'class',
@@ -11,31 +14,33 @@ const config: Config = {
     extend: {
       colors: {
         mk: {
-          coral: '#FF6A3D',
-          'coral-2': '#FF8A5C',
-          amber: '#FFB547',
-          ink: '#120E0C',
-          night: '#0C0908',
-          panel: '#1B1512',
-          'panel-2': '#241C18',
-          'panel-3': '#2E2420',
-          line: 'rgba(255,236,220,0.10)',
-          'line-2': 'rgba(255,236,220,0.18)',
-          cream: '#FFF3EA',
-          muted: '#BBA99C',
-          dim: '#A39083',
-          mint: '#3EE6B0',
-          sky: '#5AB8FF',
+          coral: '#7B50FF',
+          'coral-2': '#9775FF',
+          amber: '#B45309',
+          ink: '#F3EFFF',
+          night: '#ECE6FF',
+          panel: '#FFFFFF',
+          'panel-2': '#F7F5FF',
+          'panel-3': '#EAE3FF',
+          line: 'rgba(18,11,46,0.09)',
+          'line-2': 'rgba(18,11,46,0.16)',
+          cream: '#120B2E',
+          muted: '#544D6C',
+          dim: '#6E6789',
+          mint: '#3F7D16',
+          sky: '#2563EB',
+          lime: '#C6F432',
+          deep: '#1E1150',
         },
       },
       backgroundImage: {
-        'mk-grad': 'linear-gradient(100deg, #FF6A3D 0%, #FF8A4C 45%, #FFB547 100%)',
+        'mk-grad': 'linear-gradient(100deg, #6A3CF6 0%, #7B50FF 55%, #9775FF 100%)',
         'mk-night':
-          'radial-gradient(800px circle at 10% -10%, rgba(255,106,61,0.20), transparent 60%), radial-gradient(600px circle at 100% 10%, rgba(255,181,71,0.10), transparent 60%), #120E0C',
+          'radial-gradient(900px circle at 0% -10%, rgba(123,80,255,0.18), transparent 60%), radial-gradient(800px circle at 100% 0%, rgba(151,117,255,0.16), transparent 55%), radial-gradient(700px circle at 50% 115%, rgba(91,120,255,0.14), transparent 60%), linear-gradient(180deg, #F2EEFF 0%, #E8E0FF 100%)',
       },
       boxShadow: {
-        'mk-glow': '0 10px 40px -10px rgba(255,106,61,0.55)',
-        'mk-card': '0 20px 50px -24px rgba(0,0,0,0.7)',
+        'mk-glow': '0 12px 30px -12px rgba(123,80,255,0.6)',
+        'mk-card': 'inset 0 1px 0 rgba(255,255,255,0.7), 0 18px 40px -24px rgba(48,24,140,0.35)',
       },
       fontFamily: {
         sans: ['var(--font-jakarta)', 'var(--font-poppins)', 'system-ui', 'sans-serif'],

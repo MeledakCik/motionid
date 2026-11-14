@@ -140,7 +140,7 @@ function frame(label: string, bg: string, w: number, h: number) {
   x.fillRect(0, 0, w, h);
   x.fillStyle = 'rgba(255,255,255,0.08)';
   for (let i = 0; i < 8; i++) x.fillRect(0, (i * h) / 8, w, 2);
-  x.fillStyle = '#FFF3EA';
+  x.fillStyle = '#F4F1FF';
   x.font = `900 ${h * 0.12}px ${canvasFamily('Plus Jakarta Sans')}`;
   x.textAlign = 'center';
   x.textBaseline = 'middle';
@@ -153,9 +153,9 @@ function PreviewIcon({ parts, viewBox }: { parts: IconDef['parts']; viewBox: Ico
   return (
     <div className="grid grid-cols-3 gap-3">
       {[
-        ['#FF6A3D', '#120E0C'],
-        ['#FFFFFF', '#FF6A3D'],
-        ['#120E0C', '#FFB547'],
+        ['#7B50FF', '#120B2E'],
+        ['#FFFFFF', '#7B50FF'],
+        ['#120B2E', '#C6F432'],
       ].map(([fg, bg], i) => (
         <div key={i} className="flex aspect-square items-center justify-center rounded-2xl p-6" style={{ background: bg, color: fg }} dangerouslySetInnerHTML={{ __html: iconSvgMarkup(def, 'currentColor', 2) }} />
       ))}
@@ -201,7 +201,7 @@ function PreviewComponent({ def }: { def: ComponentDef }) {
 }
 
 function PreviewTransition({ spec }: { spec: TransitionSpec }) {
-  const frames = useMemo(() => (typeof document !== 'undefined' ? [frame('SCENE A', '#3A2A24', 360, 640), frame('SCENE B', '#FF6A3D', 360, 640)] : null), []);
+  const frames = useMemo(() => (typeof document !== 'undefined' ? [frame('SCENE A', '#2A1F5C', 360, 640), frame('SCENE B', '#7B50FF', 360, 640)] : null), []);
   const ref = useAnimatedCanvas(
     (ctx, W, H, t) => {
       if (!frames) return;
@@ -209,7 +209,7 @@ function PreviewTransition({ spec }: { spec: TransitionSpec }) {
       const local = t % cycle;
       const p = Math.min(1, Math.max(0, (local - 0.6) / spec.duration));
       ctx.clearRect(0, 0, W, H);
-      drawTransition(ctx, spec, p, frames[0], frames[1], W, H, { primary: '#FF6A3D', secondary: '#FFB547' }, true);
+      drawTransition(ctx, spec, p, frames[0], frames[1], W, H, { primary: '#7B50FF', secondary: '#C6F432' }, true);
     },
     [spec, frames]
   );
@@ -220,7 +220,7 @@ function PreviewAnimation({ spec }: { spec: AnimSpec }) {
   const ref = useAnimatedCanvas(
     (ctx, W, H, t) => {
       ctx.clearRect(0, 0, W, H);
-      ctx.fillStyle = '#1B1512';
+      ctx.fillStyle = '#1E1150';
       ctx.fillRect(0, 0, W, H);
       const cycle = spec.kind === 'loop' ? 1e9 : spec.duration + 1;
       const local = t % cycle;
@@ -265,7 +265,7 @@ function PreviewAnimation({ spec }: { spec: AnimSpec }) {
             ctx.rotate((((f.rot ?? 0) * (1 - ip)) * Math.PI) / 180);
             const sc = (f.scale ?? 1) + (1 - (f.scale ?? 1)) * ip;
             ctx.scale(sc || 0.001, sc || 0.001);
-            ctx.fillStyle = i === 1 ? '#FF6A3D' : '#FFF3EA';
+            ctx.fillStyle = i === 1 ? '#7B50FF' : '#F4F1FF';
             ctx.fillText(w, 0, 0);
             ctx.restore();
           });
@@ -277,11 +277,11 @@ function PreviewAnimation({ spec }: { spec: AnimSpec }) {
       ctx.beginPath();
       ctx.roundRect(-W * 0.22, -H * 0.12, W * 0.44, H * 0.24, 28 * k * 3);
       const g = ctx.createLinearGradient(-W * 0.22, 0, W * 0.22, 0);
-      g.addColorStop(0, '#FF6A3D');
-      g.addColorStop(1, '#FFB547');
+      g.addColorStop(0, '#7B50FF');
+      g.addColorStop(1, '#C6F432');
       ctx.fillStyle = g;
       ctx.fill();
-      ctx.fillStyle = '#120E0C';
+      ctx.fillStyle = '#120B2E';
       ctx.font = `900 ${W * 0.07}px ${canvasFamily('Plus Jakarta Sans')}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -453,7 +453,7 @@ export default function TrainingStudio() {
 
   return (
     <div className="mk-page">
-      <header className="sticky top-0 z-30 border-b border-mk-line bg-mk-ink/90 backdrop-blur">
+      <header className="mk-glass sticky top-0 z-30 border-b border-white/70">
         <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4">
           <Link href="/dashboard" className="mk-btn-icon" aria-label="Kembali">
             <ArrowLeft className="h-4 w-4" />
@@ -493,7 +493,7 @@ export default function TrainingStudio() {
         </div>
 
         {notice && (
-          <div className={cx('mb-4 flex items-start gap-2 rounded-xl px-4 py-3 text-sm', notice.ok ? 'bg-mk-mint/10 text-mk-mint' : 'bg-red-500/10 text-red-300')}>
+          <div className={cx('mb-4 flex items-start gap-2 rounded-xl px-4 py-3 text-sm', notice.ok ? 'bg-mk-mint/10 text-mk-mint' : 'bg-red-500/10 text-red-600')}>
             {notice.ok ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />}
             {notice.text}
           </div>
@@ -549,7 +549,7 @@ export default function TrainingStudio() {
                     className="mk-input font-mono text-[12px] leading-relaxed"
                     placeholder={tab === 'icon_pack' ? '<svg viewBox="0 0 24 24">…</svg>' : '{ "name": "…" }'}
                   />
-                  <div className={cx('mt-1.5 text-[11px] font-semibold', !debounced.code ? 'text-mk-dim' : v.ok ? 'text-mk-mint' : 'text-red-300')}>
+                  <div className={cx('mt-1.5 text-[11px] font-semibold', !debounced.code ? 'text-mk-dim' : v.ok ? 'text-mk-mint' : 'text-red-600')}>
                     {!debounced.code ? 'Tempel kode lalu lihat preview langsung di kanan.' : v.ok ? '✓ Kode valid — preview aktif' : `✗ ${v.error}`}
                   </div>
                 </div>
@@ -610,7 +610,7 @@ export default function TrainingStudio() {
               <PreviewAnimation spec={v.anim} />
             ) : v.fx ? (
               <div className="mx-auto aspect-[16/10] w-full overflow-hidden rounded-2xl">
-                <EffectThumb spec={v.fx} primary="#FF6A3D" secondary="#FFB547" autoplay w={640} h={400} />
+                <EffectThumb spec={v.fx} primary="#7B50FF" secondary="#C6F432" autoplay w={640} h={400} />
               </div>
             ) : null}
           </div>
@@ -640,13 +640,13 @@ export default function TrainingStudio() {
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-bold">{r.subtext || r.content_text}</div>
                     <div className="text-[11px] text-mk-dim">
-                      {r.type} · {r.category} {!ok && <span className="text-red-300">· kode rusak</span>}
+                      {r.type} · {r.category} {!ok && <span className="text-red-600">· kode rusak</span>}
                     </div>
                   </div>
                   <button type="button" className="mk-btn-icon" onClick={() => edit(r)} title="Edit">
                     <Pencil className="h-4 w-4" />
                   </button>
-                  <button type="button" className="mk-btn-icon hover:!text-red-300" onClick={() => del(r)} title="Hapus">
+                  <button type="button" className="mk-btn-icon hover:!text-red-600" onClick={() => del(r)} title="Hapus">
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>

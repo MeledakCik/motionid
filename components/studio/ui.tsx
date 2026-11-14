@@ -158,8 +158,8 @@ export function BottomSheet({ open, onClose, title, children, tall }: { open: bo
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end lg:hidden" role="dialog" aria-label={title}>
-      <button type="button" aria-label="Tutup" className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className={cx('relative flex animate-mk-sheet flex-col rounded-t-3xl border-t border-mk-line bg-mk-panel shadow-2xl', tall ? 'h-[78vh]' : 'max-h-[64vh]')}>
+      <button type="button" aria-label="Tutup" className="absolute inset-0 bg-mk-deep/25" onClick={onClose} />
+      <div className={cx('mk-glass mk-glass-strong relative flex animate-mk-sheet flex-col rounded-t-3xl border-t border-white/80 shadow-2xl', tall ? 'h-[78vh]' : 'max-h-[64vh]')}>
         <div className="flex items-center justify-between px-4 pb-1 pt-2.5">
           <div className="mx-auto h-1 w-10 rounded-full bg-mk-line-2" />
         </div>
@@ -209,7 +209,7 @@ export function useMediaQuery(q: string): boolean {
 export function Logo({ className }: { className?: string }) {
   return (
     <span className={cx('inline-flex items-center gap-2 font-extrabold tracking-tight', className)}>
-      <span className="relative flex h-8 w-8 items-center justify-center rounded-[10px] bg-mk-grad text-mk-ink shadow-mk-glow">
+      <span className="relative flex h-8 w-8 items-center justify-center rounded-[10px] bg-mk-grad text-white shadow-mk-glow">
         <svg viewBox="0 0 24 24" className="h-4.5 w-4.5" width="18" height="18" fill="currentColor" aria-hidden>
           <path d="M7 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L8.5 4.64A1 1 0 0 0 7 5.5Z" />
         </svg>
@@ -328,7 +328,7 @@ export function Dropdown<T extends string>({
         <div
           ref={menu}
           role="listbox"
-          className="mk-scroll fixed z-[80] max-h-[360px] animate-mk-up overflow-y-auto rounded-2xl border border-mk-line-2 bg-mk-panel p-1.5 shadow-2xl"
+          className="mk-glass mk-glass-strong mk-scroll fixed z-[80] max-h-[360px] animate-mk-up overflow-y-auto rounded-2xl border border-white/80 p-1.5 shadow-2xl"
           style={{ left: pos.left, width: pos.width, ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }) }}
         >
           {label && <div className="px-2.5 pb-1 pt-1.5 text-[11px] font-extrabold uppercase tracking-wider text-mk-dim">{label}</div>}

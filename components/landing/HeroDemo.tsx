@@ -53,7 +53,7 @@ export default function HeroDemo() {
       </div>
       <div className="flex min-w-0 justify-center">
         <div className="relative">
-          <div className="absolute -inset-6 -z-10 rounded-[40px] bg-mk-coral/20 blur-3xl" />
+          <div className="mk-fx-glow absolute -inset-6 -z-10 rounded-[40px] bg-mk-coral/25 blur-3xl" />
           <LivePreview doc={doc} width={260} />
         </div>
       </div>

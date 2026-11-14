@@ -3,40 +3,54 @@
 @tailwind utilities;
 
 /* ===========================================================================
-   MotionKu — identitas "Sunset Coral"
-   coral #FF6A3D · amber #FFB547 · tinta #120E0C · krem #FFF3EA
+   MotionKu — identitas "Depup Violet" (selaras dengan depup.cloud)
+   violet #7B50FF · lavender #ECE6FF · teks #120B2E · gelap #1E1150 · limau #C6F432
+
+   Kaca (glass) + blur menyesuaikan kemampuan perangkat. Kelas di <html> dipasang
+   oleh skrip kecil di app/layout.tsx sebelum halaman tampil:
+     html.mk-hi   → blur penuh (desktop / HP kencang)
+     html.mk-mid  → blur tipis (HP menengah)
+     html.mk-lite → tanpa blur, kaca dibuat lebih pekat (HP kelas bawah, hemat data,
+                    atau pengguna memilih "kurangi transparansi")
 =========================================================================== */
 :root {
-  color-scheme: dark;
-  --mk-coral: #ff6a3d;
-  --mk-amber: #ffb547;
-  --mk-ink: #120e0c;
-  --mk-panel: #1b1512;
-  --mk-panel-2: #241c18;
-  --mk-line: rgba(255, 236, 220, 0.1);
-  --mk-cream: #fff3ea;
-  --mk-muted: #bba99c;
+  color-scheme: light;
+  --mk-coral: #7b50ff;
+  --mk-ink: #f3efff;
+  --mk-night: #ece6ff;
+  --mk-cream: #120b2e;
+  --mk-muted: #544d6c;
+  --mk-blur: 18px;
+  --mk-glass: rgba(255, 255, 255, 0.6);
+  --mk-glass-strong: rgba(255, 255, 255, 0.86);
+  --mk-glass-solid: rgba(255, 255, 255, 0.97);
+  --mk-glass-deep: rgba(30, 17, 80, 0.84);
+  --mk-glass-deep-solid: rgba(30, 17, 80, 0.97);
+}
+html.mk-mid {
+  --mk-blur: 10px;
 }
 
 html,
 body {
   max-width: 100%;
   overflow-x: clip;
-  background: var(--mk-ink);
+  background: var(--mk-night);
   color: var(--mk-cream);
   -webkit-tap-highlight-color: transparent;
 }
 
 ::selection {
-  background: rgba(255, 106, 61, 0.4);
+  background: rgba(123, 80, 255, 0.24);
 }
 
 @layer components {
   .mk-page {
     @apply min-h-screen bg-mk-night text-mk-cream;
   }
+  /* kartu kaca: putih tembus pandang + garis tepi putih (tanpa blur, ringan untuk grid panjang) */
   .mk-card {
-    @apply rounded-2xl border border-mk-line bg-mk-panel;
+    @apply rounded-2xl border border-white/80 bg-white/75 shadow-mk-card;
   }
   .mk-card-2 {
     @apply rounded-xl border border-mk-line bg-mk-panel-2;
@@ -45,45 +59,109 @@ body {
     @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
   }
   .mk-btn-primary {
-    @apply mk-btn bg-mk-grad text-mk-ink shadow-mk-glow hover:brightness-105;
+    @apply mk-btn bg-mk-grad text-white shadow-mk-glow hover:brightness-110;
+  }
+  .mk-btn-lime {
+    @apply mk-btn bg-mk-lime text-mk-cream shadow-[0_10px_28px_-12px_rgba(150,190,20,0.8)] hover:brightness-105;
   }
   .mk-btn-ghost {
-    @apply mk-btn border border-mk-line bg-mk-panel-2 text-mk-cream hover:border-mk-line-2 hover:bg-mk-panel-3;
+    @apply mk-btn border border-mk-line bg-white/70 text-mk-cream hover:border-mk-line-2 hover:bg-white;
   }
   .mk-btn-icon {
     @apply inline-flex h-9 w-9 items-center justify-center rounded-lg text-mk-muted transition hover:bg-mk-panel-3 hover:text-mk-cream disabled:opacity-35;
   }
   .mk-input {
-    @apply w-full rounded-xl border border-mk-line bg-mk-ink px-3 py-2.5 text-sm text-mk-cream placeholder:text-mk-dim focus:border-mk-coral focus:outline-none focus:ring-2 focus:ring-mk-coral/25;
+    @apply w-full rounded-xl border border-mk-line bg-white px-3 py-2.5 text-sm text-mk-cream placeholder:text-mk-dim focus:border-mk-coral focus:outline-none focus:ring-2 focus:ring-mk-coral/20;
   }
   .mk-label {
     @apply mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-mk-muted;
   }
   .mk-chip {
-    @apply inline-flex items-center gap-1.5 rounded-full border border-mk-line bg-mk-panel-2 px-3 py-1.5 text-xs font-semibold text-mk-muted transition hover:text-mk-cream;
+    @apply inline-flex items-center gap-1.5 rounded-full border border-mk-line bg-white/70 px-3 py-1.5 text-xs font-semibold text-mk-muted transition hover:bg-white hover:text-mk-cream;
   }
   .mk-chip-on {
-    @apply border-mk-coral/60 bg-mk-coral/15 text-mk-cream;
+    @apply border-mk-coral bg-mk-coral text-white hover:bg-mk-coral hover:text-white;
   }
   .mk-grad-text {
-    background: linear-gradient(100deg, #ffffff 0%, #ffd2bf 40%, #ff8a5c 75%, #ffb547 100%);
+    background: linear-gradient(100deg, #4b23d6 0%, #7b50ff 55%, #9c7bff 100%);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
+  }
+
+  /* Kaca + blur: untuk permukaan yang melayang di atas konten (header, sidebar, menu, panel geser, dialog) */
+  .mk-glass {
+    background: var(--mk-glass);
+    -webkit-backdrop-filter: blur(var(--mk-blur)) saturate(170%);
+    backdrop-filter: blur(var(--mk-blur)) saturate(170%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  }
+  /* kaca lebih pekat untuk dialog, menu & panel geser (teks tetap tajam di atas konten gelap) */
+  .mk-glass-strong {
+    background: var(--mk-glass-strong);
+  }
+  /* kaca gelap ala panel depup */
+  .mk-glass-deep {
+    background: var(--mk-glass-deep);
+    -webkit-backdrop-filter: blur(var(--mk-blur)) saturate(150%);
+    backdrop-filter: blur(var(--mk-blur)) saturate(150%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  }
+}
+
+/* ---------- Perangkat lemah: matikan semua blur, kaca dibuat pekat ---------- */
+html.mk-lite .mk-glass {
+  background: var(--mk-glass-solid);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+html.mk-lite .mk-glass-deep {
+  background: var(--mk-glass-deep-solid);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+html.mk-lite [class*='backdrop-blur'],
+html.mk-lite .mk-blur-soft {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+/* cahaya dekoratif ber-filter blur disembunyikan di perangkat lemah */
+html.mk-lite .mk-fx-glow {
+  display: none;
+}
+@media (prefers-reduced-transparency: reduce) {
+  .mk-glass {
+    background: var(--mk-glass-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .mk-glass-deep {
+    background: var(--mk-glass-deep-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+/* browser tanpa dukungan backdrop-filter: kaca pekat agar teks tetap terbaca */
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .mk-glass {
+    background: var(--mk-glass-solid);
+  }
+  .mk-glass-deep {
+    background: var(--mk-glass-deep-solid);
   }
 }
 
 /* scrollbar tipis */
 .mk-scroll {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 236, 220, 0.18) transparent;
+  scrollbar-color: rgba(18, 11, 46, 0.2) transparent;
 }
 .mk-scroll::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 .mk-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255, 236, 220, 0.18);
+  background: rgba(18, 11, 46, 0.2);
   border-radius: 999px;
 }
 .mk-noscroll {
@@ -104,7 +182,7 @@ input[type='range'].mk-range {
 input[type='range'].mk-range::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: 999px;
-  background: rgba(255, 236, 220, 0.16);
+  background: rgba(18, 11, 46, 0.14);
 }
 input[type='range'].mk-range::-webkit-slider-thumb {
   -webkit-appearance: none;
@@ -112,20 +190,21 @@ input[type='range'].mk-range::-webkit-slider-thumb {
   width: 18px;
   height: 18px;
   border-radius: 999px;
-  background: #ff6a3d;
-  border: 3px solid #fff3ea;
+  background: #7b50ff;
+  border: 3px solid #ffffff;
+  box-shadow: 0 2px 6px rgba(48, 24, 140, 0.35);
 }
 input[type='range'].mk-range::-moz-range-track {
   height: 4px;
   border-radius: 999px;
-  background: rgba(255, 236, 220, 0.16);
+  background: rgba(18, 11, 46, 0.14);
 }
 input[type='range'].mk-range::-moz-range-thumb {
   width: 14px;
   height: 14px;
   border-radius: 999px;
-  background: #ff6a3d;
-  border: 3px solid #fff3ea;
+  background: #7b50ff;
+  border: 3px solid #ffffff;
 }
 
 input[type='color'].mk-color {
@@ -144,20 +223,20 @@ input[type='color'].mk-color::-webkit-color-swatch-wrapper {
   padding: 0;
 }
 input[type='color'].mk-color::-webkit-color-swatch {
-  border: 2px solid rgba(255, 236, 220, 0.2);
+  border: 2px solid rgba(18, 11, 46, 0.15);
   border-radius: 10px;
 }
 
-/* Landing */
+/* Landing & login */
 .mk-hero-bg {
   background:
-    radial-gradient(700px circle at 15% 0%, rgba(255, 106, 61, 0.28), transparent 60%),
-    radial-gradient(520px circle at 90% 20%, rgba(255, 181, 71, 0.14), transparent 60%),
-    radial-gradient(600px circle at 50% 110%, rgba(255, 106, 61, 0.12), transparent 60%),
-    #0c0908;
+    radial-gradient(700px circle at 12% 0%, rgba(123, 80, 255, 0.22), transparent 60%),
+    radial-gradient(520px circle at 92% 18%, rgba(151, 117, 255, 0.18), transparent 60%),
+    radial-gradient(640px circle at 50% 110%, rgba(91, 120, 255, 0.16), transparent 60%),
+    linear-gradient(180deg, #f2eeff 0%, #e6ddff 100%);
 }
 .mk-dots {
-  background-image: radial-gradient(rgba(255, 236, 220, 0.09) 1px, transparent 1px);
+  background-image: radial-gradient(rgba(18, 11, 46, 0.08) 1px, transparent 1px);
   background-size: 22px 22px;
 }
 
@@ -170,7 +249,7 @@ input[type='color'].mk-color::-webkit-color-swatch {
   }
 }
 
-/* HP kelas bawah: matikan efek mahal */
+/* HP layar kecil: elemen bertanda mk-blur-soft tanpa blur */
 @media (max-width: 640px) {
   .mk-blur-soft {
     backdrop-filter: none !important;

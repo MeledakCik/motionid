@@ -41,7 +41,7 @@ export function LayerActions({ layer, compact }: { layer: Layer; compact?: boole
       <button type="button" className="mk-btn-icon" title="Duplikat (Ctrl+D)" onClick={() => st.duplicateLayer(layer.id)}>
         <Copy className="h-4 w-4" />
       </button>
-      <button type="button" className="mk-btn-icon hover:!bg-red-500/20 hover:!text-red-300" title="Hapus (Del)" onClick={() => st.removeLayer(layer.id)}>
+      <button type="button" className="mk-btn-icon hover:!bg-red-500/20 hover:!text-red-600" title="Hapus (Del)" onClick={() => st.removeLayer(layer.id)}>
         <Trash2 className="h-4 w-4" />
       </button>
     </div>
@@ -130,7 +130,7 @@ function LayerInspector({ layer, pro, onOpenTool, aspect }: { layer: Layer; pro:
       {pro && layer.kind !== 'text' && (
         <Section title="Bayangan">
           <label className="flex items-center gap-2 text-xs text-mk-muted">
-            <input type="checkbox" className="accent-[#FF6A3D]" checked={!!layer.shadow} onChange={(e) => up(layer.id, { shadow: e.target.checked ? { color: 'rgba(0,0,0,0.45)', blur: 36, x: 0, y: 18 } : null })} />
+            <input type="checkbox" className="accent-[#7B50FF]" checked={!!layer.shadow} onChange={(e) => up(layer.id, { shadow: e.target.checked ? { color: 'rgba(0,0,0,0.45)', blur: 36, x: 0, y: 18 } : null })} />
             Aktifkan bayangan
           </label>
           {layer.shadow && <Slider label="Blur" value={layer.shadow.blur} min={0} max={100} onChange={(v) => live({ shadow: { ...layer.shadow!, blur: v } })} onCommit={endDrag} />}
@@ -376,14 +376,14 @@ function SceneInspector({ onOpenTool }: { onOpenTool: (t: Tool) => void }) {
           <button type="button" className="mk-btn-ghost text-[11px]" onClick={() => st.duplicateScene(sceneIdx)}>
             Duplikat scene
           </button>
-          <button type="button" className="mk-btn-ghost text-[11px] hover:!text-red-300" onClick={() => st.removeScene(sceneIdx)} disabled={doc.scenes.length <= 1}>
+          <button type="button" className="mk-btn-ghost text-[11px] hover:!text-red-600" onClick={() => st.removeScene(sceneIdx)} disabled={doc.scenes.length <= 1}>
             Hapus scene
           </button>
         </div>
       </Section>
       <Section title="Pengaturan video">
         <label className="flex items-center gap-2 text-xs text-mk-muted">
-          <input type="checkbox" className="accent-[#FF6A3D]" checked={doc.showProgress} onChange={(e) => st.commit((d) => ({ ...d, showProgress: e.target.checked }))} /> Tampilkan progress bar
+          <input type="checkbox" className="accent-[#7B50FF]" checked={doc.showProgress} onChange={(e) => st.commit((d) => ({ ...d, showProgress: e.target.checked }))} /> Tampilkan progress bar
         </label>
         <Field label="Watermark (opsional)">
           <input className="mk-input py-2 text-xs" placeholder="@akunkamu" value={doc.watermark || ''} onChange={(e) => st.live((d) => ({ ...d, watermark: e.target.value }))} onBlur={st.endDrag} />
