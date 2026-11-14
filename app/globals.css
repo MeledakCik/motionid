@@ -2,144 +2,176 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===========================================================================
+   MotionKu — identitas "Sunset Coral"
+   coral #FF6A3D · amber #FFB547 · tinta #120E0C · krem #FFF3EA
+=========================================================================== */
 :root {
   color-scheme: dark;
-  --mk-iris: #7c6cff;
-  --mk-iris-soft: #9d91ff;
-  --mk-lime: #c8f169;
-  --mk-midnight: #0e0a24;
-  --mk-panel: #141026;
-  --mk-panel-2: #1b1633;
-  --mk-line: rgba(255, 255, 255, 0.09);
+  --mk-coral: #ff6a3d;
+  --mk-amber: #ffb547;
+  --mk-ink: #120e0c;
+  --mk-panel: #1b1512;
+  --mk-panel-2: #241c18;
+  --mk-line: rgba(255, 236, 220, 0.1);
+  --mk-cream: #fff3ea;
+  --mk-muted: #bba99c;
 }
 
+html,
 body {
-  background-color: #020617;
-  color: #f8fafc;
+  background: var(--mk-ink);
+  color: var(--mk-cream);
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* Identitas MotionKu: iris + lime di atas malam ungu. */
-.mk-studio {
-  background:
-    radial-gradient(720px circle at 12% -8%, rgba(124, 108, 255, 0.16), transparent 62%),
-    radial-gradient(560px circle at 96% 18%, rgba(200, 241, 105, 0.07), transparent 60%),
-    #090a0f;
+::selection {
+  background: rgba(255, 106, 61, 0.4);
 }
-.mk-brand-text {
-  background: linear-gradient(92deg, #ffffff 8%, #c9c1ff 46%, #c8f169 96%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-.mk-brand-ring:focus-visible {
-  outline: 2px solid #c8f169;
-  outline-offset: 2px;
-}
-@keyframes mk-pack-demo {
-  0% { transform: translateX(-10px) scale(0.86) rotate(-6deg); opacity: 0.55; }
-  55% { transform: translateX(4px) scale(1.06) rotate(3deg); opacity: 1; }
-  100% { transform: translateX(10px) scale(0.94) rotate(6deg); opacity: 0.8; }
-}
-@media (prefers-reduced-motion: reduce) {
-  [style*="mk-pack-demo"] {
-    animation: none !important;
+
+@layer components {
+  .mk-page {
+    @apply min-h-screen bg-mk-night text-mk-cream;
+  }
+  .mk-card {
+    @apply rounded-2xl border border-mk-line bg-mk-panel;
+  }
+  .mk-card-2 {
+    @apply rounded-xl border border-mk-line bg-mk-panel-2;
+  }
+  .mk-btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .mk-btn-primary {
+    @apply mk-btn bg-mk-grad text-mk-ink shadow-mk-glow hover:brightness-105;
+  }
+  .mk-btn-ghost {
+    @apply mk-btn border border-mk-line bg-mk-panel-2 text-mk-cream hover:border-mk-line-2 hover:bg-mk-panel-3;
+  }
+  .mk-btn-icon {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-lg text-mk-muted transition hover:bg-mk-panel-3 hover:text-mk-cream disabled:opacity-35;
+  }
+  .mk-input {
+    @apply w-full rounded-xl border border-mk-line bg-mk-ink px-3 py-2.5 text-sm text-mk-cream placeholder:text-mk-dim focus:border-mk-coral focus:outline-none focus:ring-2 focus:ring-mk-coral/25;
+  }
+  .mk-label {
+    @apply mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-mk-muted;
+  }
+  .mk-chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-mk-line bg-mk-panel-2 px-3 py-1.5 text-xs font-semibold text-mk-muted transition hover:text-mk-cream;
+  }
+  .mk-chip-on {
+    @apply border-mk-coral/60 bg-mk-coral/15 text-mk-cream;
+  }
+  .mk-grad-text {
+    background: linear-gradient(100deg, #ffffff 0%, #ffd2bf 40%, #ff8a5c 75%, #ffb547 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
 }
 
-/* ---------------------------------------------------------------------------
-   Landing page: latar malam ungu + panel kaca (prefix mk-)
---------------------------------------------------------------------------- */
-.mk-bg {
-  background:
-    radial-gradient(640px circle at 8% -4%, rgba(124, 108, 255, 0.42), transparent 62%),
-    radial-gradient(520px circle at 96% 26%, rgba(200, 241, 105, 0.12), transparent 60%),
-    radial-gradient(620px circle at 38% 104%, rgba(236, 72, 153, 0.18), transparent 62%),
-    radial-gradient(440px circle at 74% 64%, rgba(56, 189, 248, 0.1), transparent 60%),
-    #0e0a24;
+/* scrollbar tipis */
+.mk-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 236, 220, 0.18) transparent;
 }
-.mk-grid {
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
-  background-size: 56px 56px;
-  -webkit-mask-image: radial-gradient(ellipse at 50% 0%, #000 25%, transparent 72%);
-  mask-image: radial-gradient(ellipse at 50% 0%, #000 25%, transparent 72%);
+.mk-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
-.mk-glass {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.035));
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.14),
-    0 24px 60px -28px rgba(4, 2, 18, 0.8);
-  -webkit-backdrop-filter: blur(22px) saturate(150%);
-  backdrop-filter: blur(22px) saturate(150%);
+.mk-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 236, 220, 0.18);
+  border-radius: 999px;
 }
-.mk-glass-soft {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
+.mk-noscroll {
+  scrollbar-width: none;
 }
-.mk-cta-glow {
-  background:
-    radial-gradient(420px circle at 20% 0%, rgba(139, 124, 255, 0.35), transparent 65%),
-    radial-gradient(360px circle at 85% 100%, rgba(200, 241, 105, 0.16), transparent 65%);
-}
-.mk-focus:focus-visible {
-  outline: 2px solid #c8f169;
-  outline-offset: 3px;
+.mk-noscroll::-webkit-scrollbar {
+  display: none;
 }
 
-/* Satu momen gerak: layar contoh di hero berputar 7 detik */
-.mk-loop {
-  animation-duration: 7s;
-  animation-iteration-count: infinite;
-  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
-  animation-fill-mode: both;
+/* slider */
+input[type='range'].mk-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 22px;
+  background: transparent;
 }
-.mk-once {
-  animation-duration: 0.5s;
-  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
-  animation-fill-mode: both;
+input[type='range'].mk-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 236, 220, 0.16);
 }
-@keyframes mk-rise {
-  0%, 6% { opacity: 0; transform: translateY(12px) scale(0.97); }
-  16%, 88% { opacity: 1; transform: none; }
-  96%, 100% { opacity: 0; transform: translateY(-6px); }
+input[type='range'].mk-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  margin-top: -7px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #ff6a3d;
+  border: 3px solid #fff3ea;
 }
-@keyframes mk-pop {
-  0%, 28% { opacity: 0; transform: scale(0.4); }
-  37% { opacity: 1; transform: scale(1.12); }
-  44%, 88% { opacity: 1; transform: scale(1); }
-  96%, 100% { opacity: 0; transform: scale(1); }
+input[type='range'].mk-range::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 236, 220, 0.16);
 }
-@keyframes mk-strike {
-  0%, 22% { transform: scaleX(0); }
-  32%, 100% { transform: scaleX(1); }
+input[type='range'].mk-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: #ff6a3d;
+  border: 3px solid #fff3ea;
 }
-@keyframes mk-spin-in {
-  0%, 40% { opacity: 0; transform: rotate(-40deg) scale(0.3); }
-  50% { opacity: 1; transform: rotate(-10deg) scale(1.12); }
-  56%, 88% { opacity: 1; transform: rotate(-12deg) scale(1); }
-  96%, 100% { opacity: 0; transform: rotate(-12deg) scale(1); }
+
+input[type='color'].mk-color {
+  -webkit-appearance: none;
+  appearance: none;
+  border: none;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: none;
+  cursor: pointer;
 }
-@keyframes mk-draw {
-  0%, 52% { transform: scaleX(0); }
-  64%, 100% { transform: scaleX(1); }
+input[type='color'].mk-color::-webkit-color-swatch-wrapper {
+  padding: 0;
 }
-@keyframes mk-type {
-  0%, 12% { clip-path: inset(0 100% 0 0); }
-  48%, 100% { clip-path: inset(0 0 0 0); }
+input[type='color'].mk-color::-webkit-color-swatch {
+  border: 2px solid rgba(255, 236, 220, 0.2);
+  border-radius: 10px;
 }
-@keyframes mk-chip {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: none; }
+
+/* Landing */
+.mk-hero-bg {
+  background:
+    radial-gradient(700px circle at 15% 0%, rgba(255, 106, 61, 0.28), transparent 60%),
+    radial-gradient(520px circle at 90% 20%, rgba(255, 181, 71, 0.14), transparent 60%),
+    radial-gradient(600px circle at 50% 110%, rgba(255, 106, 61, 0.12), transparent 60%),
+    #0c0908;
 }
+.mk-dots {
+  background-image: radial-gradient(rgba(255, 236, 220, 0.09) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .mk-loop,
-  .mk-once {
-    animation: none !important;
-    opacity: 1 !important;
-    transform: none !important;
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* HP kelas bawah: matikan efek mahal */
+@media (max-width: 640px) {
+  .mk-blur-soft {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
   }
 }

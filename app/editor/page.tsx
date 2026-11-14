@@ -1,8 +1,11 @@
-"use client";
+'use client';
 
-import React from 'react';
-import MotionStudioEngine from '@/components/studio/MotionStudioEngine';
+import React, { useMemo } from 'react';
+import Editor from '@/components/studio/Editor';
+import { analyzePrompt } from '@/lib/studio/prompt';
+import { buildDoc } from '@/lib/studio/builder';
 
-export default function EditorRootPage() {
-  return <MotionStudioEngine mode="user" />;
+export default function EditorBlankPage() {
+  const doc = useMemo(() => buildDoc({ plan: analyzePrompt('promo kopi susu gula aren 18rb di Kopi Senja diskon 30%', { seed: 1 }) }), []);
+  return <Editor initialDoc={doc} />;
 }

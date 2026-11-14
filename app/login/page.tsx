@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Sparkles, ShieldCheck } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
+import { Logo } from '@/components/studio/ui';
 
 /**
  * Halaman Login (/login)
@@ -46,21 +47,21 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-3xl bg-slate-900/90 border border-white/10 p-8 shadow-2xl space-y-6 text-center">
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-600 to-cyan-500 mx-auto flex items-center justify-center font-black text-xl text-white shadow-lg">
-          M
+    <div className="mk-hero-bg flex min-h-screen items-center justify-center p-5 text-mk-cream">
+      <div className="w-full max-w-md space-y-6 rounded-3xl border border-mk-line bg-mk-panel/95 p-7 text-center shadow-2xl sm:p-8">
+        <div className="flex justify-center">
+          <Logo className="text-lg" />
         </div>
 
         <div className="space-y-2">
           <h1 className="text-2xl font-bold">Masuk ke MotionKu</h1>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-mk-muted">
             Satu klik masuk dengan akun Google untuk menyimpan dan mengelola semua proyek videomu.
           </p>
         </div>
 
         {errorMsg && (
-          <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-xs text-rose-300">
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">
             {errorMsg}
           </div>
         )}
@@ -68,7 +69,7 @@ export default function LoginPage() {
         <button
           onClick={handleGoogleLogin}
           disabled={loading}
-          className="w-full py-3.5 px-5 rounded-2xl bg-white text-slate-900 hover:bg-slate-100 font-bold text-sm flex items-center justify-center gap-3 shadow-lg transition disabled:opacity-50"
+          className="flex w-full items-center justify-center gap-3 rounded-2xl bg-mk-cream px-5 py-3.5 text-sm font-bold text-mk-ink shadow-lg transition hover:bg-white disabled:opacity-50"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path
@@ -88,11 +89,11 @@ export default function LoginPage() {
               d="M12.255 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C18.205 1.19 15.495 0 12.255 0 7.615 0 3.515 2.7 1.525 6.62l4.01 3.14c.95-2.85 3.6-4.96 6.72-4.96z"
             />
           </svg>
-          <span>{loading ? 'Menghubungkan ke Google...' : 'Sign in with Google'}</span>
+          <span>{loading ? 'Menghubungkan ke Google...' : 'Masuk dengan Google'}</span>
         </button>
 
-        <div className="pt-2 flex items-center justify-center gap-2 text-[11px] text-slate-400">
-          <ShieldCheck className="w-4 h-4 text-emerald-400" />
+        <div className="flex items-center justify-center gap-2 pt-2 text-[11px] text-mk-dim">
+          <ShieldCheck className="h-4 w-4 text-mk-mint" />
           <span>Dilindungi Row-Level Security (RLS) Supabase • Tanpa API Key AI</span>
         </div>
       </div>
