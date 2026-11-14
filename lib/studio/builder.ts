@@ -121,7 +121,10 @@ function kickerFor(item: PlanItem, c: Ctx): string {
   const nth = plan.items.filter((i, j) => i.role === item.role && j <= c.idx).length;
   switch (item.role) {
     case 'hook':
-      return plan.category === 'promo' ? (plan.intent === 'flash-sale' ? 'FLASH SALE' : 'PROMO') : plan.intent === 'fakta' ? 'FAKTA' : plan.intent === 'tutorial' ? 'TUTORIAL' : plan.category === 'quote' ? '' : 'TIPS';
+      return (
+        ({ 'flash-sale': 'FLASH SALE', 'menu-kuliner': 'MENU', launching: 'BARU', event: 'EVENT', testimoni: 'TESTIMONI', 'before-after': 'SEBELUM & SESUDAH', fakta: 'FAKTA', tutorial: 'TUTORIAL', tips: 'TIPS', lowongan: 'LOWONGAN', pengumuman: 'INFO', travel: 'TRAVEL' } as Record<string, string>)[plan.intent] ??
+        (plan.category === 'promo' ? 'PROMO' : '')
+      );
     case 'poin':
       return plan.intent === 'fakta' ? `FAKTA #${nth}` : plan.intent === 'travel' ? `SPOT #${nth}` : nPoints > 1 ? `#${nth} DARI ${nPoints}` : 'KEUNGGULAN';
     case 'langkah':
@@ -479,7 +482,7 @@ export function buildScenes(plan: ContentPlan, templateId: string, aspect: Aspec
   const base = ctxFor(plan, theme, L, aspect, seed);
   let photoCursor = 0;
   let prevTr: string | undefined;
-  const fxIds = suggestEffects([plan.prompt, ...plan.keywords], plan.mood, plan.intent);
+  const fxIds = plan.effects ?? suggestEffects([plan.prompt, ...plan.keywords], plan.mood, plan.intent);
   const AMBIENT = ['hujan', 'salju', 'pasir', 'bokeh', 'kabut', 'matrix', 'debu', 'sakura', 'daun', 'bara', 'film', 'kilau'];
   const effectsFor = (role: string, idx: number) =>
     fxIds

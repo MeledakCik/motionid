@@ -35,7 +35,7 @@ import { saveProject } from '@/lib/studio/persist';
 import { changeAspect } from '@/lib/studio/builder';
 import { loadTraining } from '@/lib/studio/training';
 import { Renderer, settleTime } from '@/lib/studio/renderer';
-import { BottomSheet, cx, Logo, Segmented, useMediaQuery } from './ui';
+import { cx, Logo, Segmented, useMediaQuery } from './ui';
 import Stage from './Stage';
 import Timeline from './Timeline';
 import { BackgroundPanel, ElementsPanel, IconsPanel, MediaPanel, MusicPanel, TemplatePanel, TextPanel } from './AssetPanels';
@@ -54,7 +54,7 @@ const TOOLS: Array<{ id: Tool; label: string; icon: React.ComponentType<{ classN
   { id: 'musik', label: 'Musik', icon: Music },
   { id: 'transisi', label: 'Transisi', icon: Shuffle, pro: true },
   { id: 'animasi', label: 'Animasi', icon: Wand2, pro: true },
-  { id: 'layer', label: 'Layer', icon: Layers, pro: true },
+  { id: 'layer', label: 'Lapisan', icon: Layers, pro: true },
 ];
 
 const TOOL_TITLE: Record<Tool, string> = {
@@ -68,8 +68,8 @@ const TOOL_TITLE: Record<Tool, string> = {
   musik: 'Musik',
   transisi: 'Transisi',
   animasi: 'Animasi',
-  layer: 'Layer',
-  properti: 'Edit Elemen',
+  layer: 'Lapisan',
+  properti: 'Edit elemen',
 };
 
 function makeThumb(doc: ProjectDoc): string | undefined {
@@ -223,23 +223,21 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
 
   const saveBadge =
     saveStatus === 'saving' ? (
-      <span className="flex items-center gap-1 text-[11px] text-mk-muted">
-        <Loader2 className="h-3 w-3 animate-spin" /> Menyimpan
+      <span className="flex items-center gap-1 text-[11px] text-mk-muted" title="Menyimpan">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" /> <span className="hidden sm:inline">Menyimpan</span>
       </span>
-    ) : saveStatus === 'error' ? (
+    ) : saveStatus === 'error' || saveStatus === 'local' ? (
       <span className="flex items-center gap-1 text-[11px] text-mk-amber" title="Tersimpan di perangkat ini saja">
-        <CloudOff className="h-3.5 w-3.5" /> Lokal
-      </span>
-    ) : saveStatus === 'local' ? (
-      <span className="flex items-center gap-1 text-[11px] text-mk-amber" title="Tersimpan di perangkat ini. Masuk untuk simpan ke cloud.">
-        <CloudOff className="h-3.5 w-3.5" /> Di HP ini
+        <CloudOff className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Di HP ini</span>
       </span>
     ) : saveStatus === 'saved' ? (
-      <span className="flex items-center gap-1 text-[11px] text-mk-dim">
-        <Cloud className="h-3.5 w-3.5" /> Tersimpan
+      <span className="flex items-center gap-1 text-[11px] text-mk-mint" title="Tersimpan">
+        <Cloud className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Tersimpan</span>
       </span>
     ) : (
-      <span className="text-[11px] text-mk-dim">Belum disimpan</span>
+      <span className="flex items-center gap-1 text-[11px] text-mk-dim" title="Belum disimpan">
+        <span className="h-2 w-2 rounded-full bg-mk-amber" /> <span className="hidden sm:inline">Belum disimpan</span>
+      </span>
     );
 
   return (
@@ -257,7 +255,7 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
           className="min-w-0 max-w-[180px] flex-1 truncate rounded-lg bg-transparent px-2 py-1 text-sm font-bold outline-none hover:bg-mk-panel-2 focus:bg-mk-panel-2 sm:max-w-xs"
           aria-label="Judul proyek"
         />
-        <div className="hidden sm:block">{saveBadge}</div>
+        <div className="shrink-0 [&_span]:whitespace-nowrap">{saveBadge}</div>
         <div className="ml-auto flex items-center gap-1">
           <button type="button" className="mk-btn-icon" onClick={st.undo} disabled={!canUndo} title="Undo (Ctrl+Z)">
             <Undo2 className="h-4 w-4" />
@@ -268,13 +266,13 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
           <select
             value={doc.aspect}
             onChange={(e) => st.commit((d) => changeAspect(d, e.target.value as Aspect))}
-            className="hidden rounded-lg border border-mk-line bg-mk-panel-2 px-2 py-1.5 text-xs font-bold sm:block"
+            className="rounded-lg border border-mk-line bg-mk-panel-2 px-1.5 py-1.5 text-xs font-bold"
             title="Rasio video (menyusun ulang layout)"
           >
-            <option value="9:16">9:16 TikTok/Reels</option>
-            <option value="4:5">4:5 Feed IG</option>
-            <option value="1:1">1:1 Kotak</option>
-            <option value="16:9">16:9 YouTube</option>
+            <option value="9:16">{desktop ? '9:16 TikTok/Reels' : '9:16'}</option>
+            <option value="4:5">{desktop ? '4:5 Feed IG' : '4:5'}</option>
+            <option value="1:1">{desktop ? '1:1 Kotak' : '1:1'}</option>
+            <option value="16:9">{desktop ? '16:9 YouTube' : '16:9'}</option>
           </select>
           <div className="hidden w-[150px] md:block">
             <Segmented size="sm" value={mode} onChange={st.setMode} options={[{ value: 'mudah', label: 'Mudah' }, { value: 'pro', label: 'Pro' }]} />
@@ -291,7 +289,7 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
           <>
             <nav className="flex w-[72px] shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-mk-line bg-mk-panel py-2">
               {tools.map((t) => (
-                <button key={t.id} type="button" onClick={() => openTool(tool === t.id ? null : t.id)} className={cx('flex w-[62px] flex-col items-center gap-1 rounded-xl py-2 text-[10px] font-bold transition', tool === t.id ? 'bg-mk-coral/15 text-mk-coral' : 'text-mk-muted hover:bg-mk-panel-2 hover:text-mk-cream')}>
+                <button key={t.id} type="button" onClick={() => openTool(tool === t.id ? null : t.id)} className={cx('flex w-[62px] flex-col items-center gap-1 rounded-xl py-2 text-[11px] font-bold transition', tool === t.id ? 'bg-mk-coral/15 text-mk-coral' : 'text-mk-muted hover:bg-mk-panel-2 hover:text-mk-cream')}>
                   <t.icon className="h-5 w-5" />
                   {t.label}
                 </button>
@@ -359,15 +357,28 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
         {desktop && (
           <aside className="mk-scroll w-[300px] shrink-0 overflow-y-auto border-l border-mk-line bg-mk-panel">
             <div className="sticky top-0 z-10 border-b border-mk-line bg-mk-panel/95 px-4 py-2.5 backdrop-blur">
-              <h3 className="text-sm font-extrabold">{layer ? 'Properti elemen' : 'Properti scene'}</h3>
+              <h3 className="text-sm font-extrabold">{layer ? 'Edit elemen' : 'Pengaturan scene'}</h3>
             </div>
             <Inspector onOpenTool={openTool} />
           </aside>
         )}
       </div>
 
-      {/* ------------------------- timeline ------------------------- */}
-      <Timeline clock={clock} onOpenTool={openTool} />
+      {/* ------------------------- HP: panel menempel di bawah video (video tetap terlihat) ------------------------- */}
+      {!desktop && tool ? (
+        <section className="flex h-[min(46vh,420px)] shrink-0 animate-mk-sheet flex-col border-t border-mk-line bg-mk-panel" aria-label={TOOL_TITLE[tool]}>
+          <div className="flex items-center justify-between px-4 py-2">
+            <h3 className="text-sm font-extrabold">{TOOL_TITLE[tool]}</h3>
+            <button type="button" className="mk-btn-primary px-3 py-1.5 text-xs" onClick={() => openTool(null)}>
+              <Check className="h-3.5 w-3.5" /> Selesai
+            </button>
+          </div>
+          <div className="mk-scroll min-h-0 flex-1 overflow-y-auto border-t border-mk-line pb-2">{panel(tool)}</div>
+        </section>
+      ) : (
+        /* ------------------------- timeline ------------------------- */
+        <Timeline clock={clock} onOpenTool={openTool} />
+      )}
 
       {/* ------------------------- mobile toolbar ------------------------- */}
       {!desktop && (
@@ -394,11 +405,6 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
         </nav>
       )}
 
-      {!desktop && (
-        <BottomSheet open={!!tool} onClose={() => openTool(null)} title={TOOL_TITLE[tool || 'properti']} tall={tool === 'template' || tool === 'efek' || tool === 'elemen' || tool === 'transisi' || tool === 'animasi'}>
-          {panel(tool)}
-        </BottomSheet>
-      )}
 
       {exporting && (
         <ExportDialog
@@ -419,7 +425,7 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
 
 function ToolBtn({ label, icon: Icon, onClick, active }: { label: string; icon: React.ComponentType<{ className?: string }>; onClick: () => void; active?: boolean }) {
   return (
-    <button type="button" onClick={onClick} className={cx('flex min-w-[60px] shrink-0 flex-col items-center gap-1 rounded-xl px-2 py-1.5 text-[10px] font-bold', active ? 'text-mk-coral' : 'text-mk-muted active:bg-mk-panel-2')}>
+    <button type="button" onClick={onClick} className={cx('flex min-w-[60px] shrink-0 flex-col items-center gap-1 rounded-xl px-2 py-1.5 text-[11px] font-bold', active ? 'text-mk-coral' : 'text-mk-muted active:bg-mk-panel-2')}>
       <Icon className="h-5 w-5" />
       {label}
     </button>

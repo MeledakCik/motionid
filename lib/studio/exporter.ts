@@ -25,6 +25,8 @@ export interface ExportResult {
   mime: string;
   ext: 'mp4' | 'webm';
   method: 'webcodecs' | 'mediarecorder';
+  /** codec suara yang dipakai (opus kurang didukung di sebagian HP/aplikasi) */
+  audioCodec?: 'aac' | 'opus' | 'none';
 }
 
 function dims(doc: ProjectDoc, quality: ExportOptions['quality']) {
@@ -113,7 +115,7 @@ async function exportWebCodecs(
   report: (p: number, l: string) => void
 ): Promise<ExportResult> {
   const acfg = doc.music.id !== 'none' ? await pickAudioConfig() : null;
-  const audio = acfg ? await renderMusic(doc.music.id, duration, acfg.cfg.sampleRate) : null;
+  const audio = acfg ? await renderMusic(doc.music.id, duration, acfg.cfg.sampleRate, doc.audio?.data) : null;
 
   const muxer = new Muxer({
     target: new ArrayBufferTarget(),
@@ -186,7 +188,7 @@ async function exportWebCodecs(
   muxer.finalize();
   const buf = (muxer.target as ArrayBufferTarget).buffer;
   report(1, 'Selesai!');
-  return { blob: new Blob([buf], { type: 'video/mp4' }), mime: 'video/mp4', ext: 'mp4', method: 'webcodecs' };
+  return { blob: new Blob([buf], { type: 'video/mp4' }), mime: 'video/mp4', ext: 'mp4', method: 'webcodecs', audioCodec: acfg && audio ? acfg.muxCodec : 'none' };
 }
 
 async function exportMediaRecorder(
@@ -207,7 +209,7 @@ async function exportMediaRecorder(
   const vtrack = stream.getVideoTracks()[0] as MediaStreamTrack & { requestFrame?: () => void };
   let actx: AudioContext | null = null;
   let src: AudioBufferSourceNode | null = null;
-  const audio = doc.music.id !== 'none' ? await renderMusic(doc.music.id, duration) : null;
+  const audio = doc.music.id !== 'none' ? await renderMusic(doc.music.id, duration, 44100, doc.audio?.data) : null;
   if (audio) {
     try {
       actx = new AudioContext();

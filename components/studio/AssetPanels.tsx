@@ -78,7 +78,7 @@ export function TemplatePanel() {
                 <TemplateThumb plan={doc.plan} templateId={t.id} aspect={doc.aspect} assets={doc.assets} />
               </LazyVisible>
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-1.5 pb-1.5 pt-5">
-                <div className="truncate text-[10px] font-bold">{t.name}</div>
+                <div className="truncate text-[11px] font-bold">{t.name}</div>
               </div>
               {active && (
                 <span className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-mk-coral text-mk-ink">
@@ -87,12 +87,12 @@ export function TemplatePanel() {
               )}
               {confirm === t.id && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-black/80 p-2 text-center">
-                  <span className="text-[10px] font-semibold">Terapkan? Posisi elemen akan disusun ulang.</span>
+                  <span className="text-[11px] font-semibold">Terapkan? Posisi elemen akan disusun ulang.</span>
                   <span className="flex gap-1">
-                    <span role="button" tabIndex={0} onClick={(e) => (e.stopPropagation(), apply(t.id))} className="rounded-lg bg-mk-coral px-2 py-1 text-[10px] font-bold text-mk-ink">
+                    <span role="button" tabIndex={0} onClick={(e) => (e.stopPropagation(), apply(t.id))} className="rounded-lg bg-mk-coral px-2 py-1 text-[11px] font-bold text-mk-ink">
                       Ya
                     </span>
-                    <span role="button" tabIndex={0} onClick={(e) => (e.stopPropagation(), setConfirm(null))} className="rounded-lg bg-mk-panel-3 px-2 py-1 text-[10px] font-bold">
+                    <span role="button" tabIndex={0} onClick={(e) => (e.stopPropagation(), setConfirm(null))} className="rounded-lg bg-mk-panel-3 px-2 py-1 text-[11px] font-bold">
                       Batal
                     </span>
                   </span>
@@ -239,7 +239,7 @@ export function ElementsPanel() {
             <LazyVisible minH={90} className="aspect-[20/13] bg-[radial-gradient(circle_at_30%_20%,#3a2a24,#120e0c)]">
               <ComponentThumb id={c.id} colors={colors} heading={doc.theme.headingFont} body={doc.theme.bodyFont} />
             </LazyVisible>
-            <div className="truncate px-2 py-1.5 text-[10px] font-semibold text-mk-muted group-hover:text-mk-cream">
+            <div className="truncate px-2 py-1.5 text-[11px] font-semibold text-mk-muted group-hover:text-mk-cream">
               {c.name}
               {c.author === 'admin' && <span className="ml-1 rounded bg-mk-coral/20 px-1 text-mk-coral">baru</span>}
             </div>
@@ -347,7 +347,7 @@ export function MediaPanel() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={doc.assets[id]} alt="" className="aspect-square w-full object-cover" />
               <div className="grid grid-cols-3 gap-1 p-1.5">
-                <button type="button" title="Jadikan latar scene ini" onClick={() => updateScene(sceneIdx, { background: { type: 'image', color: doc.theme.palette.bg, src: id, fit: 'cover', dim: 0.45, kenBurns: true } })} className="rounded-lg bg-mk-panel-3 py-1 text-[10px] font-bold hover:bg-mk-coral hover:text-mk-ink">
+                <button type="button" title="Jadikan latar scene ini" onClick={() => updateScene(sceneIdx, { background: { type: 'image', color: doc.theme.palette.bg, src: id, fit: 'cover', dim: 0.45, kenBurns: true } })} className="rounded-lg bg-mk-panel-3 py-1 text-[11px] font-bold hover:bg-mk-coral hover:text-mk-ink">
                   Latar
                 </button>
                 <button
@@ -358,11 +358,11 @@ export function MediaPanel() {
                     const h = Math.min(H * 0.45, w * 1.1);
                     addLayer(makeImage(id, (W - w) / 2, (H - h) / 2, w, h, { border: { color: '#FFFFFF', width: 8 }, animIn: { id: 'pop-sedang-membal', duration: 0.55, delay: 0.1 }, shadow: { color: 'rgba(0,0,0,0.45)', blur: 40, x: 0, y: 20 } }));
                   }}
-                  className="rounded-lg bg-mk-panel-3 py-1 text-[10px] font-bold hover:bg-mk-coral hover:text-mk-ink"
+                  className="rounded-lg bg-mk-panel-3 py-1 text-[11px] font-bold hover:bg-mk-coral hover:text-mk-ink"
                 >
                   <ImagePlus className="mx-auto h-3.5 w-3.5" />
                 </button>
-                <button type="button" title="Hapus foto" onClick={() => commit((d) => { const a = { ...d.assets }; delete a[id]; return { ...d, assets: a }; })} className="rounded-lg bg-mk-panel-3 py-1 text-[10px] hover:bg-red-500/80">
+                <button type="button" title="Hapus foto" onClick={() => commit((d) => { const a = { ...d.assets }; delete a[id]; return { ...d, assets: a }; })} className="rounded-lg bg-mk-panel-3 py-1 text-[11px] hover:bg-red-500/80">
                   <Trash2 className="mx-auto h-3.5 w-3.5" />
                 </button>
               </div>
@@ -438,7 +438,7 @@ export function BackgroundPanel() {
       <Section title="Pola animasi">
         <div className="grid grid-cols-5 gap-1.5">
           {PATTERNS.map((pt) => (
-            <button key={pt} type="button" onClick={() => set({ pattern: pt, patternColor: bg.patternColor || p.primary, patternOpacity: bg.patternOpacity ?? 0.14 })} className={cx('rounded-lg border px-1 py-2 text-[10px] font-bold', (bg.pattern || 'none') === pt ? 'border-mk-coral bg-mk-coral/15' : 'border-mk-line bg-mk-panel-2 text-mk-muted')}>
+            <button key={pt} type="button" onClick={() => set({ pattern: pt, patternColor: bg.patternColor || p.primary, patternOpacity: bg.patternOpacity ?? 0.14 })} className={cx('rounded-lg border px-1 py-2 text-[11px] font-bold', (bg.pattern || 'none') === pt ? 'border-mk-coral bg-mk-coral/15' : 'border-mk-line bg-mk-panel-2 text-mk-muted')}>
               {PATTERN_LABEL[pt]}
             </button>
           ))}
@@ -466,7 +466,7 @@ export function BackgroundPanel() {
             </button>
           ))}
         </div>
-        <p className="text-[10px] text-mk-dim">Semua teks, ikon & komponen ikut berganti warna.</p>
+        <p className="text-[11px] text-mk-dim">Semua teks, ikon & komponen ikut berganti warna.</p>
       </Section>
     </div>
   );
@@ -478,9 +478,41 @@ export function MusicPanel() {
   const commit = useStudio((s) => s.commit);
   const live = useStudio((s) => s.live);
   const endDrag = useStudio((s) => s.endDrag);
+  const audioRef = useRef<HTMLInputElement>(null);
+  const [audioErr, setAudioErr] = useState('');
+  const onAudio = async (f?: File) => {
+    setAudioErr('');
+    if (!f) return;
+    if (!f.type.startsWith('audio/')) return setAudioErr('File harus berupa audio (MP3, M4A, WAV).');
+    if (f.size > 5 * 1024 * 1024) return setAudioErr('Maksimal 5 MB. Potong lagunya dulu ya.');
+    const data = await new Promise<string>((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result));
+      r.onerror = rej;
+      r.readAsDataURL(f);
+    });
+    commit((d) => ({ ...d, audio: { name: f.name.replace(/\.[^.]+$/, ''), data }, music: { ...d.music, id: 'upload' } }));
+  };
   return (
     <div>
-      <Section title="Musik latar (bebas royalti, dibuat otomatis)">
+      <Section title="Lagu sendiri">
+        <input ref={audioRef} type="file" accept="audio/*" hidden onChange={(e) => onAudio(e.target.files?.[0])} />
+        {doc.audio ? (
+          <button type="button" onClick={() => commit((d) => ({ ...d, music: { ...d.music, id: 'upload' } }))} className={cx('flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left', doc.music.id === 'upload' ? 'border-mk-coral bg-mk-coral/10' : 'border-mk-line bg-mk-panel-2')}>
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-bold">{doc.audio.name}</span>
+              <span className="text-xs text-mk-dim">Lagu unggahanmu · otomatis dipotong sesuai durasi</span>
+            </span>
+            {doc.music.id === 'upload' && <Check className="h-4 w-4 shrink-0 text-mk-coral" />}
+          </button>
+        ) : null}
+        <button type="button" className="mk-btn-ghost w-full text-xs" onClick={() => audioRef.current?.click()}>
+          <Upload className="h-4 w-4" /> {doc.audio ? 'Ganti lagu' : 'Unggah lagu (MP3/M4A, maks 5 MB)'}
+        </button>
+        {audioErr && <p className="text-xs text-red-300">{audioErr}</p>}
+        <p className="text-xs text-mk-dim">Pastikan kamu punya hak memakai lagunya. Atau pilih musik bebas royalti di bawah, lalu tambahkan lagu trending langsung di TikTok.</p>
+      </Section>
+      <Section title="Musik bebas royalti (dibuat otomatis)">
         <div className="space-y-1.5">
           {MUSIC_TRACKS.map((t) => (
             <button key={t.id} type="button" onClick={() => commit((d) => ({ ...d, music: { ...d.music, id: t.id } }))} className={cx('flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left', doc.music.id === t.id ? 'border-mk-coral bg-mk-coral/10' : 'border-mk-line bg-mk-panel-2')}>

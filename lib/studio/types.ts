@@ -224,6 +224,8 @@ export interface ContentPlan {
   items: PlanItem[];
   caption: string;
   hashtags: string[];
+  /** efek pilihan user; undefined = pakai saran otomatis dari prompt */
+  effects?: string[];
 }
 
 export interface ProjectDoc {
@@ -237,6 +239,8 @@ export interface ProjectDoc {
   /** foto unggahan user: id -> data URI (dikompres) */
   assets: Record<string, string>;
   music: { id: string; volume: number };
+  /** lagu unggahan user (data URI), dipakai bila music.id === 'upload' */
+  audio?: { name: string; data: string } | null;
   plan: ContentPlan;
   showProgress: boolean;
   watermark?: string;

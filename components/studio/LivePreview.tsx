@@ -49,7 +49,7 @@ export default function LivePreview({ doc, width = 300, className, withAudio = t
     r.setDoc(doc);
     r.onAssetLoaded = () => clock.seek(clock.time);
     clock.setDuration(docDuration(doc));
-    clock.setMusic(withAudio ? doc.music.id : 'none', doc.music.volume);
+    clock.setMusic(withAudio ? doc.music.id : 'none', doc.music.volume, doc.audio?.data);
     ensureFonts([doc.theme.headingFont, doc.theme.bodyFont, 'Anton', 'Montserrat', 'Playfair Display']).then(() => clock.seek(clock.time));
     clock.seek(0);
     // autoplay tanpa suara sampai user menekan tombol (kebijakan browser)
@@ -60,7 +60,7 @@ export default function LivePreview({ doc, width = 300, className, withAudio = t
   const toggle = () => {
     const clock = clockRef.current;
     if (!clock) return;
-    if (withAudio) clock.setMusic(doc.music.id, doc.music.volume);
+    if (withAudio) clock.setMusic(doc.music.id, doc.music.volume, doc.audio?.data);
     clock.toggle();
   };
 

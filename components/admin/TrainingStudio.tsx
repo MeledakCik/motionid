@@ -504,7 +504,7 @@ export default function TrainingStudio() {
           <div className="mk-card space-y-4 p-4 sm:p-5">
             <div className="flex items-center gap-2 text-sm font-extrabold">
               <Code2 className="h-4 w-4 text-mk-coral" /> {TABS.find((t) => t.id === tab)?.label}
-              {editingId && <span className="rounded bg-mk-amber/20 px-1.5 py-0.5 text-[10px] text-mk-amber">mengedit</span>}
+              {editingId && <span className="rounded bg-mk-amber/20 px-1.5 py-0.5 text-[11px] text-mk-amber">mengedit</span>}
             </div>
 
             {tab === 'teks' ? (
@@ -630,10 +630,10 @@ export default function TrainingStudio() {
               }
               return (
                 <div key={r.id} className="mk-card-2 flex items-center gap-3 p-3">
-                  {preview || <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-mk-panel-3 text-[10px] font-bold uppercase text-mk-muted">{r.type.slice(0, 3)}</span>}
+                  {preview || <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-mk-panel-3 text-[11px] font-bold uppercase text-mk-muted">{r.type.slice(0, 3)}</span>}
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-bold">{r.subtext || r.content_text}</div>
-                    <div className="text-[10px] text-mk-dim">
+                    <div className="text-[11px] text-mk-dim">
                       {r.type} · {r.category} {!ok && <span className="text-red-300">· kode rusak</span>}
                     </div>
                   </div>

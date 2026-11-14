@@ -18,6 +18,7 @@ export class PlaybackClock {
   private audioSrc: AudioBufferSourceNode | null = null;
   private gain: GainNode | null = null;
   private musicId = 'none';
+  private upload: string | null = null;
   private volume = 0.7;
   private audioStartedAt = 0;
   private audioOffset = 0;
@@ -38,8 +39,9 @@ export class PlaybackClock {
     if (this.time > this.duration) this.time = 0;
   }
 
-  setMusic(id: string, volume: number) {
-    const changed = id !== this.musicId;
+  setMusic(id: string, volume: number, upload?: string | null) {
+    const changed = id !== this.musicId || (id === 'upload' && (upload || null) !== this.upload);
+    this.upload = upload || null;
     this.musicId = id;
     this.volume = volume;
     if (this.gain) this.gain.gain.value = volume;
@@ -52,7 +54,7 @@ export class PlaybackClock {
   private async startAudio() {
     if (this.musicId === 'none' || typeof window === 'undefined') return;
     try {
-      const buf = await renderMusic(this.musicId, this.duration);
+      const buf = await renderMusic(this.musicId, this.duration, 44100, this.upload);
       if (!buf || !this.playing) return;
       if (!this.audioCtx) this.audioCtx = new AudioContext();
       if (this.audioCtx.state === 'suspended') await this.audioCtx.resume();

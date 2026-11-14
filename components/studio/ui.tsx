@@ -26,7 +26,7 @@ export function Field({ label, children, hint }: { label: string; children: Reac
     <label className="block">
       <span className="mb-1 block text-[11px] font-semibold text-mk-muted">{label}</span>
       {children}
-      {hint && <span className="mt-1 block text-[10px] text-mk-dim">{hint}</span>}
+      {hint && <span className="mt-1 block text-[11px] text-mk-dim">{hint}</span>}
     </label>
   );
 }
@@ -36,7 +36,7 @@ export function NumberField({ label, value, onChange, step = 1, min, max, suffix
   useEffect(() => setDraft(String(Math.round(value * 100) / 100)), [value]);
   return (
     <label className="flex items-center gap-1.5 rounded-lg border border-mk-line bg-mk-ink px-2 py-1.5">
-      <span className="w-5 shrink-0 text-[10px] font-bold text-mk-dim">{label}</span>
+      <span className="w-5 shrink-0 text-[11px] font-bold text-mk-dim">{label}</span>
       <input
         inputMode="decimal"
         className="w-full min-w-0 bg-transparent text-xs font-semibold text-mk-cream outline-none"
@@ -57,7 +57,7 @@ export function NumberField({ label, value, onChange, step = 1, min, max, suffix
           }
         }}
       />
-      {suffix && <span className="text-[10px] text-mk-dim">{suffix}</span>}
+      {suffix && <span className="text-[11px] text-mk-dim">{suffix}</span>}
     </label>
   );
 }

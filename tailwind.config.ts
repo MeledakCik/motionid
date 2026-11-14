@@ -23,7 +23,7 @@ const config: Config = {
           'line-2': 'rgba(255,236,220,0.18)',
           cream: '#FFF3EA',
           muted: '#BBA99C',
-          dim: '#8C7B70',
+          dim: '#A39083',
           mint: '#3EE6B0',
           sky: '#5AB8FF',
         },

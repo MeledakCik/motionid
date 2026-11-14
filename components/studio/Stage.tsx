@@ -40,6 +40,9 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
   const [guides, setGuides] = useState<{ x: number | null; y: number | null }>({ x: null, y: null });
   const [editingText, setEditingText] = useState<string | null>(null);
   const dragRef = useRef<DragState | null>(null);
+  const [view, setView] = useState({ z: 1, x: 0, y: 0 });
+  const pinch = useRef<{ d: number; z: number; cx: number; cy: number; x: number; y: number } | null>(null);
+  const coarse = useMemo(() => typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches, []);
   const profile = useMemo(() => getDeviceProfile(), []);
 
   const base = doc ? canvasSize(doc.aspect) : { w: 1080, h: 1920 };
@@ -98,7 +101,7 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
     if (!doc || !rendererRef.current) return;
     rendererRef.current.setDoc(doc);
     clock.setDuration(docDuration(doc));
-    clock.setMusic(doc.music.id, doc.music.volume);
+    clock.setMusic(doc.music.id, doc.music.volume, doc.audio?.data);
     draw();
   }, [doc, clock, draw]);
 
@@ -227,7 +230,7 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
     } else if (d.kind === 'rotate') {
       const cxv = o.x + o.w / 2;
       const cyv = o.y + o.h / 2;
-      let ang = (Math.atan2(p.y - cyv, p.x - cxv) * 180) / Math.PI + 90;
+      let ang = (Math.atan2(p.y - cyv, p.x - cxv) * 180) / Math.PI - 90;
       const near = Math.round(ang / 45) * 45;
       if (e.shiftKey || Math.abs(ang - near) < 4) ang = near;
       ang = ((ang + 540) % 360) - 180;
@@ -349,17 +352,46 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
     <div
       ref={wrapRef}
       className="relative flex h-full w-full items-center justify-center overflow-hidden"
-      onTouchStart={(e) => (swipe.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() })}
+      onTouchStart={(e) => {
+        if (e.touches.length === 2) {
+          // cubit untuk zoom: batalkan seret layer yang mungkin dimulai jari pertama
+          dragRef.current = null;
+          swipe.current = null;
+          const [a, b] = [e.touches[0], e.touches[1]];
+          pinch.current = { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), z: view.z, cx: (a.clientX + b.clientX) / 2, cy: (a.clientY + b.clientY) / 2, x: view.x, y: view.y };
+          return;
+        }
+        swipe.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
+      }}
+      onTouchMove={(e) => {
+        const p = pinch.current;
+        if (!p || e.touches.length < 2) return;
+        const [a, b] = [e.touches[0], e.touches[1]];
+        const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+        const z = Math.max(1, Math.min(3, (p.z * d) / Math.max(1, p.d)));
+        const cx = (a.clientX + b.clientX) / 2;
+        const cy = (a.clientY + b.clientY) / 2;
+        setView(z === 1 ? { z: 1, x: 0, y: 0 } : { z, x: p.x + (cx - p.cx), y: p.y + (cy - p.cy) });
+      }}
       onTouchEnd={(e) => {
+        if (pinch.current) {
+          if (e.touches.length < 2) pinch.current = null;
+          return;
+        }
         const s = swipe.current;
         swipe.current = null;
-        if (!s || dragRef.current || useStudio.getState().layerId) return;
+        if (!s || dragRef.current || useStudio.getState().layerId || view.z > 1) return;
         const dx = e.changedTouches[0].clientX - s.x;
         const dy = e.changedTouches[0].clientY - s.y;
         if (Math.abs(dx) > 70 && Math.abs(dy) < 50 && Date.now() - s.t < 500) selectScene(sceneIdx + (dx < 0 ? 1 : -1));
       }}
     >
-      <div className="relative shadow-mk-card" style={{ width: box.w, height: box.h }}>
+      {view.z > 1 && (
+        <button type="button" onClick={() => setView({ z: 1, x: 0, y: 0 })} className="absolute bottom-3 right-3 z-20 rounded-full bg-mk-panel/95 px-3 py-1.5 text-xs font-bold text-mk-cream shadow">
+          {Math.round(view.z * 100)}% · Reset zoom
+        </button>
+      )}
+      <div className="relative shadow-mk-card" style={{ width: box.w, height: box.h, transform: view.z !== 1 ? `translate(${view.x}px, ${view.y}px) scale(${view.z})` : undefined, transformOrigin: 'center' }}>
         <canvas
           ref={canvasRef}
           width={px.w}
@@ -387,7 +419,7 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
                 className="pointer-events-none absolute rounded border-2 border-dashed border-mk-amber/80"
                 style={{ left: l.x * scale, top: l.y * scale, width: l.w * scale, height: l.h * scale, transform: `rotate(${l.rotation}deg)` }}
               >
-                <span className="absolute -top-2.5 left-1 rounded bg-mk-amber px-1 text-[9px] font-extrabold text-mk-ink">CONTOH</span>
+                <span className="absolute -top-2.5 left-1 rounded bg-mk-amber px-1 text-[10px] font-extrabold text-mk-ink">CONTOH</span>
               </div>
             ))}
 
@@ -424,10 +456,10 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
                     onPointerDown={(e) => startHandle(e, h)}
                     onPointerMove={onPointerMove}
                     onPointerUp={onPointerUp}
-                    className="pointer-events-auto absolute -ml-2 -mt-2 flex h-4 w-4 touch-none items-center justify-center"
-                    style={pos[h]}
+                    className={`pointer-events-auto absolute flex touch-none items-center justify-center ${coarse ? '-ml-5 -mt-5 h-10 w-10' : '-ml-2 -mt-2 h-4 w-4'}`}
+                    style={{ ...pos[h], transform: view.z !== 1 ? `scale(${1 / view.z})` : undefined }}
                   >
-                    <span className={`block border-[1.5px] border-mk-coral bg-white ${h.length === 1 ? 'h-2 w-2 rounded-[2px]' : 'h-2.5 w-2.5 rounded-[3px]'}`} />
+                    <span className={`block border-[1.5px] border-mk-coral bg-white ${h.length === 1 ? (coarse ? 'h-3 w-3 rounded' : 'h-2 w-2 rounded-[2px]') : coarse ? 'h-4 w-4 rounded-full' : 'h-2.5 w-2.5 rounded-[3px]'}`} />
                   </span>
                 );
               })}
@@ -436,13 +468,13 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
                 onPointerDown={(e) => startHandle(e, 'rot')}
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}
-                className="pointer-events-auto absolute left-1/2 -top-8 -ml-3 flex h-6 w-6 cursor-grab touch-none items-center justify-center rounded-full border-[1.5px] border-mk-coral bg-white text-[11px] text-mk-ink"
+                className={`pointer-events-auto absolute left-1/2 flex cursor-grab touch-none items-center justify-center rounded-full border-[1.5px] border-mk-coral bg-white text-mk-ink shadow ${coarse ? '-bottom-14 -ml-5 h-10 w-10 text-base' : '-bottom-9 -ml-3 h-6 w-6 text-[11px]'}`}
                 title="Putar"
               >
                 ↻
               </span>
             )}
-            <span className="absolute -bottom-6 left-0 whitespace-nowrap rounded bg-mk-coral px-1.5 py-0.5 text-[10px] font-bold text-mk-ink">
+            <span className="absolute -top-6 left-0 whitespace-nowrap rounded bg-mk-coral px-1.5 py-0.5 text-[11px] font-bold text-mk-ink">
               {Math.round(selected.w)} × {Math.round(selected.h)}
             </span>
           </div>
