@@ -436,7 +436,7 @@ const KINDS: KindDef[] = [
   },
   {
     kind: 'chat', label: 'Bubble Chat', group: 'sosial', tags: ['chat', 'pesan', 'wa'], size: { w: 760, h: 220 },
-    defaults: { name: 'Pelanggan', text: 'Kak, masih ada promonya? 😍' }, fields: [F('name', 'Nama'), F('text', 'Pesan', true)],
+    defaults: { name: 'Pelanggan', text: 'Kak, masih ada promonya?' }, fields: [F('name', 'Nama'), F('text', 'Pesan', true)],
     render: (ctx, w, h, P, S, R) => {
       panel(ctx, 0, 0, w, h - 30, S, R, Math.min(S.radius, 50));
       ctx.beginPath();
@@ -620,7 +620,7 @@ const KINDS: KindDef[] = [
   },
   {
     kind: 'poll', label: 'Polling', group: 'data', tags: ['poll', 'vote', 'pilihan', 'quiz'], size: { w: 860, h: 420 },
-    defaults: { question: 'Tim kopi atau teh?', a: 'Kopi ☕', b: 'Teh 🍵', pa: '64' }, fields: [F('question', 'Pertanyaan'), F('a', 'Opsi A'), F('b', 'Opsi B'), F('pa', '% Opsi A')],
+    defaults: { question: 'Tim kopi atau teh?', a: 'Kopi', b: 'Teh', pa: '64' }, fields: [F('question', 'Pertanyaan'), F('a', 'Opsi A'), F('b', 'Opsi B'), F('pa', '% Opsi A')],
     render: (ctx, w, h, P, S, R, C) => {
       panel(ctx, 0, 0, w, h, S, R);
       drawFittedText(ctx, U(S, P.question), 40, 24, w - 80, h * 0.3, { family: fam(S, R), weight: S.weight, color: S.fg, size: 56, align: 'center' });

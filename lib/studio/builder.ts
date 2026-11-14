@@ -383,7 +383,7 @@ function buildRole(item: PlanItem, c: Ctx): Layer[] {
       if (item.value && /^\d(\.\d)?$/.test(item.value)) {
         out.push(headline(c, item.title, Y(0.14), area * 0.24, 0.15));
         out.push(makeComponent(c, componentIdFor('rating', st), c.x0, Y(0.44), pw, 240 * k, { value: item.value, label: item.body || '' }, { animIn: anim(pick(L.elemAnim, c.idx), 0.5) }));
-        out.push(makeComponent(c, componentIdFor('comment', st === 'neon' ? 'gelap' : st), c.x0, Y(0.7), pw, 230 * k, { name: 'Ulasan pelanggan', text: `Mantap! ${plan.product || 'Produknya'} recommended banget 🔥` }, { animIn: anim('geser-atas-pendek-membal', 1.1) }));
+        out.push(makeComponent(c, componentIdFor('comment', st === 'neon' ? 'gelap' : st), c.x0, Y(0.7), pw, 230 * k, { name: 'Ulasan pelanggan', text: `Mantap! ${plan.product || 'Produknya'} recommended banget` }, { animIn: anim('geser-atas-pendek-membal', 1.1) }));
       } else if (item.value && /^\d+$/.test(item.value) && Number(item.value) > 100) {
         out.push(headline(c, item.title, Y(0.14), area * 0.24, 0.15));
         out.push(makeComponent(c, componentIdFor('counter', st), c.x0, Y(0.46), pw, 320 * k, { value: item.value, suffix: '+', label: item.body || '' }, { animIn: anim(pick(L.elemAnim, c.idx), 0.5) }));
@@ -393,7 +393,7 @@ function buildRole(item: PlanItem, c: Ctx): Layer[] {
         out.push(makeComponent(c, componentIdFor('notif', st === 'neon' ? 'gelap' : st), c.x0, Y(0.7), pw, 220 * k, { app: 'shopping-bag', title: 'Pesanan baru!', text: 'Seseorang baru saja membeli' }, { animIn: anim('geser-bawah-pendek-membal', 1) }));
       } else if (plan.intent === 'testimoni' || L.id === 'chat') {
         out.push(makeComponent(c, componentIdFor('chat', st === 'brutal' ? 'minimal' : st), c.x0, Y(0.18), pw * 0.9, 240 * k, { name: item.title, text: item.body || '' }, { animIn: anim('geser-atas-pendek-membal', 0.1) }));
-        out.push(makeComponent(c, componentIdFor('chat', 'gradien'), c.x0 + pw * 0.1, Y(0.5), pw * 0.9, 220 * k, { name: plan.store || 'Admin', text: 'Terima kasih kak! 🙏' }, { animIn: anim('geser-atas-pendek-membal', 1.2) }));
+        out.push(makeComponent(c, componentIdFor('chat', 'gradien'), c.x0 + pw * 0.1, Y(0.5), pw * 0.9, 220 * k, { name: plan.store || 'Admin', text: 'Terima kasih kak!' }, { animIn: anim('geser-atas-pendek-membal', 1.2) }));
       } else {
         out.push(headline(c, item.title, Y(0.22), area * 0.3, 0.15));
         if (item.body) out.push(bodyText(c, item.body, Y(0.56), area * 0.12, 0.6));

@@ -52,7 +52,7 @@ export function TemplatePanel() {
   return (
     <div>
       <Section>
-        <Segmented value={tab} onChange={(v) => (setTab(v), setLimit(PAGE))} options={[{ value: 'cocok', label: '✨ Cocok untuk prompt' }, { value: 'semua', label: `Semua (${TEMPLATES.length})` }]} />
+        <Segmented value={tab} onChange={(v) => (setTab(v), setLimit(PAGE))} options={[{ value: 'cocok', label: 'Cocok untuk prompt' }, { value: 'semua', label: `Semua (${TEMPLATES.length})` }]} />
         {tab === 'semua' && (
           <div className="space-y-2">
             <ChipRow value={layout} onChange={(v) => (setLayout(v), setLimit(PAGE))} options={[{ id: 'all', label: 'Semua layout' }, ...LAYOUTS.map((l) => ({ id: l.id, label: l.name }))]} />

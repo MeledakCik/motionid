@@ -1,5 +1,6 @@
 import { clamp, hash01 } from '../easing';
-import { rgba } from '../color';
+import { readableOn, rgba } from '../color';
+import { drawIcon } from './icons';
 
 /**
  * Effect Pack — 34 jenis efek × variasi gaya × 3 intensitas = 370+ efek.
@@ -38,7 +39,7 @@ export type EffectKind =
   | 'denyut'
   | 'gelembung'
   | 'debu'
-  | 'emoji'
+  | 'ikon'
   | 'uang'
   | 'balon'
   | 'static'
@@ -49,7 +50,9 @@ export interface EffectParams {
   style: string;
   k: number;
   colors?: string[];
-  emoji?: string;
+  /** id ikon dari Icon Pack (bawaan atau custom admin) */
+  icon?: string;
+  motion?: 'jatuh' | 'naik' | 'melayang';
 }
 
 export interface EffectSpec {
@@ -77,7 +80,7 @@ export const EFFECT_GROUPS: Array<{ id: string; label: string }> = [
   { id: 'partikel', label: 'Partikel' },
   { id: 'retro', label: 'Retro & Film' },
   { id: 'kamera', label: 'Kamera' },
-  { id: 'emoji', label: 'Hujan Emoji' },
+  { id: 'ikon', label: 'Hujan Ikon' },
   { id: 'custom', label: 'Custom Admin' },
 ];
 
@@ -118,7 +121,7 @@ const DEFS: Def[] = [
   { kind: 'denyut', label: 'Zoom Denyut', group: 'kamera', layer: 'camera', tags: ['zoom', 'beat', 'denyut', 'pulse'], styles: [['pelan', 'Pelan'], ['beat', 'Ikut Beat'], ['cepat', 'Cepat']] },
   { kind: 'gelembung', label: 'Gelembung', group: 'partikel', layer: 'over', tags: ['gelembung', 'bubble', 'sabun', 'segar', 'laundry'], styles: [['air', 'Air'], ['pelangi', 'Sabun Pelangi'], ['tema', 'Warna Tema']] },
   { kind: 'debu', label: 'Debu Cahaya', group: 'partikel', layer: 'over', tags: ['debu', 'partikel', 'emas', 'magis'], styles: [['emas', 'Emas'], ['putih', 'Putih'], ['tema', 'Warna Tema']] },
-  { kind: 'emoji', label: 'Hujan Emoji', group: 'emoji', layer: 'over', tags: ['emoji', 'lucu', 'viral'], styles: [['api', '🔥 Api', { emoji: '🔥' }], ['uang', '💰 Uang', { emoji: '💰' }], ['hati', '❤️ Hati', { emoji: '❤️' }], ['ngakak', '😂 Ngakak', { emoji: '😂' }], ['bintang', '⭐ Bintang', { emoji: '⭐' }], ['pesta', '🎉 Pesta', { emoji: '🎉' }], ['jempol', '👍 Jempol', { emoji: '👍' }], ['kopi', '☕ Kopi', { emoji: '☕' }], ['mie', '🍜 Mie', { emoji: '🍜' }], ['seratus', '💯 Seratus', { emoji: '💯' }]] },
+  { kind: 'ikon', label: 'Hujan Ikon', group: 'ikon', layer: 'over', tags: ['ikon', 'paralaks', 'lucu', 'viral'], styles: [['api', 'Api', { icon: 'flame' }], ['uang', 'Uang', { icon: 'banknote' }], ['hati', 'Hati', { icon: 'heart' }], ['bintang', 'Bintang', { icon: 'star' }], ['pesta', 'Pesta', { icon: 'party-popper', motion: 'naik' }], ['jempol', 'Jempol', { icon: 'thumbs-up', motion: 'naik' }], ['kopi', 'Kopi', { icon: 'coffee', motion: 'melayang' }], ['makanan', 'Makanan', { icon: 'soup', motion: 'melayang' }], ['kilat', 'Kilat', { icon: 'zap' }], ['hadiah', 'Hadiah', { icon: 'gift', motion: 'naik' }]] },
   { kind: 'uang', label: 'Hujan Cuan', group: 'pesta', layer: 'over', tags: ['uang', 'koin', 'cuan', 'diskon', 'gajian'], styles: [['koin', 'Koin Emas'], ['kertas', 'Uang Kertas'], ['berlian', 'Berlian']] },
   { kind: 'balon', label: 'Balon', group: 'pesta', layer: 'over', tags: ['balon', 'ulang tahun', 'pesta', 'anak'], styles: [['warna', 'Warna-warni'], ['tema', 'Warna Tema'], ['merah-putih', 'Merah Putih']] },
   { kind: 'static', label: 'TV Static', group: 'retro', layer: 'over', tags: ['static', 'noise', 'tv', 'horor', 'glitch'], styles: [['ringan', 'Bersemut'], ['rusak', 'Sinyal Rusak'], ['glitch', 'Glitch Blok']] },
@@ -150,8 +153,14 @@ const BY_ID = new Map(LIB.map((e) => [e.id, e]));
 export function allEffects(): EffectSpec[] {
   return LIB;
 }
+const ALIAS: Record<string, string> = { ngakak: 'bintang', mie: 'makanan', seratus: 'kilat' };
 export function getEffect(id?: string): EffectSpec | undefined {
-  return id ? BY_ID.get(id) : undefined;
+  if (!id) return undefined;
+  const hit = BY_ID.get(id);
+  if (hit || !id.startsWith('emoji-')) return hit;
+  // proyek lama yang masih memakai efek emoji → ikon
+  const [, style, lvl] = id.split('-');
+  return BY_ID.get(`ikon-${ALIAS[style] || style}-${lvl}`);
 }
 export function registerEffect(e: EffectSpec) {
   const i = LIB.findIndex((x) => x.id === e.id);
@@ -179,7 +188,7 @@ export function suggestEffects(words: string[], mood: string, intent: string): s
   if (has('pedas', 'api', 'hot', 'seblak', 'geprek')) pick.push('bara-oranye-sedang');
   if (has('cinta', 'valentine', 'pacar', 'wedding', 'nikah')) pick.push('sakura-pink-ringan');
   if (has('coding', 'hacker', 'program', 'developer', 'nextjs')) pick.push('matrix-hijau-ringan');
-  if (has('kopi', 'cafe', 'kafe')) pick.push('emoji-kopi-ringan');
+  if (has('kopi', 'cafe', 'kafe')) pick.push('ikon-kopi-ringan');
   if (has('cuan', 'uang', 'gaji', 'investasi', 'diskon')) pick.push('uang-koin-ringan');
   if (has('skincare', 'glowing', 'mewah', 'premium', 'emas')) pick.push('kilau-emas-sedang');
   if (has('horor', 'misteri', 'seram')) pick.push('kabut-gelap-sedang');
@@ -911,20 +920,35 @@ export function drawEffect(ctx: CanvasRenderingContext2D, spec: EffectSpec, c: E
       ctx.globalCompositeOperation = 'source-over';
       break;
     }
-    case 'emoji': {
-      const e = spec.params.emoji || '🔥';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      for (let i = 0; i < n(26); i++) {
-        const sp = 0.12 + hash01(i, 2) * 0.16;
-        const y = fr(hash01(i, 3) + t * sp) * (H + 200) - 100;
-        const x = hash01(i, 1) * W + Math.sin(t * 1.5 + i) * 30;
-        const s = 50 + hash01(i, 4) * 60;
+    case 'ikon': {
+      // hujan ikon paralaks: 3 lapis kedalaman (jauh kecil & pelan, dekat besar & cepat)
+      const icon = spec.params.icon || 'sparkles';
+      const motion = spec.params.motion || 'jatuh';
+      const count = n(24);
+      for (let i = 0; i < count; i++) {
+        const z = [0.45, 0.7, 1][i % 3];
+        const sp = (0.08 + hash01(i, 2) * 0.08) * (0.5 + z);
+        const ph = fr(hash01(i, 3) + t * sp);
+        const y = motion === 'naik' ? H + 120 - ph * (H + 240) : motion === 'melayang' ? hash01(i, 3) * H + Math.sin(t * 0.8 + i) * 60 * z : ph * (H + 240) - 120;
+        const x = (hash01(i, 1) * W + Math.sin(t * (0.9 + z) + i) * 40 * z + (motion === 'melayang' ? t * 30 * z : 0)) % (W + 60);
+        const s = (46 + hash01(i, 4) * 40) * (0.6 + z * 0.8);
+        const col = i % 2 ? secondary : primary;
         ctx.save();
+        ctx.globalAlpha = 0.35 + 0.65 * z;
         ctx.translate(x, y);
-        ctx.rotate(Math.sin(t * 2 + i) * 0.4);
-        ctx.font = `${s}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
-        ctx.fillText(e, 0, 0);
+        ctx.rotate(Math.sin(t * 1.6 + i) * 0.35 * z);
+        if (z === 1) {
+          ctx.beginPath();
+          ctx.arc(0, 0, s * 0.62, 0, Math.PI * 2);
+          ctx.fillStyle = col;
+          ctx.shadowColor = rgba(col, 0.6);
+          ctx.shadowBlur = c.allowBlur ? 24 : 0;
+          ctx.fill();
+          ctx.shadowColor = 'transparent';
+          drawIcon(ctx, icon, -s * 0.36, -s * 0.36, s * 0.72, s * 0.72, readableOn(col), 2.4);
+        } else {
+          drawIcon(ctx, icon, -s / 2, -s / 2, s, s, col, 2);
+        }
         ctx.restore();
       }
       break;
@@ -1223,15 +1247,16 @@ export function parseEffectCode(raw: string, fallbackName = 'Efek Custom'): { ok
       kind: def.kind,
       layer: (['under', 'over'].includes(String(j.layer)) && (def.layer === 'under' || def.layer === 'over') ? j.layer : def.layer) as EffectLayer,
       tags: Array.isArray(j.tags) ? (j.tags as unknown[]).map(String) : ['custom'],
-      params: { style, k: Math.max(0.1, Math.min(4, Number(j.intensity ?? j.k) || 1)), ...extra, ...(typeof j.emoji === 'string' ? { emoji: j.emoji.slice(0, 8) } : {}) },
+      params: { style, k: Math.max(0.1, Math.min(4, Number(j.intensity ?? j.k) || 1)), ...extra, ...(typeof j.icon === 'string' ? { icon: j.icon.slice(0, 80) } : {}), ...(['jatuh', 'naik', 'melayang'].includes(String(j.motion)) ? { motion: j.motion as EffectParams['motion'] } : {}) },
       author: 'admin',
     },
   };
 }
 
 export const EFFECT_CODE_EXAMPLE = `{
-  "name": "Hujan Emoji Boba",
-  "kind": "emoji",
-  "emoji": "🧋",
+  "name": "Hujan Ikon Kopi Melayang",
+  "kind": "ikon",
+  "icon": "coffee",
+  "motion": "melayang",
   "intensity": 1.2
 }`;

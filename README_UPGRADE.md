@@ -2,7 +2,7 @@
 
 ## Yang baru
 - **Pack 300+**: 360 template (30 tema × 12 layout), 360 komponen (30 jenis × 12 gaya), 630+ ikon (Lucide, ISC), 310 transisi, 342 animasi (303 masuk/keluar + 39 loop).
-- **Efek visual 370+** (`lib/studio/packs/effects.ts`): kaca pecah, pasir, hujan, salju, confetti, kembang api, petir, bara, kabut, matrix, VHS, film grain, RGB split, guncang kamera, hujan emoji, dll — per scene, bisa diatur kekuatannya. Ditambah transisi **Kaca Pecah** dan **Jadi Pasir**. Prompt otomatis memilih efek yang cocok (mis. "hujan" → efek hujan).
+- **Efek visual 370+** (`lib/studio/packs/effects.ts`): kaca pecah, pasir, hujan, salju, confetti, kembang api, petir, bara, kabut, matrix, VHS, film grain, RGB split, guncang kamera, hujan ikon paralaks, dll — per scene, bisa diatur kekuatannya. Ditambah transisi **Kaca Pecah** dan **Jadi Pasir**. Prompt otomatis memilih efek yang cocok (mis. "hujan" → efek hujan).
 - **Prompt adaptif**: 17 jenis video dideteksi otomatis; jumlah scene mengikuti isi prompt ("5 tips" → 7 scene); harga, diskon, toko, @akun, lokasi, tanggal, dan daftar menu dibaca dari kalimat.
 - **Editor ala Figma + CapCut** (`components/studio/`): pilih, geser, ubah ukuran, putar, snap; ketuk dua kali untuk mengetik; timeline scene + transisi; mode Mudah/Pro (track layer); undo/redo; autosave.
 - **Foto**: unggah foto produk/latar (dikompres otomatis), jadikan latar scene, elemen foto, atau isi mockup HP.

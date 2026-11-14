@@ -45,7 +45,7 @@ const GUIDE: Record<Exclude<Tab, 'teks'>, React.ReactNode> = {
         <b>style</b> per kind, contoh hujan: lurus | miring-kiri | miring-kanan | neon | petir | malam; kaca-pecah: tengah | kiri-atas | kanan-bawah | hamburan | jatuh | layar-hp; pasir: badai-kanan | badai-kiri | jatuh | gurun | emas.
       </li>
       <li>
-        <b>intensity</b> 0.1–4 (jumlah partikel / kekuatan). Untuk kind <code>emoji</code> isi <code>&quot;emoji&quot;: &quot;🧋&quot;</code>.
+        <b>intensity</b> 0.1–4 (jumlah partikel / kekuatan). Untuk kind <code>ikon</code> isi <code>&quot;icon&quot;</code> dengan id ikon apa saja (termasuk ikon custom admin) dan <code>&quot;motion&quot;</code>: jatuh | naik | melayang.
       </li>
       <li>
         <b>layer</b> (opsional): <code>under</code> (di belakang teks) atau <code>over</code> (di depan).

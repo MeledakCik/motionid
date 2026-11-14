@@ -92,7 +92,7 @@ export default function DashboardPage() {
       <main className="mx-auto max-w-6xl space-y-6 px-4 pb-20 pt-6">
         <section className="mk-card relative overflow-hidden p-5 sm:p-7">
           <div className="absolute -right-10 -top-10 h-48 w-48 rounded-full bg-mk-coral/20 blur-3xl" />
-          <h1 className="text-2xl font-extrabold sm:text-3xl">Halo{name ? `, ${name}` : ''} 👋</h1>
+          <h1 className="text-2xl font-extrabold sm:text-3xl">Halo{name ? `, ${name}` : ''}</h1>
           <p className="mt-1 text-sm text-mk-muted">Mau bikin video apa hari ini?</p>
           <div className="mt-4 flex flex-wrap gap-1.5">
             {QUICK.map((qq) => (

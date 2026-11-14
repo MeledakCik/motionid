@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { AlignCenter, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, ChevronDown, ChevronUp, Copy, Eye, EyeOff, Lock, Trash2, Unlock, Wand2 } from 'lucide-react';
+import { AlignCenter, AlignLeft, AlignRight, Palette, Shuffle, ArrowDownToLine, ArrowUpToLine, ChevronDown, ChevronUp, Copy, Eye, EyeOff, Lock, Trash2, Unlock, Wand2 } from 'lucide-react';
 import type { ComponentLayer, FontId, IconLayer, ImageLayer, Layer, ShapeLayer, TextLayer } from '@/lib/studio/types';
 import { canvasSize } from '@/lib/studio/types';
 import { currentLayer, Tool, useStudio } from '@/store/useStudio';
@@ -357,10 +357,10 @@ function SceneInspector({ onOpenTool }: { onOpenTool: (t: Tool) => void }) {
         <Slider label="Durasi" value={scene.duration} min={1} max={15} step={0.1} onChange={(v) => st.live((d) => ({ ...d, scenes: d.scenes.map((s, i) => (i === sceneIdx ? { ...s, duration: v } : s)) }))} onCommit={st.endDrag} format={(v) => `${v.toFixed(1)} dtk`} />
         <div className="grid grid-cols-2 gap-1.5">
           <button type="button" className="mk-btn-ghost text-[11px]" onClick={() => onOpenTool('latar')}>
-            🎨 Latar
+            <Palette className="h-3.5 w-3.5" /> Latar
           </button>
           <button type="button" className="mk-btn-ghost text-[11px]" onClick={() => onOpenTool('transisi')} disabled={sceneIdx === 0}>
-            🔀 {sceneIdx === 0 ? 'Scene pertama' : getTransition(scene.transition.id).name.split(' · ')[0]}
+            <Shuffle className="h-3.5 w-3.5" /> {sceneIdx === 0 ? 'Scene pertama' : getTransition(scene.transition.id).name.split(' · ')[0]}
           </button>
           <button type="button" className="mk-btn-ghost text-[11px]" onClick={() => st.duplicateScene(sceneIdx)}>
             Duplikat scene
