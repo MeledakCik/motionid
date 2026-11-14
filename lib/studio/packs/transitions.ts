@@ -1,7 +1,7 @@
 import { EasingId, ease, clamp, hash01 } from '../easing';
 
 /**
- * Transition Pack — 1000+ transisi antar scene (46 jenis render).
+ * Transition Pack — 9000+ transisi antar scene (58 jenis render × 5 aksen).
  * Setiap transisi = `kind` (algoritma gambar) + parameter. Admin bisa menambah transisi
  * lewat kode JSON (kind + params), atau mode "custom" dengan pose keluar/masuk + mask.
  */
@@ -53,6 +53,18 @@ export type TransitionKind =
   | 'filmroll'
   | 'swing'
   | 'curtain'
+  | 'spotlight'
+  | 'flytiles'
+  | 'tear'
+  | 'roll'
+  | 'slats'
+  | 'pagecurl'
+  | 'tilesout'
+  | 'lens'
+  | 'brush'
+  | 'melt'
+  | 'bubbles'
+  | 'toss'
   | 'custom';
 
 export interface TransitionParams {
@@ -72,6 +84,10 @@ export interface TransitionParams {
   inFrom?: CustomPose;
   inTo?: CustomPose;
   mask?: 'none' | 'circle' | 'rect' | 'diamond';
+  /** mode khusus jenis tertentu (ubin: shrink/spin/fall, lempar: foto) */
+  mode?: string;
+  /** aksen di atas transisi: kilat putih, kilat warna, zoom hentak, getar, cahaya bocor */
+  fx?: 'kilat' | 'warna' | 'zoom' | 'getar' | 'cahaya';
 }
 
 interface CustomPose {
@@ -94,6 +110,15 @@ export interface TransitionSpec {
   energy: 1 | 2 | 3;
   author?: 'builtin' | 'admin';
 }
+
+/** Aksen yang bisa ditempel ke transisi mana pun (id transisi: `<id>~<aksen>`). */
+export const TRANSITION_FX: Array<{ id: NonNullable<TransitionParams['fx']>; label: string; tag: string }> = [
+  { id: 'kilat', label: 'Kilat Putih', tag: 'kilat' },
+  { id: 'warna', label: 'Kilat Warna', tag: 'warna' },
+  { id: 'zoom', label: 'Zoom Hentak', tag: 'zoom' },
+  { id: 'getar', label: 'Getar', tag: 'getar' },
+  { id: 'cahaya', label: 'Cahaya Bocor', tag: 'cahaya' },
+];
 
 export const TRANSITION_GROUPS: Array<{ id: string; label: string }> = [
   { id: 'dasar', label: 'Dasar' },
@@ -615,31 +640,281 @@ function buildLibrary(): TransitionSpec[] {
       }
     }
   }
+
+  /* ================================================================ */
+  /* Pack v8 — 12 jenis render baru                                    */
+  /* ================================================================ */
+  const DIR4L: Array<[NonNullable<TransitionParams['dir']>, string]> = DIR8.slice(0, 4);
+
+  // Lampu Sorot
+  for (const [d, dl] of DIR4L) {
+    for (const n of [1, 2, 3]) {
+      for (const [ek, el] of [
+        ['hard', 'Tajam'],
+        ['soft', 'Lembut'],
+      ] as const) {
+        for (const [rk, rl] of [
+          ['polos', ''],
+          ['white', ' + Cincin'],
+        ] as const) {
+          add({ id: `spotlight-${d}-${n}-${ek}-${rk}`, name: `Lampu Sorot ${n} dari ${dl} · ${el}${rl}`, group: 'bentuk', kind: 'spotlight', tags: ['spotlight', 'sorot', 'panggung', 'lampu'], duration: 1, easing: 'inOutCubic', params: { dir: d, count: n, edge: ek, ...(rk === 'white' ? { color: 'white' as const } : {}) }, energy: 2 });
+        }
+      }
+    }
+  }
+
+  // Ubin Terbang
+  for (const [d, dl] of DIR4L) {
+    for (const n of [4, 6, 9]) {
+      for (const [ok, ol] of [
+        ['rows', 'Berurutan'],
+        ['diagonal', 'Diagonal'],
+        ['random', 'Acak'],
+      ] as const) {
+        for (const [ak, al, a, e] of [
+          ['lurus', 'Lurus', 0, 'outBack'],
+          ['putar', 'Berputar', 45, 'outCubic'],
+        ] as const) {
+          add({ id: `flytiles-${d}-${n}-${ok}-${ak}`, name: `Ubin Terbang ke ${dl} ${n} ${ol} · ${al}`, group: 'pola', kind: 'flytiles', tags: ['tiles', 'ubin', 'terbang', 'mosaic'], duration: 0.95, easing: e, params: { dir: d, count: n, order: ok, angle: a }, energy: 3 });
+        }
+      }
+    }
+  }
+
+  // Sobek Kertas
+  for (const [ax, axl] of [
+    ['left', 'Tegak'],
+    ['up', 'Mendatar'],
+  ] as const) {
+    for (const n of [8, 14, 24]) {
+      for (const [ik, il, i] of [
+        ['halus', 'Halus', 0.5],
+        ['sedang', 'Sedang', 1],
+        ['kasar', 'Kasar', 1.6],
+      ] as const) {
+        for (const [ck, cl] of [
+          ['polos', ''],
+          ['white', ' + Serat Putih'],
+        ] as const) {
+          add({ id: `tear-${ax}-${n}-${ik}-${ck}`, name: `Sobek Kertas ${axl} ${n} ${il}${cl}`, group: 'hancur', kind: 'tear', tags: ['tear', 'sobek', 'kertas', 'paper'], duration: 0.85, easing: 'inOutCubic', params: { dir: ax, count: n, intensity: i, ...(ck === 'white' ? { color: 'white' as const } : {}) }, energy: 3 });
+        }
+      }
+    }
+  }
+
+  // Gulung Kertas
+  for (const [d, dl] of DIR4L) {
+    for (const [ik, il, i] of [
+      ['tipis', 'Tipis', 0.04],
+      ['tebal', 'Tebal', 0.08],
+    ] as const) {
+      for (const [ek, el, e] of [
+        ['halus', 'Halus', 'inOutCubic'],
+        ['cepat', 'Cepat', 'outCubic'],
+        ['tegas', 'Tegas', 'inOutQuart'],
+      ] as const) {
+        add({ id: `roll-${d}-${ik}-${ek}`, name: `Gulung Kertas ke ${dl} ${il} · ${el}`, group: '3d', kind: 'roll', tags: ['roll', 'gulung', 'kertas', 'scroll'], duration: 0.85, easing: e, params: { dir: d, intensity: i }, energy: 2 });
+      }
+    }
+  }
+
+  // Kerai Putar 3D
+  for (const [ax, axl] of [
+    ['left', 'Tegak'],
+    ['up', 'Mendatar'],
+  ] as const) {
+    for (const n of [4, 6, 10, 16]) {
+      for (const [ok, ol, order, rev] of [
+        ['urut', 'Berurutan', 'rows', false],
+        ['balik', 'Terbalik', 'rows', true],
+        ['tengah', 'dari Tengah', 'diagonal', false],
+        ['acak', 'Acak', 'random', false],
+      ] as const) {
+        for (const [bk, bl] of [
+          ['hitam', ''],
+          ['primary', ' · Latar Brand'],
+        ] as const) {
+          add({ id: `slats-${ax}-${n}-${ok}-${bk}`, name: `Kerai Putar 3D ${axl} ${n} ${ol}${bl}`, group: '3d', kind: 'slats', tags: ['slats', 'kerai', '3d', 'putar'], duration: 0.9, easing: 'inOutSine', params: { dir: ax, count: n, order, reverse: rev, ...(bk === 'primary' ? { color: 'primary' as const } : {}) }, energy: 2 });
+        }
+      }
+    }
+  }
+
+  // Lipat Sudut
+  for (const [o, ol] of ORIG5.slice(1)) {
+    for (const a of [-20, 0, 20]) {
+      for (const [ck, cl] of [
+        ['kertas', 'Kertas'],
+        ['primary', 'Brand'],
+      ] as const) {
+        for (const [ek, el, e] of [
+          ['halus', 'Halus', 'inOutCubic'],
+          ['lembut', 'Lembut', 'inOutSine'],
+        ] as const) {
+          add({ id: `pagecurl-${o}-${a}-${ck}-${ek}`, name: `Lipat Sudut ${ol}${a ? ` ${a > 0 ? '+' : ''}${a}°` : ''} ${cl} · ${el}`, group: '3d', kind: 'pagecurl', tags: ['pagecurl', 'lipat', 'halaman', 'buku'], duration: 0.9, easing: e, params: { origin: o, angle: a, ...(ck === 'primary' ? { color: 'primary' as const } : {}) }, energy: 2 });
+        }
+      }
+    }
+  }
+
+  // Ubin Mengecil / Berputar / Jatuh
+  for (const n of [4, 6, 8, 12]) {
+    for (const [ok, ol] of [
+      ['rows', 'Berurutan'],
+      ['diagonal', 'Diagonal'],
+      ['random', 'Acak'],
+    ] as const) {
+      for (const [mk, ml, e] of [
+        ['shrink', 'Mengecil', 'inOutCubic'],
+        ['spin', 'Berputar', 'inOutCubic'],
+        ['fall', 'Berjatuhan', 'inCubic'],
+      ] as const) {
+        add({ id: `tilesout-${n}-${ok}-${mk}`, name: `Ubin ${ml} ${n} ${ol}`, group: 'hancur', kind: 'tilesout', tags: ['tiles', 'ubin', 'hancur', mk], duration: 0.9, easing: e, params: { count: n, order: ok, mode: mk }, energy: 3 });
+      }
+    }
+  }
+
+  // Lensa Zoom
+  for (const [o, ol] of ORIG5) {
+    for (const [mk, ml, m] of [
+      ['ringan', 'Ringan', 1.4],
+      ['kuat', 'Kuat', 2.2],
+    ] as const) {
+      for (const [ck, cl] of [
+        ['polos', ''],
+        ['white', ' + Cincin Putih'],
+        ['primary', ' + Cincin Brand'],
+      ] as const) {
+        add({ id: `lens-${o}-${mk}-${ck}`, name: `Lensa Zoom ${ol} ${ml}${cl}`, group: 'zoom', kind: 'lens', tags: ['lens', 'lensa', 'zoom', 'kaca pembesar'], duration: 0.8, easing: 'inOutCubic', params: { origin: o, intensity: m, ...(ck !== 'polos' ? { color: ck } : {}) }, energy: 2 });
+      }
+    }
+  }
+
+  // Sapuan Kuas
+  for (const [ax, axl] of [
+    ['left', 'Mendatar'],
+    ['up', 'Tegak'],
+  ] as const) {
+    for (const n of [3, 4, 6, 8]) {
+      for (const a of [0, 12]) {
+        for (const [ek, el, e] of [
+          ['halus', 'Halus', 'inOutCubic'],
+          ['cepat', 'Cepat', 'outCubic'],
+        ] as const) {
+          add({ id: `brush-${ax}-${n}-${a}-${ek}`, name: `Sapuan Kuas ${axl} ${n}${a ? ' Miring' : ''} · ${el}`, group: 'sapu', kind: 'brush', tags: ['brush', 'kuas', 'cat', 'paint'], duration: 1, easing: e, params: { dir: ax, count: n, angle: a }, energy: 2 });
+        }
+      }
+    }
+  }
+
+  // Leleh
+  for (const [d, dl] of DIR4L) {
+    for (const n of [12, 24, 48]) {
+      for (const [sk, sl, s] of [
+        ['rata', 'Rata', 0.3],
+        ['acak', 'Acak', 0.9],
+      ] as const) {
+        for (const [ek, el, e] of [
+          ['pelan', 'Pelan', 'inCubic'],
+          ['tajam', 'Tajam', 'inExpo'],
+        ] as const) {
+          add({ id: `melt-${d}-${n}-${sk}-${ek}`, name: `Leleh ke ${dl} ${n} ${sl} · ${el}`, group: 'hancur', kind: 'melt', tags: ['melt', 'leleh', 'drip', 'cair'], duration: 1, easing: e, params: { dir: d, count: n, intensity: s }, energy: 2 });
+        }
+      }
+    }
+  }
+
+  // Gelembung Acak
+  for (const [s, sl] of [
+    ['circle', 'Bulat'],
+    ['hexagon', 'Heksagon'],
+    ['star', 'Bintang'],
+    ['heart', 'Hati'],
+  ] as const) {
+    for (const n of [8, 16, 28, 45]) {
+      for (const [ck, cl] of [
+        ['polos', ''],
+        ['white', ' + Garis Putih'],
+        ['primary', ' + Garis Brand'],
+      ] as const) {
+        add({ id: `bubbles-${s}-${n}-${ck}`, name: `Gelembung ${sl} ${n}${cl}`, group: 'bentuk', kind: 'bubbles', tags: ['bubbles', 'gelembung', 'acak', s], duration: 0.9, easing: 'inOutSine', params: { shape: s, count: n, ...(ck !== 'polos' ? { color: ck } : {}) }, energy: 2 });
+      }
+    }
+  }
+
+  // Lempar Foto
+  for (const [d, dl] of DIR8) {
+    for (const a of [15, 40]) {
+      for (const [mk, ml] of [
+        ['polos', ''],
+        ['foto', ' Berbingkai'],
+      ] as const) {
+        for (const [ek, el, e] of [
+          ['cepat', 'Cepat', 'inCubic'],
+          ['ayun', 'Ayun', 'inOutBack'],
+        ] as const) {
+          add({ id: `toss-${d}-${a}-${mk}-${ek}`, name: `Lempar Foto ke ${dl}${ml} ${a}° · ${el}`, group: 'geser', kind: 'toss', tags: ['toss', 'lempar', 'foto', 'polaroid'], duration: 0.8, easing: e, params: { dir: d, angle: a, ...(mk === 'foto' ? { mode: 'foto' } : {}) }, energy: 3 });
+        }
+      }
+    }
+  }
+
   return L;
 }
 
 const LIB = buildLibrary();
 const BY_ID = new Map(LIB.map((t) => [t.id, t]));
 
+/* Varian aksen (`<id>~<aksen>`) dibuat saat dibutuhkan agar pack tetap ringan dimuat. */
+const fxAllowed = (t: TransitionSpec, fx: string) =>
+  t.author === 'builtin' && t.kind !== 'cut' && !((fx === 'kilat' || fx === 'warna') && t.kind === 'flash') && !(fx === 'getar' && t.kind === 'shake') && !(fx === 'zoom' && (t.kind === 'zoom' || t.kind === 'dolly'));
+const ACCENTS = new Map<string, TransitionSpec>();
+function accentOf(id: string): TransitionSpec | undefined {
+  const hit = ACCENTS.get(id);
+  if (hit) return hit;
+  const i = id.lastIndexOf('~');
+  if (i < 0) return undefined;
+  const base = BY_ID.get(id.slice(0, i));
+  const fx = TRANSITION_FX.find((f) => f.id === id.slice(i + 1));
+  if (!base || !fx || !fxAllowed(base, fx.id)) return undefined;
+  const v: TransitionSpec = { ...base, id, name: `${base.name} + ${fx.label}`, tags: [...base.tags, fx.tag], params: { ...base.params, fx: fx.id }, energy: 3 };
+  ACCENTS.set(id, v);
+  return v;
+}
+let FULL: TransitionSpec[] | null = null;
+/** Semua transisi termasuk varian aksen (dibuat sekali saat pertama dipanggil). */
 export function allTransitions(): TransitionSpec[] {
-  return LIB;
+  if (!FULL) {
+    FULL = [...LIB];
+    for (const fx of TRANSITION_FX) for (const t of LIB) if (fxAllowed(t, fx.id)) FULL.push(accentOf(`${t.id}~${fx.id}`)!);
+  }
+  return FULL;
+}
+/** Jumlah semua transisi (tanpa membuat daftar lengkap). */
+export function transitionCount(): number {
+  if (FULL) return FULL.length;
+  let n = LIB.length;
+  for (const fx of TRANSITION_FX) for (const t of LIB) if (fxAllowed(t, fx.id)) n++;
+  return n;
 }
 export function getTransition(id?: string): TransitionSpec {
-  return (id && BY_ID.get(id)) || BY_ID.get('fade-none-normal')!;
+  return (id && (BY_ID.get(id) || accentOf(id))) || BY_ID.get('fade-none-normal')!;
 }
 export function hasTransition(id: string) {
-  return BY_ID.has(id);
+  return BY_ID.has(id) || !!accentOf(id);
 }
 export function registerTransition(spec: TransitionSpec) {
   const idx = LIB.findIndex((t) => t.id === spec.id);
   if (idx >= 0) LIB[idx] = spec;
   else LIB.push(spec);
   BY_ID.set(spec.id, spec);
+  FULL = null;
 }
 export function unregisterTransition(id: string) {
   const idx = LIB.findIndex((t) => t.id === id);
   if (idx >= 0) LIB.splice(idx, 1);
   BY_ID.delete(id);
+  FULL = null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -671,6 +946,12 @@ function dirVec(dir: TransitionParams['dir']): [number, number] {
     default:
       return [-1, 0];
   }
+}
+
+/** Arah dengan komponen penuh (-1/0/1): untuk diagonal, scene digeser selebar & setinggi layar. */
+function dirFull(dir: TransitionParams['dir']): [number, number] {
+  const [x, y] = dirVec(dir);
+  return [Math.sign(Math.round(x * 100)), Math.sign(Math.round(y * 100))];
 }
 
 function originPt(o: TransitionParams['origin'], W: number, H: number): [number, number] {
@@ -785,6 +1066,22 @@ export function drawTransition(
   const P = spec.params;
   const diag = Math.hypot(W, H);
   ctx.save();
+  const fx = P.fx;
+  const bump = Math.sin(Math.PI * p);
+  if (fx === 'zoom' && bump > 0) {
+    const zs = 1 + 0.14 * bump;
+    ctx.translate(W / 2, H / 2);
+    ctx.scale(zs, zs);
+    ctx.translate(-W / 2, -H / 2);
+  } else if (fx === 'getar' && bump > 0) {
+    const amp = 0.022 * Math.min(W, H) * bump;
+    const f = Math.floor(p * 36);
+    const zs = 1 + 0.05 * bump;
+    ctx.translate(W / 2 + (hash01(f, 3) - 0.5) * 2 * amp, H / 2 + (hash01(f, 9) - 0.5) * 2 * amp);
+    ctx.scale(zs, zs);
+    ctx.translate(-W / 2, -H / 2);
+  }
+  ctx.save();
   switch (spec.kind) {
     case 'cut':
       drawFull(ctx, p < 0.5 ? A : B, W, H);
@@ -816,23 +1113,23 @@ export function drawTransition(
     }
 
     case 'slide': {
-      const [dx, dy] = dirVec(P.dir);
+      const [dx, dy] = dirFull(P.dir);
       drawFull(ctx, A, W, H);
-      ctx.shadowColor = 'rgba(0,0,0,0.45)';
+      ctx.shadowColor = `rgba(0,0,0,${(0.45 * clamp(p * 4)).toFixed(3)})`;
       ctx.shadowBlur = 40;
       drawTransformed(ctx, B, W, H, -dx * W * (1 - e), -dy * H * (1 - e));
       break;
     }
 
     case 'push': {
-      const [dx, dy] = dirVec(P.dir);
+      const [dx, dy] = dirFull(P.dir);
       drawTransformed(ctx, A, W, H, dx * W * e, dy * H * e);
       drawTransformed(ctx, B, W, H, -dx * W * (1 - e), -dy * H * (1 - e));
       break;
     }
 
     case 'card': {
-      const [dx, dy] = dirVec(P.dir);
+      const [dx, dy] = dirFull(P.dir);
       drawTransformed(ctx, A, W, H, 0, 0, 1 - 0.12 * e, 0, 1 - 0.5 * e);
       ctx.shadowColor = 'rgba(0,0,0,0.5)';
       ctx.shadowBlur = 50;
@@ -1060,6 +1357,7 @@ export function drawTransition(
       ctx.beginPath();
       for (let i = 0; i < n; i++) {
         const local = clamp(e * 1.3 - (i / n) * 0.3);
+        if (local <= 0) continue;
         if (horizontal) {
           const bh = H / n;
           ctx.rect(0, i * bh, W, bh * local + 0.5);
@@ -1163,12 +1461,12 @@ export function drawTransition(
         for (let i = 0; i < n; i++) {
           ctx.save();
           const segs = vertical ? H / n : W / n;
+          const dirSign = n === 2 ? (i === 0 ? -1 : 1) : i % 2 ? 1 : -1;
+          const off = dirSign * (vertical ? H : W) * (1 - e) * (n === 2 ? 0.5 : 1);
           ctx.beginPath();
-          if (vertical) ctx.rect(0, i * segs, W, segs + 1);
-          else ctx.rect(i * segs, 0, segs + 1, H);
+          if (vertical) ctx.rect(0, i * segs + off, W, segs + 1);
+          else ctx.rect(i * segs + off, 0, segs + 1, H);
           ctx.clip();
-          const dirSign = i % 2 ? 1 : -1;
-          const off = dirSign * (vertical ? H : W) * (1 - e) * 0.5;
           ctx.drawImage(B, vertical ? 0 : off, vertical ? off : 0, W, H);
           ctx.restore();
         }
@@ -1181,6 +1479,7 @@ export function drawTransition(
       const src = p < 0.5 ? A : B;
       drawFull(ctx, src, W, H);
       const amt = Math.sin(p * Math.PI) * k;
+      if (amt < 0.001) break;
       const strips = 6 + Math.floor(amt * 10);
       for (let i = 0; i < strips; i++) {
         const y = hash01(i, Math.floor(p * 12)) * H;
@@ -1288,6 +1587,10 @@ export function drawTransition(
 
     case 'shatter': {
       // B di belakang; A terbelah jadi pecahan segitiga yang terlempar & jatuh
+      if (p <= 0.0001) {
+        drawFull(ctx, A, W, H);
+        break;
+      }
       drawFull(ctx, B, W, H);
       const [ox, oy] = originPt(P.origin, W, H);
       const n = P.count || 7;
@@ -1539,7 +1842,7 @@ export function drawTransition(
     }
 
     case 'carousel': {
-      const [dx, dy] = dirVec(P.dir);
+      const [dx, dy] = dirFull(P.dir);
       const sMin = P.intensity || 0.8;
       const s = 1 - (1 - sMin) * Math.sin(Math.PI * clamp(e));
       ctx.fillStyle = '#000';
@@ -1556,10 +1859,11 @@ export function drawTransition(
     case 'tilt': {
       drawFull(ctx, A, W, H);
       const [dx, dy] = dirVec(P.dir);
-      const k = Math.tan(((P.angle || 20) * Math.PI) / 180) * (1 - clamp(e));
+      const k0 = Math.tan(((P.angle || 20) * Math.PI) / 180);
+      const k = k0 * (1 - clamp(e));
       ctx.fillStyle = `rgba(0,0,0,${0.35 * Math.min(1, e)})`;
       ctx.fillRect(0, 0, W, H);
-      ctx.translate(-dx * W * (1 - e), -dy * H * (1 - e));
+      ctx.translate(-dx * (W + (k0 * H) / 2) * (1 - e), -dy * (H + (k0 * W) / 2) * (1 - e));
       if (dx !== 0) ctx.transform(1, 0, k * -dx, 1, (k * dx * H) / 2, 0);
       else ctx.transform(1, k * -dy, 0, 1, 0, (k * dy * W) / 2);
       drawFull(ctx, B, W, H);
@@ -1777,6 +2081,470 @@ export function drawTransition(
       break;
     }
 
+    /* ---------------- Pack v8 ---------------- */
+    case 'spotlight': {
+      drawFull(ctx, A, W, H);
+      const n = P.count || 1;
+      const [dx, dy] = dirVec(P.dir);
+      const tm = ease('inOutCubic', clamp(p / 0.55));
+      const tg = ease('inOutCubic', clamp((p - 0.55) / 0.45));
+      const r0 = Math.min(W, H) * 0.2;
+      ctx.fillStyle = `rgba(0,0,0,${0.82 * clamp(p * 4) * (1 - tg)})`;
+      ctx.fillRect(0, 0, W, H);
+      const spots: Array<[number, number, number]> = [];
+      for (let i = 0; i < n; i++) {
+        const a = Math.atan2(-dy, -dx) + (i * Math.PI * 2) / n;
+        const sx = W / 2 + Math.cos(a) * diag * 0.5;
+        const sy = H / 2 + Math.sin(a) * diag * 0.5;
+        const ex = W / 2 + (n > 1 ? Math.cos(a) * r0 * 0.9 : 0);
+        const ey = H / 2 + (n > 1 ? Math.sin(a) * r0 * 0.9 : 0);
+        const r = Math.max(0.1, r0 * Math.min(1, p * 5) + (diag - r0) * tg);
+        spots.push([sx + (ex - sx) * tm, sy + (ey - sy) * tm, r]);
+      }
+      ctx.save();
+      ctx.beginPath();
+      for (const [x, y, r] of spots) {
+        ctx.moveTo(x + r, y);
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+      }
+      ctx.clip();
+      drawFull(ctx, B, W, H);
+      if (P.edge === 'soft' && tg < 1) {
+        for (const [x, y, r] of spots) {
+          const g = ctx.createRadialGradient(x, y, r * 0.65, x, y, r);
+          g.addColorStop(0, 'rgba(0,0,0,0)');
+          g.addColorStop(1, `rgba(0,0,0,${0.55 * (1 - tg)})`);
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+      if (P.color && tg < 1) {
+        ctx.globalAlpha = 0.9 * (1 - tg);
+        ctx.strokeStyle = colorOf(P.color, cols);
+        ctx.lineWidth = Math.max(2, Math.min(W, H) * 0.008);
+        for (const [x, y, r] of spots) {
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+      break;
+    }
+
+    case 'flytiles': {
+      drawFull(ctx, A, W, H);
+      const n = P.count || 6;
+      const cw = W / n;
+      const rows = Math.ceil(H / cw);
+      const [dx, dy] = dirVec(P.dir);
+      const rotMax = ((P.angle || 0) * Math.PI) / 180;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < n; c++) {
+          const idx = r * n + c;
+          const lin = dx !== 0 ? (dx > 0 ? (n - 1 - c) / n : c / n) : dy > 0 ? (rows - 1 - r) / rows : r / rows;
+          const delay = (P.order === 'random' ? hash01(idx, 29) : P.order === 'diagonal' ? (r + c) / (rows + n) : lin) * 0.5;
+          const lp = clamp((p - delay) / 0.5);
+          if (lp <= 0) continue;
+          const t = ease(spec.easing, lp);
+          const sx = c * cw;
+          const sy = r * cw;
+          const ch = Math.min(cw, H - sy);
+          ctx.save();
+          ctx.translate(sx + cw / 2 - dx * W * 0.7 * (1 - t), sy + ch / 2 - dy * H * 0.7 * (1 - t));
+          if (rotMax) ctx.rotate(rotMax * (1 - t) * (hash01(idx, 31) - 0.5) * 2);
+          const s = 0.5 + 0.5 * t;
+          ctx.scale(s, s);
+          ctx.drawImage(B, sx, sy, cw, ch, -cw / 2 - 0.5, -ch / 2 - 0.5, cw + 1, ch + 1);
+          ctx.restore();
+        }
+      }
+      break;
+    }
+
+    case 'tear': {
+      if (e <= 0) {
+        drawFull(ctx, A, W, H);
+        break;
+      }
+      drawFull(ctx, B, W, H);
+      const horizCut = P.dir === 'up' || P.dir === 'down';
+      const L = horizCut ? H : W;
+      const M = horizCut ? W : H;
+      const n = P.count || 14;
+      const amp = (P.intensity || 1) * Math.min(W, H) * 0.035;
+      const pts: Array<[number, number]> = [];
+      for (let i = 0; i <= n; i++) pts.push([L / 2 + (hash01(i, 37) - 0.5) * 2 * amp, (i / n) * M]);
+      const map = (u: number, v: number): [number, number] => (horizCut ? [v, u] : [u, v]);
+      const off = e * L * 0.72;
+      for (const side of [-1, 1]) {
+        ctx.save();
+        const [tx, ty] = map(side * off, 0);
+        ctx.translate(tx, ty);
+        const [px, py] = map(side < 0 ? 0 : L, M / 2);
+        ctx.translate(px, py);
+        ctx.rotate(side * e * 0.06);
+        ctx.translate(-px, -py);
+        const edgeU = side < 0 ? -2 : L + 2;
+        ctx.beginPath();
+        let q = map(edgeU, -2);
+        ctx.moveTo(q[0], q[1]);
+        for (const [u, v] of pts) {
+          q = map(u, v);
+          ctx.lineTo(q[0], q[1]);
+        }
+        q = map(edgeU, M + 2);
+        ctx.lineTo(q[0], q[1]);
+        ctx.closePath();
+        ctx.save();
+        ctx.clip();
+        drawFull(ctx, A, W, H);
+        ctx.restore();
+        if (P.color) {
+          ctx.beginPath();
+          pts.forEach(([u, v], i) => {
+            const r = map(u, v);
+            if (i) ctx.lineTo(r[0], r[1]);
+            else ctx.moveTo(r[0], r[1]);
+          });
+          ctx.strokeStyle = colorOf(P.color, cols);
+          ctx.lineWidth = Math.max(2, amp * 0.35);
+          ctx.lineJoin = 'round';
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+      break;
+    }
+
+    case 'roll': {
+      drawFull(ctx, B, W, H);
+      const [dx, dy] = dirVec(P.dir);
+      const horiz = dx !== 0;
+      const L = horiz ? W : H;
+      const fwd = horiz ? dx > 0 : dy > 0;
+      const rr = Math.max(4, L * (P.intensity || 0.06));
+      if (e >= 1) break;
+      const a0 = fwd ? e * L : 0;
+      const a1 = fwd ? L : L - e * L;
+      ctx.save();
+      ctx.beginPath();
+      if (horiz) ctx.rect(a0, 0, a1 - a0, H);
+      else ctx.rect(0, a0, W, a1 - a0);
+      ctx.clip();
+      drawFull(ctx, A, W, H);
+      ctx.restore();
+      // bayangan di scene baru, tepat di depan gulungan
+      const edge = fwd ? a0 : a1;
+      const sh = rr * 1.2;
+      ctx.globalAlpha = clamp(e * 8);
+      const s0 = fwd ? edge - sh : edge;
+      const g = horiz ? ctx.createLinearGradient(s0, 0, s0 + sh, 0) : ctx.createLinearGradient(0, s0, 0, s0 + sh);
+      g.addColorStop(fwd ? 0 : 1, 'rgba(0,0,0,0)');
+      g.addColorStop(fwd ? 1 : 0, 'rgba(0,0,0,0.35)');
+      ctx.fillStyle = g;
+      if (horiz) ctx.fillRect(s0, 0, sh, H);
+      else ctx.fillRect(0, s0, W, sh);
+      // silinder gulungan
+      const b0 = fwd ? a0 : Math.max(a0, a1 - rr);
+      const b1 = fwd ? Math.min(a1, a0 + rr) : a1;
+      if (b1 - b0 > 0.5) {
+        const g2 = horiz ? ctx.createLinearGradient(b0, 0, b1, 0) : ctx.createLinearGradient(0, b0, 0, b1);
+        g2.addColorStop(0, 'rgba(0,0,0,0.45)');
+        g2.addColorStop(0.45, 'rgba(255,255,255,0.35)');
+        g2.addColorStop(1, 'rgba(0,0,0,0.5)');
+        ctx.fillStyle = g2;
+        if (horiz) ctx.fillRect(b0, 0, b1 - b0, H);
+        else ctx.fillRect(0, b0, W, b1 - b0);
+      }
+      break;
+    }
+
+    case 'slats': {
+      const n = P.count || 6;
+      const vertical = P.dir !== 'up' && P.dir !== 'down';
+      ctx.fillStyle = P.color ? colorOf(P.color, cols) : '#000000';
+      ctx.fillRect(0, 0, W, H);
+      const L = vertical ? W : H;
+      const sw = L / n;
+      const mid = (n - 1) / 2 || 1;
+      for (let i = 0; i < n; i++) {
+        const k = P.order === 'random' ? hash01(i, 41) : P.order === 'diagonal' ? Math.abs(i - (n - 1) / 2) / mid : P.reverse ? (n - 1 - i) / n : i / n;
+        const te = ease(spec.easing, clamp((p - k * 0.45) / 0.55));
+        const c = Math.cos(Math.PI * te);
+        const src = te < 0.5 ? A : B;
+        const s = Math.max(0.001, Math.abs(c));
+        const u0 = i * sw;
+        ctx.save();
+        if (vertical) {
+          ctx.translate(u0 + sw / 2, 0);
+          ctx.scale(s, 1);
+          ctx.drawImage(src, u0, 0, sw, H, -sw / 2 - 0.5, 0, sw + 1, H);
+          ctx.fillStyle = `rgba(0,0,0,${0.45 * (1 - s)})`;
+          ctx.fillRect(-sw / 2 - 0.5, 0, sw + 1, H);
+        } else {
+          ctx.translate(0, u0 + sw / 2);
+          ctx.scale(1, s);
+          ctx.drawImage(src, 0, u0, W, sw, 0, -sw / 2 - 0.5, W, sw + 1);
+          ctx.fillStyle = `rgba(0,0,0,${0.45 * (1 - s)})`;
+          ctx.fillRect(0, -sw / 2 - 0.5, W, sw + 1);
+        }
+        ctx.restore();
+      }
+      break;
+    }
+
+    case 'pagecurl': {
+      drawFull(ctx, A, W, H);
+      const [ox, oy] = originPt(P.origin === 'center' || !P.origin ? 'tr' : P.origin, W, H);
+      const ang = Math.atan2(H / 2 - oy, W / 2 - ox) + ((P.angle || 0) * Math.PI) / 180;
+      const d0 = Math.cos(ang);
+      const d1 = Math.sin(ang);
+      const corners: Array<[number, number]> = [
+        [0, 0],
+        [W, 0],
+        [W, H],
+        [0, H],
+      ];
+      const proj = (x: number, y: number) => (x - ox) * d0 + (y - oy) * d1;
+      const maxP = Math.max(...corners.map(([x, y]) => proj(x, y)));
+      const s = e * maxP * 1.02;
+      const peeled: Array<[number, number]> = [];
+      for (let i = 0; i < 4; i++) {
+        const a = corners[i];
+        const b = corners[(i + 1) % 4];
+        const fa = proj(a[0], a[1]) - s;
+        const fb = proj(b[0], b[1]) - s;
+        if (fa <= 0) peeled.push(a);
+        if ((fa <= 0) !== (fb <= 0)) {
+          const t = fa / (fa - fb);
+          peeled.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+        }
+      }
+      if (peeled.length > 2) {
+        ctx.save();
+        ctx.beginPath();
+        peeled.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+        ctx.closePath();
+        ctx.clip();
+        drawFull(ctx, B, W, H);
+        ctx.restore();
+        if (e > 0 && e < 1) {
+          const flap = peeled.map(([x, y]): [number, number] => {
+            const k = 2 * (s - proj(x, y));
+            return [x + k * d0, y + k * d1];
+          });
+          ctx.save();
+          ctx.beginPath();
+          flap.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+          ctx.closePath();
+          if (allowBlur) {
+            ctx.shadowColor = 'rgba(0,0,0,0.45)';
+            ctx.shadowBlur = 24;
+          }
+          ctx.fillStyle = P.color ? colorOf(P.color, cols) : '#F3EFE6';
+          ctx.fill();
+          ctx.shadowColor = 'transparent';
+          const g = ctx.createLinearGradient(ox + d0 * s, oy + d1 * s, ox + d0 * (s + Math.max(1, s)), oy + d1 * (s + Math.max(1, s)));
+          g.addColorStop(0, 'rgba(255,255,255,0.4)');
+          g.addColorStop(1, 'rgba(0,0,0,0.22)');
+          ctx.fillStyle = g;
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+      break;
+    }
+
+    case 'tilesout': {
+      drawFull(ctx, B, W, H);
+      const n = P.count || 6;
+      const cw = W / n;
+      const rows = Math.ceil(H / cw);
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < n; c++) {
+          const idx = r * n + c;
+          const delay = (P.order === 'random' ? hash01(idx, 43) : P.order === 'diagonal' ? (r + c) / (rows + n) : r / rows) * 0.5;
+          const t = ease(spec.easing, clamp((p - delay) / 0.5));
+          if (t >= 1) continue;
+          const sx = c * cw;
+          const sy = r * cw;
+          const ch = Math.min(cw, H - sy);
+          ctx.save();
+          if (P.mode === 'fall') {
+            ctx.translate(sx + cw / 2 + (hash01(idx, 45) - 0.5) * cw * t, sy + ch / 2 + t * t * H * 1.3);
+            ctx.rotate((hash01(idx, 47) - 0.5) * 1.4 * t);
+          } else {
+            ctx.translate(sx + cw / 2, sy + ch / 2);
+            if (P.mode === 'spin') ctx.rotate(t * Math.PI);
+            const s = Math.max(0.001, 1 - t);
+            ctx.scale(s, s);
+          }
+          ctx.drawImage(A, sx, sy, cw, ch, -cw / 2 - 0.5, -ch / 2 - 0.5, cw + 1, ch + 1);
+          ctx.restore();
+        }
+      }
+      break;
+    }
+
+    case 'lens': {
+      const [ox, oy] = originPt(P.origin, W, H);
+      const R = Math.hypot(Math.max(ox, W - ox), Math.max(oy, H - oy)) + 2;
+      const mag = P.intensity || 1.5;
+      drawTransformed(ctx, A, W, H, 0, 0, 1 + 0.08 * e);
+      const r = Math.max(0.1, R * e);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(ox, oy, r, 0, Math.PI * 2);
+      ctx.clip();
+      const s = 1 + (mag - 1) * (1 - e);
+      ctx.translate(ox, oy);
+      ctx.scale(s, s);
+      ctx.translate(-ox, -oy);
+      drawFull(ctx, B, W, H);
+      ctx.restore();
+      if (P.color && e > 0 && e < 1) {
+        ctx.globalAlpha = 1 - e;
+        ctx.beginPath();
+        ctx.arc(ox, oy, r, 0, Math.PI * 2);
+        ctx.strokeStyle = colorOf(P.color, cols);
+        ctx.lineWidth = Math.max(3, Math.min(W, H) * 0.012);
+        ctx.stroke();
+      }
+      break;
+    }
+
+    case 'brush': {
+      drawFull(ctx, A, W, H);
+      const n = P.count || 4;
+      const vertical = P.dir === 'up' || P.dir === 'down';
+      const L = vertical ? H : W;
+      const M = vertical ? W : H;
+      const band = M / n;
+      const lw = band * 1.6;
+      const slope = Math.tan(((P.angle || 0) * Math.PI) / 180);
+      const pat = ctx.createPattern(B, 'no-repeat');
+      if (pat) {
+        ctx.strokeStyle = pat;
+        ctx.lineWidth = lw;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        const per = 0.8 / n;
+        for (let i = 0; i < n; i++) {
+          const local = ease(spec.easing, clamp((p - i * per) / (per + 0.12)));
+          if (local <= 0) continue;
+          const rev = i % 2 === 1;
+          const u0 = -lw / 2;
+          const u1 = L + lw / 2;
+          const ua = rev ? u1 : u0;
+          const ub = ua + (rev ? -1 : 1) * (u1 - u0) * local;
+          const v = (i + 0.5) * band;
+          ctx.beginPath();
+          for (let k = 0; k <= 14; k++) {
+            const u = ua + (ub - ua) * (k / 14);
+            const vv = v + slope * (u - L / 2) * (rev ? -1 : 1) + Math.sin(u * 0.02 + i * 1.7) * band * 0.06;
+            const x = vertical ? vv : u;
+            const y = vertical ? u : vv;
+            if (k) ctx.lineTo(x, y);
+            else ctx.moveTo(x, y);
+          }
+          ctx.stroke();
+        }
+      }
+      const fin = pat ? clamp((p - 0.88) / 0.12) : e;
+      if (fin > 0) {
+        ctx.globalAlpha = fin;
+        drawFull(ctx, B, W, H);
+      }
+      break;
+    }
+
+    case 'melt': {
+      drawFull(ctx, B, W, H);
+      const [dx, dy] = dirVec(P.dir);
+      const vertical = dy !== 0;
+      const sign = vertical ? dy : dx;
+      const n = P.count || 24;
+      const L = vertical ? H : W;
+      const M = vertical ? W : H;
+      const cw = M / n;
+      const spread = P.intensity || 0.6;
+      for (let i = 0; i < n; i++) {
+        const t = ease(spec.easing, clamp(p * (1 + hash01(i, 49) * spread)));
+        if (t >= 1) continue;
+        const stretch = 1 + 0.35 * t;
+        const len = L * stretch;
+        const off = sign > 0 ? t * L * 1.05 : -t * L * 1.05 - (len - L);
+        const m0 = i * cw;
+        if (vertical) ctx.drawImage(A, m0, 0, cw, H, m0, off, cw + 0.6, len);
+        else ctx.drawImage(A, 0, m0, W, cw, off, m0, len, cw + 0.6);
+      }
+      break;
+    }
+
+    case 'bubbles': {
+      drawFull(ctx, A, W, H);
+      const n = P.count || 16;
+      const cover: Record<string, number> = { circle: 1, hexagon: 1.16, star: 2.15, heart: 1.9, diamond: 1.42, square: 1.34, triangle: 2.05 };
+      const kf = cover[P.shape || 'circle'] || 1.2;
+      const blobs: Array<[number, number, number, number]> = [];
+      ctx.save();
+      ctx.beginPath();
+      for (let i = 0; i < n; i++) {
+        const delay = hash01(i, 53) * 0.55;
+        const t = clamp((p - delay) / (1 - delay));
+        if (t <= 0) continue;
+        const x = hash01(i, 59) * W;
+        const y = hash01(i, 61) * H;
+        const r = Math.max(0.1, diag * kf * Math.pow(ease(spec.easing, t), 1.6));
+        shapePath(ctx, P.shape, x, y, r, 0, false);
+        blobs.push([x, y, r, t]);
+      }
+      ctx.clip();
+      drawFull(ctx, B, W, H);
+      ctx.restore();
+      if (P.color) {
+        ctx.strokeStyle = colorOf(P.color, cols);
+        ctx.lineWidth = Math.max(2, Math.min(W, H) * 0.008);
+        for (const [x, y, r, t] of blobs) {
+          if (t >= 1) continue;
+          ctx.globalAlpha = 0.85 * (1 - t);
+          shapePath(ctx, P.shape, x, y, r, 0, true);
+          ctx.stroke();
+        }
+      }
+      break;
+    }
+
+    case 'toss': {
+      const [dx, dy] = dirVec(P.dir);
+      drawTransformed(ctx, B, W, H, 0, 0, 1.08 - 0.08 * e);
+      if (e >= 1) break;
+      const ang = ((P.angle || 20) * Math.PI) / 180;
+      const x = dx * W * 2 * e;
+      const y = dy * H * 2 * e - Math.sin(Math.PI * clamp(e)) * H * 0.08;
+      const s = 1 - 0.18 * clamp(e);
+      ctx.save();
+      ctx.translate(W / 2 + x, H / 2 + y);
+      ctx.rotate(ang * e * (dx < 0 ? -1 : 1));
+      ctx.scale(s, s);
+      if (allowBlur) {
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowBlur = 30;
+      }
+      if (P.mode === 'foto') {
+        const b = Math.min(W, H) * 0.035;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(-W / 2 - b, -H / 2 - b, W + b * 2, H + b * 4.5);
+        ctx.shadowColor = 'transparent';
+      }
+      ctx.drawImage(A, -W / 2, -H / 2, W, H);
+      ctx.restore();
+      break;
+    }
+
     case 'custom': {
       const lerpP = (a: CustomPose | undefined, b: CustomPose | undefined, t: number) => ({
         x: ((a?.x ?? 0) + ((b?.x ?? 0) - (a?.x ?? 0)) * t) * (W / 1080),
@@ -1803,6 +2571,27 @@ export function drawTransition(
     }
   }
   ctx.restore();
+  // ---- aksen (lapisan atas) ----
+  if (fx === 'kilat' || fx === 'warna') {
+    const a = clamp(1 - Math.abs(p - 0.5) / 0.16) * 0.9;
+    if (a > 0) {
+      ctx.globalAlpha = a;
+      ctx.fillStyle = fx === 'kilat' ? '#FFFFFF' : cols.primary;
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = 1;
+    }
+  } else if (fx === 'cahaya' && bump > 0.001) {
+    ctx.globalCompositeOperation = 'screen';
+    const cx = -0.3 * W + 1.6 * W * p;
+    const g = ctx.createLinearGradient(cx - W * 0.6, 0, cx + W * 0.6, H * 0.4);
+    g.addColorStop(0, 'rgba(255,120,40,0)');
+    g.addColorStop(0.45, `rgba(255,140,60,${(0.75 * bump).toFixed(3)})`);
+    g.addColorStop(0.6, `rgba(255,220,150,${(0.55 * bump).toFixed(3)})`);
+    g.addColorStop(1, 'rgba(255,200,120,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  }
+  ctx.restore();
 }
 
 let scratch: HTMLCanvasElement | null = null;
@@ -1819,7 +2608,8 @@ function getScratch(w: number, h: number): HTMLCanvasElement {
 const KINDS: TransitionKind[] = [
   'cut', 'fade', 'slide', 'push', 'wipe', 'iris', 'shape', 'zoom', 'blinds', 'grid', 'stripes', 'spin', 'flip', 'cube',
   'whip', 'glitch', 'flash', 'blur', 'split', 'clock', 'pixelate', 'ink', 'slice', 'colorwipe', 'burst', 'shake', 'card', 'dolly', 'shatter', 'sand',
-  'wave', 'zigzag', 'dots', 'rings', 'fan', 'pie', 'checker', 'carousel', 'tilt', 'stretch', 'colorbars', 'scan', 'diagblinds', 'filmroll', 'swing', 'curtain', 'custom',
+  'wave', 'zigzag', 'dots', 'rings', 'fan', 'pie', 'checker', 'carousel', 'tilt', 'stretch', 'colorbars', 'scan', 'diagblinds', 'filmroll', 'swing', 'curtain',
+  'spotlight', 'flytiles', 'tear', 'roll', 'slats', 'pagecurl', 'tilesout', 'lens', 'brush', 'melt', 'bubbles', 'toss', 'custom',
 ];
 
 export function parseTransitionCode(raw: string, fallbackName = 'Transisi Custom'): { ok: boolean; error?: string; spec?: TransitionSpec } {

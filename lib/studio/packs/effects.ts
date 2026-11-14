@@ -44,7 +44,15 @@ export type EffectKind =
   | 'balon'
   | 'static'
   | 'speedline'
-  | 'sinar';
+  | 'sinar'
+  | 'aurora'
+  | 'riak'
+  | 'garis-gerak'
+  | 'polkadot'
+  | 'bintang-jatuh'
+  | 'kunang'
+  | 'grid-neon'
+  | 'pita';
 
 export interface EffectParams {
   style: string;
@@ -53,6 +61,10 @@ export interface EffectParams {
   /** id ikon dari Icon Pack (bawaan atau custom admin) */
   icon?: string;
   motion?: 'jatuh' | 'naik' | 'melayang';
+  /** palet warna pengganti warna tema (lihat EFFECT_PALETTES) */
+  palette?: string;
+  /** id gaya lengkap untuk UI, mis. "tema~biru" */
+  variant?: string;
 }
 
 export interface EffectSpec {
@@ -127,6 +139,14 @@ const DEFS: Def[] = [
   { kind: 'static', label: 'TV Static', group: 'retro', layer: 'over', tags: ['static', 'noise', 'tv', 'horor', 'glitch'], styles: [['ringan', 'Bersemut'], ['rusak', 'Sinyal Rusak'], ['glitch', 'Glitch Blok']] },
   { kind: 'speedline', label: 'Garis Kecepatan', group: 'dramatis', layer: 'over', tags: ['anime', 'speed', 'kecepatan', 'kaget', 'fokus'], styles: [['putih', 'Putih'], ['hitam', 'Hitam'], ['tema', 'Warna Tema']] },
   { kind: 'sinar', label: 'Sinar Berputar', group: 'cahaya', layer: 'under', tags: ['sinar', 'rays', 'promo', 'juara'], styles: [['putih', 'Putih'], ['emas', 'Emas'], ['tema', 'Warna Tema']] },
+  { kind: 'aurora', label: 'Aurora', group: 'cahaya', layer: 'under', tags: ['aurora', 'langit', 'malam', 'magis', 'dreamy'], styles: [['hijau', 'Hijau Kutub'], ['ungu', 'Ungu Biru'], ['tema', 'Warna Tema']] },
+  { kind: 'riak', label: 'Riak Air', group: 'partikel', layer: 'over', tags: ['riak', 'air', 'kolam', 'tenang', 'ripple'], styles: [['air', 'Air'], ['putih', 'Putih'], ['tema', 'Warna Tema']] },
+  { kind: 'garis-gerak', label: 'Garis Bergerak', group: 'pesta', layer: 'under', tags: ['garis', 'stripes', 'promo', 'dinamis', 'latar'], styles: [['putih', 'Putih'], ['hitam', 'Hitam'], ['tema', 'Warna Tema']] },
+  { kind: 'polkadot', label: 'Polkadot', group: 'pesta', layer: 'under', tags: ['polkadot', 'titik', 'lucu', 'anak', 'pastel'], styles: [['putih', 'Putih'], ['pastel', 'Pastel'], ['tema', 'Warna Tema']] },
+  { kind: 'bintang-jatuh', label: 'Bintang Jatuh', group: 'cahaya', layer: 'over', tags: ['bintang jatuh', 'meteor', 'malam', 'harapan', 'mimpi'], styles: [['putih', 'Putih'], ['emas', 'Emas'], ['tema', 'Warna Tema']] },
+  { kind: 'kunang', label: 'Kunang-kunang', group: 'partikel', layer: 'over', tags: ['kunang', 'firefly', 'malam', 'magis', 'hutan'], styles: [['kuning', 'Kuning'], ['hijau', 'Hijau'], ['tema', 'Warna Tema']] },
+  { kind: 'grid-neon', label: 'Grid Neon', group: 'retro', layer: 'under', tags: ['synthwave', 'grid', 'neon', 'retro', '80an'], styles: [['pink', 'Pink'], ['biru', 'Biru'], ['tema', 'Warna Tema']] },
+  { kind: 'pita', label: 'Pita Jatuh', group: 'pesta', layer: 'over', tags: ['pita', 'streamer', 'pesta', 'ulang tahun', 'perayaan'], styles: [['warna', 'Warna-warni'], ['emas', 'Emas'], ['tema', 'Warna Tema']] },
 ];
 
 /** Ikon tambahan untuk Hujan Ikon (v7): tiap ikon × 3 gaya gerak = gaya baru yang benar-benar beda. */
@@ -238,6 +258,26 @@ if (ikonDef) {
     for (const [m, ml] of IKON_MOTION) ikonDef.styles.push([`${icon}-${m}`, `${label} ${ml}`, { icon, motion: m }]);
 }
 
+/** Palet warna pengganti warna tema. Gaya "Warna Tema" (dan semua Hujan Ikon) punya varian palet ini. */
+export const EFFECT_PALETTES: Array<{ id: string; label: string; colors: [string, string] }> = [
+  { id: 'merah', label: 'Merah', colors: ['#EF4444', '#FCA5A5'] },
+  { id: 'oranye', label: 'Oranye', colors: ['#F97316', '#FDBA74'] },
+  { id: 'kuning', label: 'Kuning', colors: ['#FACC15', '#FEF08A'] },
+  { id: 'hijau', label: 'Hijau', colors: ['#22C55E', '#86EFAC'] },
+  { id: 'toska', label: 'Toska', colors: ['#14B8A6', '#5EEAD4'] },
+  { id: 'biru', label: 'Biru', colors: ['#3B82F6', '#93C5FD'] },
+  { id: 'ungu', label: 'Ungu', colors: ['#8B5CF6', '#C4B5FD'] },
+  { id: 'pink', label: 'Pink', colors: ['#EC4899', '#F9A8D4'] },
+  { id: 'emas', label: 'Emas', colors: ['#D4A017', '#FDE68A'] },
+  { id: 'perak', label: 'Perak', colors: ['#CBD5E1', '#F8FAFC'] },
+  { id: 'neon', label: 'Neon', colors: ['#39FF14', '#00E5FF'] },
+  { id: 'sunset', label: 'Sunset', colors: ['#FF6A3D', '#FF3D7F'] },
+];
+const PALETTE_BY = new Map(EFFECT_PALETTES.map((p) => [p.id, p]));
+/** Hujan Ikon memakai 5 palet utama (agar daftar tetap ringkas). */
+const IKON_PALETTES = ['merah', 'kuning', 'hijau', 'biru', 'ungu'];
+const palettesFor = (kind: string, style: string): string[] => (kind === 'ikon' ? IKON_PALETTES : style === 'tema' ? EFFECT_PALETTES.map((p) => p.id) : []);
+
 function build(): EffectSpec[] {
   const out: EffectSpec[] = [];
   for (const d of DEFS)
@@ -259,13 +299,58 @@ function build(): EffectSpec[] {
 const LIB = build();
 const BY_ID = new Map(LIB.map((e) => [e.id, e]));
 
+/* Varian palet (`<jenis>-<gaya>~<palet>-<kekuatan>`) dibuat saat dibutuhkan agar pack tetap ringan dimuat. */
+const PALETTE_VARIANTS = new Map<string, EffectSpec>();
+function paletteOf(id: string): EffectSpec | undefined {
+  const hit = PALETTE_VARIANTS.get(id);
+  if (hit) return hit;
+  const i = id.indexOf('~');
+  if (i < 0) return undefined;
+  const j = id.lastIndexOf('-');
+  if (j < i) return undefined;
+  const pid = id.slice(i + 1, j);
+  const base = BY_ID.get(id.slice(0, i) + id.slice(j));
+  const pl = PALETTE_BY.get(pid);
+  if (!base || !pl || base.author !== 'builtin' || !palettesFor(base.kind, base.params.style).includes(pid)) return undefined;
+  const def = DEFS.find((d) => d.kind === base.kind);
+  const st = def?.styles.find((x) => x[0] === base.params.style);
+  const lvl = INT.find(([k]) => k === id.slice(j + 1));
+  const v: EffectSpec = {
+    ...base,
+    id,
+    name: `${def?.label || base.kind} ${st?.[1] || base.params.style} · Palet ${pl.label}${lvl ? ` · ${lvl[1]}` : ''}`,
+    tags: [...base.tags, pid],
+    params: { ...base.params, palette: pid, variant: `${base.params.style}~${pid}` },
+  };
+  PALETTE_VARIANTS.set(id, v);
+  return v;
+}
+let FULL: EffectSpec[] | null = null;
+/** Semua efek termasuk varian palet (dibuat sekali saat pertama dipanggil). */
 export function allEffects(): EffectSpec[] {
-  return LIB;
+  if (!FULL) {
+    FULL = [...LIB];
+    for (const d of DEFS)
+      for (const [sk] of d.styles)
+        for (const pid of palettesFor(d.kind, sk))
+          for (const [ik] of INT) {
+            const v = paletteOf(`${d.kind}-${sk}~${pid}-${ik}`);
+            if (v) FULL.push(v);
+          }
+  }
+  return FULL;
+}
+/** Jumlah semua efek (tanpa membuat daftar lengkap). */
+export function effectCount(): number {
+  if (FULL) return FULL.length;
+  let n = LIB.length;
+  for (const d of DEFS) for (const [sk] of d.styles) n += palettesFor(d.kind, sk).length * INT.length;
+  return n;
 }
 const ALIAS: Record<string, string> = { ngakak: 'bintang', mie: 'makanan', seratus: 'kilat' };
 export function getEffect(id?: string): EffectSpec | undefined {
   if (!id) return undefined;
-  const hit = BY_ID.get(id);
+  const hit = BY_ID.get(id) || paletteOf(id);
   if (hit || !id.startsWith('emoji-')) return hit;
   // proyek lama yang masih memakai efek emoji → ikon
   const [, style, lvl] = id.split('-');
@@ -276,14 +361,16 @@ export function registerEffect(e: EffectSpec) {
   if (i >= 0) LIB[i] = e;
   else LIB.push(e);
   BY_ID.set(e.id, e);
+  FULL = null;
 }
 export function unregisterEffect(id: string) {
   const i = LIB.findIndex((x) => x.id === id);
   if (i >= 0) LIB.splice(i, 1);
   BY_ID.delete(id);
+  FULL = null;
 }
 export const effectKinds = () =>
-  DEFS.map((d) => ({ kind: d.kind, label: d.label, group: d.group, layer: d.layer, tags: d.tags, styles: d.styles.map((s) => ({ id: s[0], label: s[1] })) }));
+  DEFS.map((d) => ({ kind: d.kind, label: d.label, group: d.group, layer: d.layer, tags: d.tags, styles: d.styles.map((s) => ({ id: s[0], label: s[1], palettes: palettesFor(d.kind, s[0]) })) }));
 export const INTENSITY_LEVELS = INT.map(([id, label]) => ({ id, label }));
 /** id efek untuk kombinasi jenis + gaya + intensitas */
 export const effectId = (kind: string, style: string, lvl = 'sedang') => `${kind}-${style}-${lvl}`;
@@ -292,7 +379,7 @@ export function splitEffectId(id: string): { kind: string; style: string; lvl: s
   const e = getEffect(id);
   if (!e || e.author === 'admin') return null;
   const lvl = INT.find(([k]) => id.endsWith(`-${k}`))?.[0] || 'sedang';
-  return { kind: e.kind, style: e.params.style, lvl };
+  return { kind: e.kind, style: e.params.variant || e.params.style, lvl };
 }
 
 /** Cari efek yang cocok dengan kata kunci prompt. */
@@ -537,6 +624,10 @@ export function drawPostEffect(ctx: CanvasRenderingContext2D, spec: EffectSpec, 
 
 /** Efek lapisan (dipanggil di ruang unit dasar, setelah setTransform ke skala kanvas). */
 export function drawEffect(ctx: CanvasRenderingContext2D, spec: EffectSpec, c: EffectCtx, amount = 1) {
+  if (spec.params.palette) {
+    const pl = PALETTE_BY.get(spec.params.palette);
+    if (pl) c = { ...c, primary: pl.colors[0], secondary: pl.colors[1] };
+  }
   const { W, H, t, primary, secondary } = c;
   const k = spec.params.k * amount;
   const st = spec.params.style;
@@ -1196,6 +1287,191 @@ export function drawEffect(ctx: CanvasRenderingContext2D, spec: EffectSpec, c: E
         ctx.arc(0, 0, R, a, a + Math.PI / nr);
         ctx.closePath();
         ctx.fill();
+      }
+      break;
+    }
+    case 'aurora': {
+      const cols = st === 'hijau' ? ['#3EF2B8', '#7CFFCB'] : st === 'ungu' ? ['#B46BFF', '#5AB8FF'] : [primary, secondary];
+      ctx.globalCompositeOperation = 'lighter';
+      for (let b = 0; b < 3; b++) {
+        const col = cols[b % cols.length];
+        const yb = H * (0.18 + b * 0.14);
+        const th = H * (0.12 + 0.05 * Math.sin(t * 0.4 + b)) * Math.min(1.6, 0.6 + k * 0.4);
+        const steps = 24;
+        ctx.beginPath();
+        for (let i = 0; i <= steps; i++) {
+          const x = (i / steps) * W;
+          const y = yb + Math.sin((x / W) * 6 + t * 0.6 + b * 1.7) * H * 0.05 - th / 2;
+          if (i) ctx.lineTo(x, y);
+          else ctx.moveTo(x, y);
+        }
+        for (let i = steps; i >= 0; i--) {
+          const x = (i / steps) * W;
+          ctx.lineTo(x, yb + Math.sin((x / W) * 6 + t * 0.6 + b * 1.7 + 0.8) * H * 0.05 + th / 2);
+        }
+        ctx.closePath();
+        const g = ctx.createLinearGradient(0, yb - th, 0, yb + th);
+        g.addColorStop(0, rgba(col, 0));
+        g.addColorStop(0.5, rgba(col, Math.min(0.5, 0.22 * k)));
+        g.addColorStop(1, rgba(col, 0));
+        ctx.fillStyle = g;
+        ctx.fill();
+      }
+      break;
+    }
+    case 'riak': {
+      const col = st === 'putih' ? '#FFFFFF' : st === 'tema' ? primary : '#9BE7FF';
+      ctx.lineWidth = Math.max(1.5, Math.min(W, H) * 0.004);
+      for (let i = 0; i < n(5); i++) {
+        const cyc = t * (0.25 + hash01(i, 2) * 0.2) + hash01(i, 3);
+        const ph = fr(cyc);
+        const seed = Math.floor(cyc) * 7 + i;
+        const x = hash01(seed, 5) * W;
+        const y = hash01(seed, 6) * H;
+        const R = Math.min(W, H) * (0.18 + hash01(i, 4) * 0.25);
+        for (const f of [1, 0.7, 0.45]) {
+          const r = ph * R * f;
+          if (r < 1) continue;
+          ctx.strokeStyle = rgba(col, (1 - ph) * 0.55);
+          ctx.beginPath();
+          ctx.ellipse(x, y, r, r * 0.55, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+      break;
+    }
+    case 'garis-gerak': {
+      const col = st === 'hitam' ? '#000000' : st === 'tema' ? primary : '#FFFFFF';
+      const u = Math.min(W, H) / 1080;
+      const sw = 60 * u;
+      const gap = 140 * u;
+      const R = Math.hypot(W, H);
+      ctx.translate(W / 2, H / 2);
+      ctx.rotate(-Math.PI / 6);
+      ctx.fillStyle = rgba(col, Math.min(0.35, 0.12 * k));
+      const off = (t * 80 * u) % gap;
+      for (let x = -R; x < R; x += gap) ctx.fillRect(x + off, -R, sw, R * 2);
+      break;
+    }
+    case 'polkadot': {
+      const cols = st === 'pastel' ? ['#FBCFE8', '#BFDBFE', '#BBF7D0', '#FEF08A'] : st === 'tema' ? [primary, secondary] : ['#FFFFFF'];
+      const u = Math.min(W, H) / 1080;
+      const gap = (120 * u) / Math.min(1.6, Math.max(0.6, k));
+      let idx = 0;
+      for (let y = -gap; y < H + gap; y += gap) {
+        const row = Math.round(y / gap);
+        for (let x = -gap; x < W + gap; x += gap) {
+          idx++;
+          const xx = x + (row % 2 ? gap / 2 : 0) + ((t * 20 * u) % gap);
+          const yy = y + Math.sin(t * 1.2 + (x / W) * 8) * 6 * u;
+          const r = (10 + 6 * Math.sin(t * 2 + idx)) * u;
+          ctx.fillStyle = rgba(cols[idx % cols.length], 0.35);
+          ctx.beginPath();
+          ctx.arc(xx, yy, Math.max(1, r), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      break;
+    }
+    case 'bintang-jatuh': {
+      const col = st === 'emas' ? '#FFD45E' : st === 'tema' ? primary : '#FFFFFF';
+      const u = Math.min(W, H) / 1080;
+      ctx.lineCap = 'round';
+      for (let i = 0; i < n(6); i++) {
+        const cyc = t * (0.35 + hash01(i, 2) * 0.3) + hash01(i, 3);
+        const ph = fr(cyc);
+        if (ph > 0.6) continue;
+        const q = ph / 0.6;
+        const seed = Math.floor(cyc) * 11 + i;
+        const x = hash01(seed, 5) * W * 1.2 - q * W * 0.7;
+        const y = hash01(seed, 6) * H * 0.5 - H * 0.1 + q * W * 0.45;
+        const len = (180 + hash01(i, 7) * 220) * u;
+        const g = ctx.createLinearGradient(x, y, x + len * 0.84, y - len * 0.54);
+        g.addColorStop(0, rgba(col, 0.95 * (1 - q * 0.5)));
+        g.addColorStop(1, rgba(col, 0));
+        ctx.strokeStyle = g;
+        ctx.lineWidth = 3 * u + 1;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + len * 0.84, y - len * 0.54);
+        ctx.stroke();
+        ctx.fillStyle = rgba('#FFFFFF', 0.9 * (1 - q * 0.5));
+        ctx.beginPath();
+        ctx.arc(x, y, 3.5 * u + 1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      break;
+    }
+    case 'kunang': {
+      const col = st === 'hijau' ? '#A3FF7A' : st === 'tema' ? primary : '#FFE066';
+      ctx.globalCompositeOperation = 'lighter';
+      const u = Math.min(W, H) / 1080;
+      for (let i = 0; i < n(26); i++) {
+        const x = hash01(i, 1) * W + Math.sin(t * (0.3 + hash01(i, 2) * 0.5) + i) * 70 * u;
+        const y = hash01(i, 3) * H + Math.cos(t * (0.25 + hash01(i, 4) * 0.4) + i * 2) * 60 * u;
+        const tw = Math.max(0, Math.sin(t * (1.5 + hash01(i, 5) * 2) + i * 5));
+        if (tw <= 0.01) continue;
+        const r = (5 + hash01(i, 6) * 6) * u + 1;
+        const g = ctx.createRadialGradient(x, y, 0, x, y, r * 5);
+        g.addColorStop(0, rgba(col, 0.9 * tw));
+        g.addColorStop(0.3, rgba(col, 0.35 * tw));
+        g.addColorStop(1, rgba(col, 0));
+        ctx.fillStyle = g;
+        ctx.fillRect(x - r * 5, y - r * 5, r * 10, r * 10);
+      }
+      break;
+    }
+    case 'grid-neon': {
+      const col = st === 'biru' ? '#22D3EE' : st === 'tema' ? primary : '#FF2A6D';
+      const hz = H * 0.58;
+      const g = ctx.createLinearGradient(0, hz - H * 0.18, 0, hz + 4);
+      g.addColorStop(0, rgba(col, 0));
+      g.addColorStop(1, rgba(col, 0.35));
+      ctx.fillStyle = g;
+      ctx.fillRect(0, hz - H * 0.18, W, H * 0.18 + 4);
+      ctx.strokeStyle = rgba(col, 0.7);
+      ctx.lineWidth = Math.max(1, Math.min(W, H) * 0.003);
+      const vx = W / 2;
+      for (let i = -14; i <= 14; i++) {
+        ctx.beginPath();
+        ctx.moveTo(vx + (i / 14) * W * 0.08, hz);
+        ctx.lineTo(vx + (i / 14) * W * 1.6, H);
+        ctx.stroke();
+      }
+      const sp = (t * 0.6 * Math.min(2, k)) % 1;
+      for (let j = 0; j < 10; j++) {
+        const q = (j + sp) / 10;
+        const y = hz + (H - hz) * q * q;
+        ctx.globalAlpha = Math.min(1, q * 1.5);
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(W, y);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      break;
+    }
+    case 'pita': {
+      const cols = st === 'emas' ? ['#FFD45E', '#E6A93A', '#FFF1B8'] : st === 'tema' ? [primary, secondary, '#FFFFFF'] : RAINBOW;
+      const u = Math.min(W, H) / 1080;
+      ctx.lineCap = 'round';
+      for (let i = 0; i < n(14); i++) {
+        const ph = fr(hash01(i, 3) + t * (0.06 + hash01(i, 2) * 0.06));
+        const x0 = hash01(i, 1) * W;
+        const y0 = ph * (H + 400 * u) - 200 * u;
+        const len = (120 + hash01(i, 4) * 120) * u;
+        const amp = (14 + hash01(i, 5) * 12) * u;
+        ctx.strokeStyle = cols[i % cols.length];
+        ctx.lineWidth = 7 * u + 1;
+        ctx.beginPath();
+        for (let s = 0; s <= 12; s++) {
+          const q = s / 12;
+          const x = x0 + Math.sin(q * Math.PI * 3 + t * 4 + i) * amp;
+          const y = y0 + q * len;
+          if (s) ctx.lineTo(x, y);
+          else ctx.moveTo(x, y);
+        }
+        ctx.stroke();
       }
       break;
     }

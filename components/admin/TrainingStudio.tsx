@@ -5,11 +5,11 @@ import Link from 'next/link';
 import { AlertTriangle, ArrowLeft, BookOpen, CheckCircle2, Code2, Loader2, Pencil, RefreshCw, Save, Trash2, Wand2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { allIcons, IconDef, iconSvgMarkup, parseSvgMarkup } from '@/lib/studio/packs/icons';
-import { allComponents, COMPONENT_CODE_EXAMPLE, componentKinds, ComponentDef, drawComponent, parseComponentCode } from '@/lib/studio/packs/components';
-import { allTransitions, drawTransition, parseTransitionCode, TRANSITION_CODE_EXAMPLE, TransitionSpec } from '@/lib/studio/packs/transitions';
+import { componentCount, COMPONENT_CODE_EXAMPLE, componentKinds, ComponentDef, drawComponent, parseComponentCode } from '@/lib/studio/packs/components';
+import { transitionCount, drawTransition, parseTransitionCode, TRANSITION_CODE_EXAMPLE, TransitionSpec } from '@/lib/studio/packs/transitions';
 import { allAnimations, ANIMATION_CODE_EXAMPLE, AnimSpec, evalIn, evalLoop, parseAnimationCode } from '@/lib/studio/packs/animations';
 import { TEMPLATES, THEMES } from '@/lib/studio/packs/templates';
-import { allEffects, EFFECT_CODE_EXAMPLE, effectKinds, EffectSpec, parseEffectCode } from '@/lib/studio/packs/effects';
+import { effectCount, EFFECT_CODE_EXAMPLE, effectKinds, EffectSpec, parseEffectCode } from '@/lib/studio/packs/effects';
 import { EffectThumb } from '@/components/studio/Thumbs';
 import { applyRow, loadTraining, removeRow, TrainingRow } from '@/lib/studio/training';
 import { canvasFamily, ensureFonts } from '@/lib/studio/fonts';
@@ -445,10 +445,10 @@ export default function TrainingStudio() {
   const listForTab = rows.filter((r) => (tab === 'teks' ? r.type === 'hook' || r.type === 'cta' : r.type === tab));
   const counts = {
     icon_pack: allIcons().length,
-    component_pack: allComponents().length,
-    transition_pack: allTransitions().length,
+    component_pack: componentCount(),
+    transition_pack: transitionCount(),
     animation_pack: allAnimations().length,
-    effect_pack: allEffects().length,
+    effect_pack: effectCount(),
   };
 
   return (
