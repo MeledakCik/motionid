@@ -2,7 +2,8 @@ import type { Config } from 'tailwindcss';
 
 /**
  * Warna khas MotionKu: "Depup Violet" — selaras dengan depup.cloud.
- * Violet-biru #7B50FF di atas lavender terang, kartu kaca putih, panel gelap #1E1150, aksen limau #C6F432.
+ * Violet-biru #7B50FF di atas gradien lavender yang halus, kartu kaca putih, panel gelap #1E1150, aksen limau #C6F432.
+ * Gradien latar & kelas kaca ada di app/globals.css.
  * Nama token lama dipertahankan supaya semua komponen tetap jalan, dengan makna:
  *   coral = warna utama · amber = peringatan · mint = sukses · ink = kolom/input
  *   night = latar halaman · panel* = kartu · cream = teks utama · muted/dim = teks sekunder
@@ -35,12 +36,10 @@ const config: Config = {
       },
       backgroundImage: {
         'mk-grad': 'linear-gradient(100deg, #6A3CF6 0%, #7B50FF 55%, #9775FF 100%)',
-        'mk-night':
-          'radial-gradient(900px circle at 0% -10%, rgba(123,80,255,0.18), transparent 60%), radial-gradient(800px circle at 100% 0%, rgba(151,117,255,0.16), transparent 55%), radial-gradient(700px circle at 50% 115%, rgba(91,120,255,0.14), transparent 60%), linear-gradient(180deg, #F2EEFF 0%, #E8E0FF 100%)',
       },
       boxShadow: {
         'mk-glow': '0 12px 30px -12px rgba(123,80,255,0.6)',
-        'mk-card': 'inset 0 1px 0 rgba(255,255,255,0.7), 0 18px 40px -24px rgba(48,24,140,0.35)',
+        'mk-card': 'inset 0 1px 0 rgba(255,255,255,0.9), 0 0 0 1px rgba(18,11,46,0.05), 0 18px 40px -26px rgba(48,24,140,0.4)',
       },
       fontFamily: {
         sans: ['var(--font-jakarta)', 'var(--font-poppins)', 'system-ui', 'sans-serif'],
@@ -51,14 +50,22 @@ const config: Config = {
         space: ['var(--font-space)', 'sans-serif'],
         anton: ['var(--font-anton)', 'sans-serif'],
       },
+      // gerak seragam dengan Depup Office (Motion.kt STANDARD): cepat di awal, berhenti lembut tanpa pantulan
+      transitionTimingFunction: {
+        DEFAULT: 'cubic-bezier(0.2, 0, 0, 1)',
+      },
+      transitionDuration: {
+        DEFAULT: '200ms',
+      },
       keyframes: {
         'mk-up': { from: { opacity: '0', transform: 'translateY(10px)' }, to: { opacity: '1', transform: 'none' } },
         'mk-sheet': { from: { transform: 'translateY(100%)' }, to: { transform: 'translateY(0)' } },
         'mk-pulse': { '0%,100%': { opacity: '1' }, '50%': { opacity: '0.45' } },
       },
       animation: {
-        'mk-up': 'mk-up .35s ease-out both',
-        'mk-sheet': 'mk-sheet .28s cubic-bezier(.2,.8,.2,1) both',
+        // kurva ENTER Depup Office (Motion.kt): cepat di awal, mendarat lembut, tanpa pantulan
+        'mk-up': 'mk-up .32s cubic-bezier(.05,.7,.1,1) both',
+        'mk-sheet': 'mk-sheet .32s cubic-bezier(.05,.7,.1,1) both',
         'mk-pulse': 'mk-pulse 1.4s ease-in-out infinite',
       },
     },

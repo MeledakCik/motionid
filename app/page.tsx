@@ -43,9 +43,9 @@ const FEATURES = [
 
 export default function LandingPage() {
   return (
-    <div className="mk-hero-bg min-h-screen text-mk-cream">
+    <div className="min-h-screen text-mk-cream">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      <header className="mk-glass sticky top-0 z-40 border-b border-white/70">
+      <header className="mk-glass mk-bar sticky top-0 z-40 border-b border-white/60">
         <nav className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-5">
           <Link href="/" aria-label="MotionKu, ke beranda">
             <Logo />
@@ -144,8 +144,7 @@ export default function LandingPage() {
         </section>
 
         <section className="mx-auto max-w-6xl px-5 pb-20">
-          <div className="relative overflow-hidden rounded-3xl bg-mk-deep p-8 text-white sm:p-12">
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(600px_circle_at_0%_0%,rgba(123,80,255,0.5),transparent_60%),radial-gradient(500px_circle_at_100%_100%,rgba(151,117,255,0.3),transparent_60%)]" />
+          <div className="mk-mesh-deep relative overflow-hidden rounded-3xl p-8 text-white shadow-[0_24px_60px_-28px_rgba(30,17,80,0.65)] sm:p-12">
             <svg className="pointer-events-none absolute right-8 top-8 hidden h-14 w-52 sm:block" viewBox="0 0 208 56" fill="none" aria-hidden>
               <path d="M3 40c12 0 14-34 28-34s14 44 28 44 14-38 28-38 14 32 28 32 14-26 28-26 14 18 28 18 14-30 35-34" stroke="#C6F432" strokeWidth="4" strokeLinecap="round" />
             </svg>
@@ -158,7 +157,7 @@ export default function LandingPage() {
         </section>
       </main>
 
-      <footer className="border-t border-mk-line py-8 text-center text-xs text-mk-dim">
+      <footer className="border-t border-white/60 py-8 text-center text-xs text-mk-dim">
         © {new Date().getFullYear()} {SITE_NAME} · Ikon oleh Lucide (ISC)
       </footer>
     </div>

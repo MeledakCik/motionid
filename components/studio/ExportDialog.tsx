@@ -93,8 +93,8 @@ export default function ExportDialog({
   const canShare = typeof navigator !== 'undefined' && !!navigator.canShare && !!result && navigator.canShare({ files: [new File([result.blob], fileName, { type: result.mime })] });
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-mk-deep/40 p-0 backdrop-blur-sm sm:items-center sm:p-4" role="dialog" aria-label="Export video">
-      <div className="mk-glass mk-glass-strong w-full max-w-md animate-mk-up rounded-t-3xl border border-white/80 p-5 shadow-2xl sm:rounded-3xl">
+    <div className="mk-scrim fixed inset-0 z-[60] flex items-end justify-center p-0 sm:items-center sm:p-4" role="dialog" aria-label="Export video">
+      <div className="mk-glass mk-solid mk-float w-full max-w-md animate-mk-up rounded-t-3xl border border-white/80 p-5 sm:rounded-3xl">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-base font-extrabold">Export video</h3>
           <button type="button" className="mk-btn-icon" onClick={() => (abortRef.current?.abort(), onClose())} aria-label="Tutup">

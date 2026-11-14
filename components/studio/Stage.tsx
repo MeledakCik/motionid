@@ -387,7 +387,7 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
       }}
     >
       {view.z > 1 && (
-        <button type="button" onClick={() => setView({ z: 1, x: 0, y: 0 })} className="absolute bottom-3 right-3 z-20 rounded-full bg-mk-panel/95 px-3 py-1.5 text-xs font-bold text-mk-cream shadow">
+        <button type="button" onClick={() => setView({ z: 1, x: 0, y: 0 })} className="mk-glass mk-pop mk-float absolute bottom-3 right-3 z-20 rounded-full px-3 py-1.5 text-xs font-bold text-mk-cream">
           {Math.round(view.z * 100)}% · Reset zoom
         </button>
       )}

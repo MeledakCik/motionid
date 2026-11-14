@@ -86,7 +86,7 @@ export default function Timeline({ clock, onOpenTool }: { clock: PlaybackClock; 
   const trackW = desktop ? 520 : 300;
 
   return (
-    <div className="select-none border-t border-mk-line bg-mk-panel">
+    <div className="mk-glass select-none border-t border-white/60">
       {/* kontrol */}
       <div className="flex items-center gap-2 px-3 py-1.5">
         <button type="button" className="mk-btn-icon" onClick={() => (clock.pause(), clock.seek(0))} title="Ke awal">

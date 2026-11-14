@@ -57,8 +57,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="mk-hero-bg flex min-h-screen items-center justify-center p-5 text-mk-cream">
-      <div className="mk-glass w-full max-w-md space-y-6 rounded-3xl border border-white/80 p-7 text-center shadow-mk-card sm:p-8">
+    <div className="flex min-h-screen items-center justify-center p-5 text-mk-cream">
+      <div className="mk-glass mk-float w-full max-w-md animate-mk-up space-y-6 rounded-3xl border border-white/80 p-7 text-center sm:p-8">
         <div className="flex justify-center">
           <Logo className="text-lg" />
         </div>

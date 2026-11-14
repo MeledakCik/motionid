@@ -181,7 +181,7 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
 
   if (!doc) {
     return (
-      <div className="flex min-h-[100dvh] items-center justify-center bg-mk-night">
+      <div className="flex min-h-[100dvh] items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-mk-coral" />
       </div>
     );
@@ -241,9 +241,9 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
     );
 
   return (
-    <div className="flex h-[100dvh] flex-col overflow-hidden bg-mk-night text-mk-cream">
+    <div className="flex h-[100dvh] flex-col overflow-hidden text-mk-cream">
       {/* ------------------------- top bar ------------------------- */}
-      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-mk-line bg-mk-panel px-2 sm:px-3">
+      <header className="mk-glass flex h-14 shrink-0 items-center gap-2 border-b border-white/60 px-2 sm:px-3">
         <Link href={admin ? '/admin' : guest ? '/' : '/dashboard'} className="mk-btn-icon" aria-label="Kembali">
           <ArrowLeft className="h-4 w-4" />
         </Link>
@@ -301,7 +301,7 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
             </nav>
             {tool && tool !== 'properti' && (
               <aside className="mk-scroll w-[320px] shrink-0 overflow-y-auto border-r border-mk-line bg-mk-panel">
-                <div className="mk-glass sticky top-0 z-10 flex items-center justify-between border-b border-mk-line px-4 py-2.5">
+                <div className="mk-glass mk-bar sticky top-0 z-10 flex items-center justify-between border-b border-mk-line px-4 py-2.5">
                   <h3 className="text-sm font-extrabold">{TOOL_TITLE[tool]}</h3>
                   <button type="button" className="mk-btn-icon h-7 w-7" onClick={() => openTool(null)} aria-label="Tutup panel">
                     <X className="h-4 w-4" />
@@ -318,18 +318,18 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
           <Stage clock={clock} onRequestEdit={() => openTool(desktop ? null : 'properti')} />
           <div className="pointer-events-none absolute inset-x-2 top-2 z-10 flex flex-col items-center gap-1.5">
             {guest && (
-              <a href={loginHref()} className="pointer-events-auto rounded-full border border-mk-line bg-mk-panel/95 px-3 py-1.5 text-[11px] font-semibold text-mk-muted shadow">
+              <a href={loginHref()} className="mk-glass mk-pop mk-float pointer-events-auto rounded-full px-3 py-1.5 text-[11px] font-semibold text-mk-muted">
                 Mode tamu · tersimpan di perangkat ini · <span className="font-bold text-mk-coral">Masuk</span>
               </a>
             )}
             {placeholders.length > 0 && (
-              <button type="button" onClick={() => jumpPlaceholder()} className="pointer-events-auto rounded-full border border-mk-amber/50 bg-mk-panel/95 px-3 py-1.5 text-[12px] font-bold text-mk-amber shadow">
+              <button type="button" onClick={() => jumpPlaceholder()} className="mk-glass mk-pop mk-float pointer-events-auto rounded-full border border-mk-amber/40 px-3 py-1.5 text-[12px] font-bold text-mk-amber">
                 {placeholders.length} teks contoh perlu diganti · <span className="underline">Ganti</span>
               </button>
             )}
           </div>
           {coach > 0 && (
-            <div className="mk-glass-deep absolute inset-x-3 bottom-3 z-20 mx-auto max-w-sm animate-mk-up rounded-2xl border border-white/15 p-4 text-white shadow-2xl">
+            <div className="mk-glass-deep mk-pop mk-float absolute inset-x-3 bottom-3 z-20 mx-auto max-w-sm animate-mk-up rounded-2xl border border-white/15 p-4 text-white">
               <div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-mk-lime">Panduan singkat {coach}/3</div>
               <p className="text-sm font-semibold">
                 {coach === 1 && 'Ketuk teks, gambar, atau stiker di video untuk memilihnya. Seret untuk pindah, tarik titik sudut untuk ubah ukuran.'}
@@ -360,7 +360,7 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
         {/* ------------------------- desktop: inspector ------------------------- */}
         {desktop && (
           <aside className="mk-scroll w-[300px] shrink-0 overflow-y-auto border-l border-mk-line bg-mk-panel">
-            <div className="mk-glass sticky top-0 z-10 border-b border-mk-line px-4 py-2.5">
+            <div className="mk-glass mk-bar sticky top-0 z-10 border-b border-mk-line px-4 py-2.5">
               <h3 className="text-sm font-extrabold">{layer ? 'Edit elemen' : 'Pengaturan scene'}</h3>
             </div>
             <Inspector onOpenTool={openTool} />
@@ -370,7 +370,7 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
 
       {/* ------------------------- HP: panel menempel di bawah video (video tetap terlihat) ------------------------- */}
       {!desktop && tool ? (
-        <section className="flex h-[min(46vh,420px)] shrink-0 animate-mk-sheet flex-col border-t border-mk-line bg-mk-panel" aria-label={TOOL_TITLE[tool]}>
+        <section className="mk-glass flex h-[min(46vh,420px)] shrink-0 animate-mk-sheet flex-col rounded-t-3xl border-t border-white/70" aria-label={TOOL_TITLE[tool]}>
           <div className="flex items-center justify-between px-4 py-2">
             <h3 className="text-sm font-extrabold">{TOOL_TITLE[tool]}</h3>
             <button type="button" className="mk-btn-primary px-3 py-1.5 text-xs" onClick={() => openTool(null)}>
@@ -386,7 +386,7 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
 
       {/* ------------------------- mobile toolbar ------------------------- */}
       {!desktop && (
-        <nav className="shrink-0 border-t border-mk-line bg-mk-panel pb-[env(safe-area-inset-bottom)]">
+        <nav className="mk-glass shrink-0 border-t border-white/60 pb-[env(safe-area-inset-bottom)]">
           {layer ? (
             <div className="mk-noscroll flex items-center gap-1 overflow-x-auto px-2 py-1.5">
               <ToolBtn label="Edit" icon={SlidersHorizontal} onClick={() => openTool('properti')} active />

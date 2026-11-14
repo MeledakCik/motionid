@@ -158,8 +158,8 @@ export function BottomSheet({ open, onClose, title, children, tall }: { open: bo
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end lg:hidden" role="dialog" aria-label={title}>
-      <button type="button" aria-label="Tutup" className="absolute inset-0 bg-mk-deep/25" onClick={onClose} />
-      <div className={cx('mk-glass mk-glass-strong relative flex animate-mk-sheet flex-col rounded-t-3xl border-t border-white/80 shadow-2xl', tall ? 'h-[78vh]' : 'max-h-[64vh]')}>
+      <button type="button" aria-label="Tutup" className="mk-scrim absolute inset-0" onClick={onClose} />
+      <div className={cx('mk-glass mk-solid mk-float relative flex animate-mk-sheet flex-col rounded-t-3xl border-t border-white/80', tall ? 'h-[78vh]' : 'max-h-[64vh]')}>
         <div className="flex items-center justify-between px-4 pb-1 pt-2.5">
           <div className="mx-auto h-1 w-10 rounded-full bg-mk-line-2" />
         </div>
@@ -328,7 +328,7 @@ export function Dropdown<T extends string>({
         <div
           ref={menu}
           role="listbox"
-          className="mk-glass mk-glass-strong mk-scroll fixed z-[80] max-h-[360px] animate-mk-up overflow-y-auto rounded-2xl border border-white/80 p-1.5 shadow-2xl"
+          className="mk-glass mk-pop mk-float mk-scroll fixed z-[80] max-h-[360px] animate-mk-up overflow-y-auto rounded-2xl border border-white/80 p-1.5"
           style={{ left: pos.left, width: pos.width, ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }) }}
         >
           {label && <div className="px-2.5 pb-1 pt-1.5 text-[11px] font-extrabold uppercase tracking-wider text-mk-dim">{label}</div>}

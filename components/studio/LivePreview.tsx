@@ -68,7 +68,7 @@ export default function LivePreview({ doc, width = 300, className, withAudio = t
     <div className={className}>
       <div className="relative overflow-hidden rounded-[22px] border border-mk-line bg-black shadow-mk-card" style={{ width, aspectRatio: `${w}/${h}` }}>
         <canvas ref={ref} width={pw} height={ph} className="block h-full w-full" onClick={toggle} />
-        <button type="button" onClick={toggle} className="absolute bottom-3 left-3 flex h-9 w-9 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur" aria-label={playing ? 'Jeda' : 'Putar dengan suara'}>
+        <button type="button" onClick={toggle} className="absolute bottom-3 left-3 flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white" aria-label={playing ? 'Jeda' : 'Putar dengan suara'}>
           {playing ? <Pause className="h-4 w-4" /> : <Play className="ml-0.5 h-4 w-4" />}
         </button>
         <div className="absolute inset-x-0 bottom-0 h-1 bg-white/10">

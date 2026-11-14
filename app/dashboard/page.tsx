@@ -23,6 +23,7 @@ import {
   Wand2,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { GlassTabBar } from '@/components/glass/GlassTabBar';
 import { analyzePrompt, INTENT_LABELS } from '@/lib/studio/prompt';
 import type { Intent } from '@/lib/studio/types';
 import { cx, LazyVisible, Logo } from '@/components/studio/ui';
@@ -215,7 +216,7 @@ export default function DashboardPage() {
       {loading ? (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="aspect-[9/14] animate-mk-pulse rounded-xl bg-mk-panel" />
+            <div key={i} className="aspect-[9/14] animate-mk-pulse rounded-xl bg-white/60" />
           ))}
         </div>
       ) : !list.length ? (
@@ -253,11 +254,11 @@ export default function DashboardPage() {
                 <div className="relative aspect-[9/14] overflow-hidden rounded-xl border border-mk-line bg-mk-ink shadow-mk-card transition group-hover:border-mk-coral/70 group-hover:ring-2 group-hover:ring-mk-coral/30">
                   <ProjectThumb p={p} />
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30 opacity-0 transition group-hover:opacity-100" />
-                  <span className="absolute left-2 top-2 rounded-md bg-black/55 px-2 py-0.5 text-[10px] font-bold text-white backdrop-blur">
+                  <span className="absolute left-2 top-2 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-bold text-white">
                     {p.style_json?.intent ? INTENT_LABELS[p.style_json.intent] : p.category}
                   </span>
                   {p.style_json?.scenes ? (
-                    <span className="absolute bottom-2 right-2 flex items-center gap-1 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-bold text-white backdrop-blur">
+                    <span className="absolute bottom-2 right-2 flex items-center gap-1 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-white">
                       <Film className="h-3 w-3" /> {p.style_json.scenes}
                     </span>
                   ) : null}
@@ -279,7 +280,7 @@ export default function DashboardPage() {
                   setMenuId(menuId === p.id ? null : p.id);
                 }}
                 className={cx(
-                  'absolute right-2 top-2 h-7 w-7 items-center justify-center rounded-md bg-black/55 text-white backdrop-blur hover:bg-black/75',
+                  'absolute right-2 top-2 h-7 w-7 items-center justify-center rounded-md bg-black/60 text-white hover:bg-black/75',
                   menuId === p.id ? 'flex' : 'hidden group-hover:flex'
                 )}
                 aria-label="Menu proyek"
@@ -287,7 +288,7 @@ export default function DashboardPage() {
                 <MoreHorizontal className="h-4 w-4" />
               </button>
               {menuId === p.id && (
-                <div onClick={(e) => e.stopPropagation()} className="mk-glass absolute right-2 top-10 z-20 w-40 overflow-hidden rounded-xl border border-white/80 p-1 shadow-mk-card">
+                <div onClick={(e) => e.stopPropagation()} className="mk-glass mk-pop mk-float absolute right-2 top-10 z-20 w-40 animate-mk-up overflow-hidden rounded-xl border border-white/80 p-1">
                   <Link href={`/editor/${p.id}`} className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold hover:bg-white">
                     <Pencil className="h-3.5 w-3.5" /> Buka di editor
                   </Link>
@@ -304,7 +305,7 @@ export default function DashboardPage() {
                 </div>
               )}
               {confirmId === p.id && (
-                <div className="absolute inset-x-0 top-0 flex aspect-[9/14] flex-col items-center justify-center gap-2 rounded-xl bg-mk-deep/85 p-3 text-center text-white backdrop-blur-sm">
+                <div className="absolute inset-x-0 top-0 flex aspect-[9/14] flex-col items-center justify-center gap-2 rounded-xl bg-mk-deep/90 p-3 text-center text-white">
                   <span className="text-xs font-semibold">Hapus proyek ini?</span>
                   <div className="flex gap-1.5">
                     <button type="button" onClick={() => remove(p.id)} className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-bold">
@@ -320,15 +321,15 @@ export default function DashboardPage() {
           ))}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-mk-line">
-          <div className="hidden grid-cols-[1fr_140px_140px_44px] gap-3 border-b border-mk-line bg-mk-panel px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-mk-dim sm:grid">
+        <div className="mk-card overflow-hidden !rounded-xl">
+          <div className="hidden grid-cols-[1fr_140px_140px_44px] gap-3 border-b border-mk-line bg-white/50 px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-mk-dim sm:grid">
             <span>Nama</span>
             <span>Jenis</span>
             <span>Diubah</span>
             <span />
           </div>
           {recent.map((p) => (
-            <div key={p.id} className="group grid grid-cols-[1fr_44px] items-center gap-3 border-b border-mk-line px-4 py-2.5 last:border-0 hover:bg-mk-panel sm:grid-cols-[1fr_140px_140px_44px]">
+            <div key={p.id} className="group grid grid-cols-[1fr_44px] items-center gap-3 border-b border-mk-line px-4 py-2.5 last:border-0 hover:bg-white/70 sm:grid-cols-[1fr_140px_140px_44px]">
               <Link href={`/editor/${p.id}`} className="flex min-w-0 items-center gap-3">
                 <div className="relative h-14 w-9 shrink-0 overflow-hidden rounded-md border border-mk-line bg-mk-ink">
                   <ProjectThumb p={p} />
@@ -372,7 +373,7 @@ export default function DashboardPage() {
   );
 
   return (
-    <div className="flex min-h-screen bg-mk-night text-mk-cream">
+    <div className="flex min-h-screen text-mk-cream">
       {/* ---------- Sidebar (desktop) ---------- */}
       <aside className="mk-glass sticky top-0 hidden h-screen w-[232px] shrink-0 flex-col border-r border-white/70 px-3 py-4 lg:flex">
         <Link href="/" className="px-2">
@@ -428,7 +429,7 @@ export default function DashboardPage() {
       {/* ---------- Area utama ---------- */}
       <div className="min-w-0 flex-1">
         {/* Topbar */}
-        <header className="mk-glass sticky top-0 z-30 border-b border-white/70">
+        <header className="mk-glass mk-bar sticky top-0 z-30 border-b border-white/60">
           <div className="flex h-14 items-center gap-3 px-4 lg:px-8">
             <Link href="/" className="lg:hidden">
               <Logo />
@@ -456,15 +457,13 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        <main className="mx-auto max-w-[1400px] space-y-10 px-4 pb-28 pt-6 lg:px-8 lg:pb-16">
+        <main className="mx-auto max-w-[1400px] space-y-10 px-4 pb-32 pt-6 lg:px-8 lg:pb-16">
           {error && <div className="rounded-xl bg-red-500/10 px-4 py-3 text-xs text-red-600">{error}</div>}
 
           {tab === 'home' && (
             <>
               {/* Hero ala Canva: sapaan + kolom ide + pintasan format */}
-              <section className="relative overflow-hidden rounded-3xl bg-mk-deep px-5 py-8 text-center text-white shadow-mk-card sm:px-10 sm:py-12">
-                {/* cahaya lembut memakai gradien (tanpa filter blur, ringan di HP) */}
-                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(520px_circle_at_0%_0%,rgba(123,80,255,0.55),transparent_60%),radial-gradient(480px_circle_at_100%_100%,rgba(151,117,255,0.35),transparent_60%)]" />
+              <section className="mk-mesh-deep relative overflow-hidden rounded-3xl px-5 py-8 text-center text-white shadow-[0_24px_60px_-28px_rgba(30,17,80,0.65)] sm:px-10 sm:py-12">
                 <svg className="pointer-events-none absolute right-6 top-6 hidden h-12 w-44 sm:block" viewBox="0 0 208 56" fill="none" aria-hidden>
                   <path d="M3 40c12 0 14-34 28-34s14 44 28 44 14-38 28-38 14 32 28 32 14-26 28-26 14 18 28 18 14-30 35-34" stroke="#C6F432" strokeWidth="4" strokeLinecap="round" />
                 </svg>
@@ -519,32 +518,18 @@ export default function DashboardPage() {
         </main>
       </div>
 
-      {/* ---------- Bottom nav (mobile) ---------- */}
-      <nav className="mk-glass fixed inset-x-0 bottom-0 z-40 flex items-center justify-around border-t border-white/70 px-2 pb-[env(safe-area-inset-bottom)] lg:hidden">
-        {NAV.slice(0, 1).map((n) => (
-          <button key={n.id} type="button" onClick={() => setTab(n.id)} className={cx('flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-semibold', tab === n.id ? 'text-mk-coral' : 'text-mk-dim')}>
-            <n.icon className="h-5 w-5" /> {n.label}
-          </button>
-        ))}
-        <button type="button" onClick={() => setTab('projects')} className={cx('flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-semibold', tab === 'projects' ? 'text-mk-coral' : 'text-mk-dim')}>
-          <FolderOpen className="h-5 w-5" /> Proyek
-        </button>
-        <Link href="/create" className="-mt-5 flex h-12 w-12 items-center justify-center rounded-full bg-mk-grad text-white shadow-mk-glow" aria-label="Buat video">
-          <Plus className="h-6 w-6" />
-        </Link>
-        <button type="button" onClick={() => setTab('templates')} className={cx('flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-semibold', tab === 'templates' ? 'text-mk-coral' : 'text-mk-dim')}>
-          <LayoutTemplate className="h-5 w-5" /> Template
-        </button>
-        {isAdmin ? (
-          <Link href="/admin" className="flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-semibold text-mk-dim">
-            <Brain className="h-5 w-5" /> Admin
-          </Link>
-        ) : (
-          <button type="button" onClick={logout} className="flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-semibold text-mk-dim">
-            <LogOut className="h-5 w-5" /> Keluar
-          </button>
-        )}
-      </nav>
+      {/* ---------- Navigasi bawah (HP): kapsul kaca melayang ala Depup Office ---------- */}
+      <GlassTabBar
+        className="lg:hidden"
+        active={tab}
+        action={{ href: '/create', label: 'Buat video', icon: Plus }}
+        tabs={[
+          { id: 'home', label: 'Beranda', icon: Home, onSelect: () => setTab('home') },
+          { id: 'projects', label: 'Proyek', icon: FolderOpen, onSelect: () => setTab('projects') },
+          { id: 'templates', label: 'Template', icon: LayoutTemplate, onSelect: () => setTab('templates') },
+          isAdmin ? { id: 'admin', label: 'Admin', icon: Brain, href: '/admin' } : { id: 'logout', label: 'Keluar', icon: LogOut, onSelect: logout },
+        ]}
+      />
     </div>
   );
 }

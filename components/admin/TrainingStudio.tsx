@@ -453,7 +453,7 @@ export default function TrainingStudio() {
 
   return (
     <div className="mk-page">
-      <header className="mk-glass sticky top-0 z-30 border-b border-white/70">
+      <header className="mk-glass mk-bar sticky top-0 z-30 border-b border-white/60">
         <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4">
           <Link href="/dashboard" className="mk-btn-icon" aria-label="Kembali">
             <ArrowLeft className="h-4 w-4" />
