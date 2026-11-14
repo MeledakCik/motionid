@@ -44,6 +44,22 @@ const KIND_LABEL: Record<string, string> = {
   cube: 'Kubus 3D',
   shatter: 'Kaca Pecah',
   sand: 'Jadi Pasir',
+  wave: 'Gelombang',
+  zigzag: 'Gerigi',
+  dots: 'Titik Halftone',
+  rings: 'Cincin',
+  fan: 'Kipas',
+  pie: 'Potongan Pie',
+  checker: 'Papan Catur',
+  carousel: 'Karusel',
+  tilt: 'Geser Miring',
+  stretch: 'Regang',
+  colorbars: 'Balok Warna',
+  scan: 'Pindai Cahaya',
+  diagblinds: 'Kerai Miring',
+  filmroll: 'Gulungan Film',
+  swing: 'Ayun Pintu',
+  curtain: 'Tirai Panggung',
   custom: 'Custom',
 };
 
@@ -93,7 +109,7 @@ export function TransitionPanel({ clock }: { clock: PlaybackClock }) {
             </button>
           </div>
           {curKind && curKind.specs.length > 1 && (
-            <div className="mk-noscroll -mx-1 mt-2 flex gap-1.5 overflow-x-auto px-1">
+            <div className="mk-scroll -mx-1 mt-2 flex max-h-36 flex-wrap gap-1.5 overflow-y-auto px-1">
               {curKind.specs.map((t) => (
                 <button key={t.id} type="button" onClick={() => apply(t.id)} className={cx('mk-chip shrink-0 py-1', t.id === cur.id && 'mk-chip-on')}>
                   {t.name.replace(new RegExp(`^${curKind.label}\\s*`, 'i'), '') || t.name}
@@ -322,7 +338,7 @@ export function EffectsPanel({ clock }: { clock: PlaybackClock }) {
                   </div>
                   {parts && k && (
                     <>
-                      <div className="mk-noscroll -mx-1 mt-2 flex gap-1.5 overflow-x-auto px-1">
+                      <div className="mk-scroll -mx-1 mt-2 flex max-h-36 flex-wrap gap-1.5 overflow-y-auto px-1">
                         {k.styles.map((st) => (
                           <button key={st.id} type="button" onClick={() => replace(a.id, effectId(parts.kind, st.id, parts.lvl))} className={cx('mk-chip shrink-0 py-1', parts.style === st.id && 'mk-chip-on')}>
                             {st.label}
@@ -361,7 +377,7 @@ export function EffectsPanel({ clock }: { clock: PlaybackClock }) {
         )}
         <SearchBox value={q} onChange={setQ} placeholder="Cari efek… (hujan, kaca pecah, pasir)" />
         <ChipRow value={group} onChange={setGroup} options={[{ id: 'all', label: 'Semua' }, ...EFFECT_GROUPS.filter((g) => g.id !== 'custom')]} />
-        <p className="text-[11px] text-mk-dim">{kinds.length} jenis efek · tiap jenis punya beberapa gaya & 3 tingkat kekuatan ({allEffects().length} kombinasi)</p>
+        <p className="text-[11px] text-mk-dim">{kinds.length} jenis efek · tiap jenis punya banyak gaya & 3 tingkat kekuatan ({allEffects().length} kombinasi)</p>
       </Section>
       <div className="grid grid-cols-3 gap-2 p-3 lg:grid-cols-2">
         {list.map((k) => {

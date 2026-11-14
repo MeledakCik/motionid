@@ -78,6 +78,28 @@ export const COMPONENT_STYLES: Array<{ id: string; label: string }> = [
   { id: 'soft', label: 'Soft' },
   { id: 'pop', label: 'Pop Kuning' },
   { id: 'elegan', label: 'Elegan Emas' },
+  { id: 'kaca-gelap', label: 'Kaca Gelap' },
+  { id: 'neon-aksen', label: 'Neon Aksen' },
+  { id: 'clay', label: 'Clay 3D' },
+  { id: 'garis-warna', label: 'Garis Warna' },
+  { id: 'kapsul', label: 'Kapsul Brand' },
+  { id: 'blok-aksen', label: 'Blok Aksen' },
+  { id: 'tinta', label: 'Tinta Hitam' },
+  { id: 'putih-tegas', label: 'Putih Tegas' },
+  { id: 'stiker', label: 'Stiker' },
+  { id: 'koran', label: 'Koran' },
+  { id: 'pastel', label: 'Pastel' },
+  { id: 'hitam-emas', label: 'Hitam Emas' },
+  { id: 'sunset', label: 'Gradien Sunset' },
+  { id: 'laut', label: 'Gradien Laut' },
+  { id: 'gradien-balik', label: 'Gradien Terbalik' },
+  { id: 'cyber', label: 'Cyber Lime' },
+  { id: 'retro-80', label: 'Retro 80an' },
+  { id: 'krem', label: 'Krem Hangat' },
+  { id: 'bayang-aksen', label: 'Bayangan Aksen' },
+  { id: 'polos', label: 'Tanpa Latar' },
+  { id: 'miring', label: 'Miring Dinamis' },
+  { id: 'salju', label: 'Kaca Salju' },
 ];
 
 function tokens(style: string, c: CompColors): Tokens {
@@ -123,6 +145,50 @@ function tokens(style: string, c: CompColors): Tokens {
       return { ...base, bg: '#FFE34D', fg: '#111111', sub: '#3B3200', border: '#111111', borderW: 5, radius: 999, shadow: { x: 0, y: 10, blur: 0, color: '#111111' }, accent: '#111111', accentFg: '#FFE34D', weight: 900, upper: true };
     case 'elegan':
       return { ...base, bg: 'rgba(10,8,6,0.55)', fg: '#F6EBD3', sub: 'rgba(246,235,211,0.75)', border: '#D9B86C', borderW: 2, radius: 6, shadow: null, accent: '#D9B86C', accentFg: '#1A1408', weight: 600, serif: true };
+    case 'kaca-gelap':
+      return { ...base, bg: 'rgba(0,0,0,0.38)', fg: '#FFFFFF', sub: 'rgba(255,255,255,0.72)', border: 'rgba(255,255,255,0.18)', borderW: 2, radius: 36, sheen: true };
+    case 'neon-aksen':
+      return { ...base, bg: 'rgba(10,4,16,0.78)', fg: '#FFFFFF', sub: rgba('#FFFFFF', 0.72), border: c.secondary, borderW: 4, radius: 22, glow: c.secondary, shadow: null, accent: c.secondary, accentFg: readableOn(c.secondary) };
+    case 'clay':
+      return { ...base, bg: shade(c.surface, 0.12), radius: 48, shadow: { x: 0, y: 14, blur: 0, color: shade(c.primary, -0.35) }, border: rgba('#FFFFFF', 0.25), borderW: 2, weight: 900 };
+    case 'garis-warna':
+      return { ...base, bg: null, fg: c.text, border: c.primary, borderW: 6, radius: 20, shadow: null, weight: 800 };
+    case 'kapsul':
+      return { ...base, bg: c.primary, fg: readableOn(c.primary), sub: rgba(readableOn(c.primary), 0.8), accent: '#FFFFFF', accentFg: '#111111', radius: 999, shadow: { x: 0, y: 14, blur: 34, color: rgba(c.primary, 0.45) } };
+    case 'blok-aksen':
+      return { ...base, bg: c.secondary, fg: readableOn(c.secondary), sub: rgba(readableOn(c.secondary), 0.8), accent: c.primary, accentFg: readableOn(c.primary), radius: 20, upper: true, weight: 900 };
+    case 'tinta':
+      return { ...base, bg: '#111111', fg: '#FFFFFF', sub: 'rgba(255,255,255,0.7)', radius: 4, shadow: null, weight: 900, upper: true };
+    case 'putih-tegas':
+      return { ...base, bg: '#FFFFFF', fg: '#111111', sub: '#4A4A4A', border: c.primary, borderW: 6, radius: 12, shadow: { x: 0, y: 12, blur: 0, color: c.primary }, weight: 900 };
+    case 'stiker':
+      return { ...base, bg: c.surface, border: '#FFFFFF', borderW: 10, radius: 36, shadow: { x: 0, y: 8, blur: 18, color: 'rgba(0,0,0,0.45)' }, tilt: 2.5, weight: 900 };
+    case 'koran':
+      return { ...base, bg: '#F2EFE6', fg: '#111111', sub: '#55524A', border: '#111111', borderW: 2, radius: 0, shadow: null, serif: true, accent: '#D62828', accentFg: '#FFFFFF' };
+    case 'pastel':
+      return { ...base, bg: '#FFF4FA', fg: '#3A2A40', sub: '#7A6A80', radius: 56, shadow: { x: 0, y: 16, blur: 40, color: rgba(c.primary, 0.28) }, weight: 700 };
+    case 'hitam-emas':
+      return { ...base, bg: '#0D0D0D', fg: '#F5E6C4', sub: 'rgba(245,230,196,0.72)', border: '#D9B86C', borderW: 3, radius: 0, serif: true, accent: '#D9B86C', accentFg: '#111111', shadow: { x: 0, y: 20, blur: 50, color: 'rgba(0,0,0,0.6)' } };
+    case 'sunset':
+      return { ...base, bg: null, grad: ['#FF6A3D', '#FF3D7F'], fg: '#FFFFFF', sub: 'rgba(255,255,255,0.82)', accent: '#FFFFFF', accentFg: '#FF3D7F', radius: 36, sheen: true };
+    case 'laut':
+      return { ...base, bg: null, grad: ['#00C6FF', '#0052D4'], fg: '#FFFFFF', sub: 'rgba(255,255,255,0.82)', accent: '#FFFFFF', accentFg: '#0052D4', radius: 36, sheen: true };
+    case 'gradien-balik':
+      return { ...base, bg: null, grad: [c.secondary, c.primary], fg: readableOn(c.secondary), sub: rgba(readableOn(c.secondary), 0.8), accent: '#FFFFFF', accentFg: '#111111', radius: 28 };
+    case 'cyber':
+      return { ...base, bg: 'rgba(0,0,0,0.62)', fg: '#C6FF00', sub: rgba('#C6FF00', 0.7), border: '#C6FF00', borderW: 2, radius: 2, glow: '#C6FF00', shadow: null, upper: true, accent: '#C6FF00', accentFg: '#000000' };
+    case 'retro-80':
+      return { ...base, bg: '#2A1146', fg: '#FFD23F', sub: 'rgba(255,210,63,0.75)', border: '#FF2E88', borderW: 4, radius: 16, shadow: { x: 10, y: 10, blur: 0, color: '#FF2E88' }, upper: true, accent: '#FF2E88', accentFg: '#FFFFFF', weight: 900 };
+    case 'krem':
+      return { ...base, bg: '#F5E9DA', fg: '#3B2A1E', sub: '#7A6150', radius: 28, shadow: { x: 0, y: 12, blur: 30, color: 'rgba(60,30,10,0.25)' }, weight: 700 };
+    case 'bayang-aksen':
+      return { ...base, bg: c.surface, border: c.text, borderW: 3, radius: 22, shadow: { x: -12, y: 12, blur: 0, color: c.secondary } };
+    case 'polos':
+      return { ...base, bg: null, border: null, borderW: 0, shadow: null, weight: 900, upper: true };
+    case 'miring':
+      return { ...base, bg: c.primary, fg: readableOn(c.primary), sub: rgba(readableOn(c.primary), 0.8), accent: '#111111', accentFg: '#FFFFFF', radius: 14, tilt: -4, shadow: { x: 8, y: 8, blur: 0, color: '#111111' }, upper: true, weight: 900 };
+    case 'salju':
+      return { ...base, bg: 'rgba(255,255,255,0.72)', fg: '#152030', sub: '#4B5A6A', border: 'rgba(255,255,255,0.95)', borderW: 2, radius: 32, sheen: true, shadow: { x: 0, y: 18, blur: 40, color: 'rgba(0,0,0,0.25)' } };
     default:
       return base;
   }

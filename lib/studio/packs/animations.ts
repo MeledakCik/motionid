@@ -1,7 +1,7 @@
 import { EasingId, ease, clamp } from '../easing';
 
 /**
- * Animation Pack — 300+ animasi elemen (masuk/keluar + loop/emphasis).
+ * Animation Pack — 1000+ animasi elemen (masuk/keluar + loop/emphasis).
  * Semua animasi bersifat deklaratif (spec JSON), jadi admin bisa menambah animasi baru
  * lewat kode JSON tanpa menjalankan JavaScript asing di browser user.
  */
@@ -360,6 +360,271 @@ function buildLibrary(): AnimSpec[] {
       Object.entries(amp).forEach(([kk, vv]) => ((a as Record<string, number>)[kk] = (vv as number) * (wave === 'spin' ? 1 : m)));
       add({ id: `loop-${k}-${ik}`, name: `${l} · ${il}`, group: 'loop', kind: 'loop', tags: ['loop', k], easing: 'linear', duration: period, loop: { wave, amp: a, period: wave === 'spin' ? period / m : period } });
     }
+  }
+
+  /* ================================================================ */
+  /* Pack Ekstra v7 — animasi kombinasi baru (semua spec unik)         */
+  /* ================================================================ */
+  const EV2: Array<{ key: string; label: string; easing: EasingId }> = [EASE_VARIANTS[0], EASE_VARIANTS[1]];
+
+  // Geser + putar
+  for (const dir of DIRS) {
+    for (const [rk, rl, rot] of [
+      ['miring', 'Miring', -20],
+      ['miring-balik', 'Miring Balik', 20],
+      ['seperempat', '90°', 90],
+    ] as const) {
+      for (const ev of EV2) {
+        add({ id: `geser-putar-${dir.key}-${rk}-${ev.key}`, name: `Geser Berputar ${dir.label} · ${rl} · ${ev.label}`, group: 'geser', kind: 'in', tags: ['geser', 'putar', dir.key], easing: ev.easing, duration: 0.7, from: { x: dir.x * 260, y: dir.y * 260, rot, alpha: 0 } });
+      }
+    }
+  }
+  // Geser + motion blur
+  for (const dir of DIRS) {
+    for (const [dk, dl, dist] of [
+      ['pendek', 'Pendek', 120],
+      ['jauh', 'Jauh', 480],
+    ] as const) {
+      for (const ev of EV2) {
+        add({ id: `geser-blur-${dir.key}-${dk}-${ev.key}`, name: `Geser Kilat ${dir.label} · ${dl} · ${ev.label}`, group: 'geser', kind: 'in', tags: ['geser', 'blur', 'cepat', dir.key], easing: ev.easing, duration: 0.6, from: { x: dir.x * dist, y: dir.y * dist, blur: 16, alpha: 0 } });
+      }
+    }
+  }
+  // Geser + skala
+  for (const dir of DIRS) {
+    for (const [sk, sl, s] of [
+      ['kecil', 'dari Kecil', 0.5],
+      ['besar', 'dari Besar', 1.6],
+    ] as const) {
+      for (const ev of EV2) {
+        add({ id: `geser-skala-${dir.key}-${sk}-${ev.key}`, name: `Geser ${dir.label} ${sl} · ${ev.label}`, group: 'geser', kind: 'in', tags: ['geser', 'zoom', dir.key], easing: ev.easing, duration: 0.65, from: { x: dir.x * 200, y: dir.y * 200, scale: s, alpha: 0 } });
+      }
+    }
+  }
+  // Geser + miring (skew)
+  for (const dir of DIRS.slice(0, 4)) {
+    for (const sk of [20, 40]) {
+      for (const ev of EASE_VARIANTS) {
+        add({ id: `geser-skew-${dir.key}-${sk}-${ev.key}`, name: `Geser Miring ${sk}° ${dir.label} · ${ev.label}`, group: 'geser', kind: 'in', tags: ['geser', 'skew', 'dinamis'], easing: ev.easing, duration: 0.6, from: { x: dir.x * 300, y: dir.y * 300, skew: (dir.x || dir.y) > 0 ? sk : -sk, alpha: 0 } });
+      }
+    }
+  }
+  // Pop dari arah
+  for (const dir of DIRS) {
+    for (const [ek, el, e] of [
+      ['membal', 'Membal', 'outBack'],
+      ['kenyal', 'Kenyal', 'outElastic'],
+      ['pegas', 'Pegas', 'spring'],
+    ] as const) {
+      add({ id: `pop-arah-${dir.key}-${ek}`, name: `Pop ${dir.label} · ${el}`, group: 'skala', kind: 'in', tags: ['pop', dir.key], easing: e, duration: 0.75, from: { x: dir.x * 120, y: dir.y * 120, scale: 0.3, alpha: 0 } });
+    }
+  }
+  // Zoom dari arah
+  for (const dir of DIRS) {
+    for (const ev of EV2) {
+      add({ id: `zoom-arah-${dir.key}-${ev.key}`, name: `Zoom Mendarat ${dir.label} · ${ev.label}`, group: 'skala', kind: 'in', tags: ['zoom', dir.key], easing: ev.easing, duration: 0.7, from: { x: dir.x * 160, y: dir.y * 160, scale: 3, alpha: 0, blur: 8 } });
+    }
+  }
+  // Wipe reveal + gerak tambahan
+  for (const c of ['left', 'right', 'up', 'down', 'center-h', 'center-v', 'circle', 'diagonal'] as ClipKind[]) {
+    for (const [xk, xl, f] of [
+      ['zoom', 'Zoom', { scale: 1.3 }],
+      ['fokus', 'Fokus', { blur: 10 }],
+      ['putar', 'Putar', { rot: -8 }],
+    ] as const) {
+      for (const ev of [
+        { key: 'halus', label: 'Halus', easing: 'inOutCubic' as EasingId },
+        { key: 'tegas', label: 'Tegas', easing: 'inOutQuart' as EasingId },
+      ]) {
+        add({ id: `wipe-${c}-${xk}-${ev.key}`, name: `Wipe ${c} + ${xl} · ${ev.label}`, group: 'reveal', kind: 'in', tags: ['wipe', 'reveal', xk], easing: ev.easing, duration: 0.75, clip: c, from: f });
+      }
+    }
+  }
+  // Teks: gaya baru
+  const textStyles2: Array<[string, string, Partial<Pose>]> = [
+    ['zoom', 'Zoom', { scale: 2.2, alpha: 0 }],
+    ['kanan', 'Dari Kiri', { x: -80, alpha: 0 }],
+    ['kiri', 'Dari Kanan', { x: 80, alpha: 0 }],
+    ['lipat', 'Lipat', { sy: 0, alpha: 0 }],
+    ['goyang', 'Goyang', { rot: 25, alpha: 0 }],
+    ['kabut', 'Kabut Zoom', { blur: 10, scale: 1.6, alpha: 0 }],
+    ['jatuh-putar', 'Jatuh Berputar', { y: -200, rot: -60, alpha: 0 }],
+    ['tipis', 'Menyempit', { sx: 2.5, alpha: 0 }],
+    ['berdiri', 'Berdiri', { sy: 0, y: 40, alpha: 0 }],
+  ];
+  for (const [mk, ml] of textModes) {
+    for (const [sk, sl, from] of textStyles2) {
+      for (const [spk, spl, dur, ov] of speeds) {
+        add({ id: `teks-${mk}-${sk}-${spk}`, name: `${sl} ${ml} · ${spl}`, group: 'teks', kind: 'in', tags: ['teks', mk, sk], easing: 'outCubic', duration: mk === 'char' ? dur * 1.2 : dur, from: {}, text: { mode: mk, from, overlap: ov } });
+      }
+    }
+  }
+  // Teks: versi membal & serentak dari semua gaya
+  for (const [mk, ml] of textModes) {
+    for (const [sk, sl, from] of [...textStyles.map(([a, b, c]) => [a, b, c] as [string, string, Partial<Pose>]), ...textStyles2]) {
+      for (const [spk, spl, dur] of [speeds[0], speeds[1]]) {
+        add({ id: `teks-${mk}-${sk}-${spk}-membal`, name: `${sl} ${ml} · ${spl} · Membal`, group: 'teks', kind: 'in', tags: ['teks', mk, sk, 'membal'], easing: 'outBack', duration: (mk === 'char' ? dur * 1.2 : dur) + 0.05, from: {}, text: { mode: mk, from, overlap: 0.45 } });
+      }
+      add({ id: `teks-${mk}-${sk}-serentak`, name: `${sl} ${ml} · Serentak`, group: 'teks', kind: 'in', tags: ['teks', mk, sk, 'serentak'], easing: 'outExpo', duration: 0.7, from: {}, text: { mode: mk, from, overlap: 0.85 } });
+    }
+  }
+  // Fisika tambahan
+  for (const [k, l, f, e] of [
+    ['pantul-kiri', 'Memantul dari Kiri', { x: -500 }, 'outBounce'],
+    ['pantul-kanan', 'Memantul dari Kanan', { x: 500 }, 'outBounce'],
+    ['pantul-putar', 'Jatuh Memantul Berputar', { y: -500, rot: 25 }, 'outBounce'],
+    ['elastis-putar', 'Elastis Berputar', { rot: -180, scale: 0 }, 'outElastic'],
+    ['pegas-atas', 'Pegas dari Atas', { y: -300 }, 'spring'],
+    ['pegas-bawah', 'Pegas dari Bawah', { y: 300 }, 'spring'],
+    ['snap-kiri', 'Snap dari Kiri', { x: -200 }, 'snap'],
+    ['snap-kanan', 'Snap dari Kanan', { x: 200 }, 'snap'],
+    ['snap-atas', 'Snap dari Atas', { y: -200 }, 'snap'],
+    ['snap-bawah', 'Snap dari Bawah', { y: 200 }, 'snap'],
+    ['elastis-skew', 'Elastis Miring', { skew: 40 }, 'outElastic'],
+    ['pegas-pipih', 'Pegas Memipih', { sx: 2.5 }, 'spring'],
+  ] as const) {
+    for (const [dk, dl, mult] of [
+      ['lembut', 'Lembut', 0.5],
+      ['kuat', 'Kuat', 1],
+      ['ekstra', 'Ekstra', 1.4],
+    ] as const) {
+      const f2: Partial<Pose> = {};
+      Object.entries(f).forEach(([kk, vv]) => {
+        const key = kk as keyof Pose;
+        const base = IDENTITY[key];
+        (f2 as Record<string, number>)[key] = base + ((vv as number) - base) * mult;
+      });
+      add({ id: `fisika-${k}-${dk}`, name: `${l} · ${dl}`, group: 'fisika', kind: 'in', tags: ['pantul', 'elastis', 'fisika'], easing: e as EasingId, duration: e === 'outBounce' ? 1 : 0.9, from: { ...f2, alpha: 0 } });
+    }
+  }
+  for (const [k, l, f, e] of [
+    ['jatuh-pantul', 'Jatuh Memantul', { y: -500 }, 'outBounce'],
+    ['naik-pantul', 'Lompat Memantul', { y: 500 }, 'outBounce'],
+    ['elastis', 'Elastis', { scale: 0 }, 'outElastic'],
+    ['elastis-x', 'Elastis Melebar', { sx: 0 }, 'outElastic'],
+    ['elastis-y', 'Elastis Meninggi', { sy: 0 }, 'outElastic'],
+    ['pegas', 'Pegas', { scale: 0.3, y: 80 }, 'spring'],
+    ['pegas-kiri', 'Pegas dari Kanan', { x: 300 }, 'spring'],
+    ['pegas-kanan', 'Pegas dari Kiri', { x: -300 }, 'spring'],
+    ['pegas-putar', 'Pegas Berputar', { rot: -90, scale: 0.4 }, 'spring'],
+    ['snap', 'Snap Kilat', { scale: 0.6 }, 'snap'],
+  ] as const) {
+    const f2: Partial<Pose> = {};
+    Object.entries(f).forEach(([kk, vv]) => {
+      const key = kk as keyof Pose;
+      const base = IDENTITY[key];
+      (f2 as Record<string, number>)[key] = base + ((vv as number) - base) * 1.4;
+    });
+    add({ id: `fisika-${k}-ekstra`, name: `${l} · Ekstra`, group: 'fisika', kind: 'in', tags: ['pantul', 'elastis', 'fisika'], easing: e as EasingId, duration: e === 'outBounce' ? 1.1 : 1, from: { ...f2, alpha: 0 } });
+  }
+  // Stylish baru (keyframes)
+  const kfs2: Array<[string, string, Keyframe[]]> = [
+    ['stempel', 'Cap Stempel', [{ t: 0, scale: 3, rot: -14, alpha: 0 }, { t: 0.45, scale: 0.9, rot: -6, alpha: 1, easing: 'inCubic' }, { t: 0.7, scale: 1.05, rot: -6 }, { t: 1, scale: 1, rot: -6 }]],
+    ['gempa', 'Gempa Masuk', [{ t: 0, alpha: 0, scale: 1.1 }, { t: 0.1, alpha: 1, x: -18 }, { t: 0.2, x: 16, y: 6 }, { t: 0.3, x: -12, y: -4 }, { t: 0.45, x: 8 }, { t: 0.6, x: -4, y: 2 }, { t: 1, x: 0, y: 0, scale: 1 }]],
+    ['ayun-atas', 'Ayun Gantung', [{ t: 0, y: -300, rot: 30, alpha: 0 }, { t: 0.45, y: 0, rot: -14, alpha: 1 }, { t: 0.7, rot: 6 }, { t: 0.85, rot: -2 }, { t: 1, rot: 0 }]],
+    ['lontar', 'Lontar Melengkung', [{ t: 0, x: -400, y: 300, rot: -40, alpha: 0 }, { t: 0.5, x: -100, y: -60, rot: -8, alpha: 1 }, { t: 1, x: 0, y: 0, rot: 0 }]],
+    ['portal', 'Portal', [{ t: 0, sx: 0, sy: 1.4, blur: 20, alpha: 0 }, { t: 0.5, sx: 1.2, sy: 0.9, blur: 4, alpha: 1 }, { t: 1, sx: 1, sy: 1, blur: 0 }]],
+    ['karet-y', 'Karet Vertikal', [{ t: 0, sy: 1, alpha: 0 }, { t: 0.3, sy: 1.4, sx: 0.75, alpha: 1 }, { t: 0.45, sy: 0.8, sx: 1.2 }, { t: 0.6, sy: 1.12, sx: 0.9 }, { t: 1, sx: 1, sy: 1 }]],
+    ['bumerang', 'Bumerang', [{ t: 0, x: 400, rot: 180, alpha: 0 }, { t: 0.5, x: -60, rot: -20, alpha: 1 }, { t: 0.8, x: 12, rot: 4 }, { t: 1, x: 0, rot: 0 }]],
+    ['kedip-masuk', 'Kedip Neon', [{ t: 0, alpha: 0 }, { t: 0.1, alpha: 1 }, { t: 0.18, alpha: 0.1 }, { t: 0.3, alpha: 1 }, { t: 0.38, alpha: 0.3 }, { t: 0.5, alpha: 1 }, { t: 1, alpha: 1 }]],
+    ['tarik-pita', 'Tarik Pita', [{ t: 0, sx: 3, skew: -30, x: -300, alpha: 0 }, { t: 0.55, sx: 0.9, skew: 8, x: 10, alpha: 1 }, { t: 1, sx: 1, skew: 0, x: 0 }]],
+    ['piring-terbang', 'Piring Terbang', [{ t: 0, x: -600, rot: 720, scale: 0.4, alpha: 0 }, { t: 0.7, x: 20, rot: -10, scale: 1.05, alpha: 1 }, { t: 1, x: 0, rot: 0, scale: 1 }]],
+    ['gulung', 'Gulung Masuk', [{ t: 0, x: -300, y: 60, rot: -180, alpha: 0 }, { t: 0.7, x: 10, y: 0, rot: 6, alpha: 1 }, { t: 1, x: 0, rot: 0 }]],
+    ['meletus', 'Meletus', [{ t: 0, scale: 0, blur: 12, alpha: 0 }, { t: 0.35, scale: 1.4, blur: 0, alpha: 1 }, { t: 0.55, scale: 0.88 }, { t: 0.75, scale: 1.06 }, { t: 1, scale: 1 }]],
+    ['tirai-turun', 'Tirai Turun', [{ t: 0, sy: 0, y: -200, alpha: 0 }, { t: 0.6, sy: 1.08, y: 10, alpha: 1 }, { t: 1, sy: 1, y: 0 }]],
+    ['sapuan-kuas', 'Sapuan Kuas', [{ t: 0, sx: 0, skew: 25, alpha: 0 }, { t: 0.5, sx: 1.1, skew: -6, alpha: 1 }, { t: 1, sx: 1, skew: 0 }]],
+  ];
+  for (const [k, l, frames] of kfs2) {
+    for (const [sk, sl, d] of [
+      ['cepat', 'Cepat', 0.55],
+      ['normal', 'Normal', 0.9],
+      ['lambat', 'Lambat', 1.4],
+    ] as const) {
+      add({ id: `gaya-${k}-${sk}`, name: `${l} · ${sl}`, group: 'stylish', kind: 'in', tags: ['stylish', k], easing: 'outCubic', duration: d, keyframes: frames });
+    }
+  }
+  for (const [k, l, frames] of kfs) {
+    add({ id: `gaya-${k}-lambat`, name: `${l} · Lambat`, group: 'stylish', kind: 'in', tags: ['stylish', k], easing: 'outCubic', duration: 1.4, keyframes: frames });
+  }
+  // Putar dari arah
+  for (const dir of DIRS.slice(0, 4)) {
+    for (const deg of [-90, 90, 180]) {
+      for (const ev of [EASE_VARIANTS[0], EASE_VARIANTS[2]]) {
+        add({ id: `putar-arah-${dir.key}-${deg}-${ev.key}`, name: `Putar ${deg}° ${dir.label} · ${ev.label}`, group: 'putar', kind: 'in', tags: ['putar', dir.key], easing: ev.easing, duration: 0.75, from: { x: dir.x * 220, y: dir.y * 220, rot: deg, alpha: 0 } });
+      }
+    }
+  }
+  // Flip + zoom
+  for (const [k, l, f] of [
+    ['x', 'Flip Horizontal', { sx: 0, scale: 1.5 }],
+    ['y', 'Flip Vertikal', { sy: 0, scale: 1.5 }],
+    ['x-kecil', 'Flip Horizontal Kecil', { sx: 0, scale: 0.6 }],
+    ['y-kecil', 'Flip Vertikal Kecil', { sy: 0, scale: 0.6 }],
+  ] as const) {
+    for (const ev of EASE_VARIANTS) {
+      add({ id: `flip-zoom-${k}-${ev.key}`, name: `${l} + Zoom · ${ev.label}`, group: 'putar', kind: 'in', tags: ['flip', 'zoom', '3d'], easing: ev.easing, duration: 0.7, from: { ...f, alpha: 0 } });
+    }
+  }
+  // Kabut dari arah
+  for (const dir of DIRS) {
+    for (const [bk, bl, b] of [
+      ['tipis', 'Tipis', 8],
+      ['tebal', 'Tebal', 24],
+    ] as const) {
+      for (const ev of [EASE_VARIANTS[0], { key: 'lembut', label: 'Lembut', easing: 'inOutSine' as EasingId }]) {
+        add({ id: `kabut-${dir.key}-${bk}-${ev.key}`, name: `Kabut ${bl} ${dir.label} · ${ev.label}`, group: 'blur', kind: 'in', tags: ['blur', 'kabut', dir.key], easing: ev.easing, duration: 0.9, from: { x: dir.x * 80, y: dir.y * 80, blur: b, alpha: 0 } });
+      }
+    }
+  }
+  // Spiral
+  for (const deg of [180, 360, 720]) {
+    for (const [sk, sl, s] of [
+      ['masuk', 'Masuk', 0],
+      ['keluar', 'dari Besar', 2.5],
+    ] as const) {
+      for (const [dk, dl, sg] of [
+        ['kanan', 'Searah', 1],
+        ['kiri', 'Berlawanan', -1],
+      ] as const) {
+        add({ id: `spiral-${deg}-${sk}-${dk}`, name: `Spiral ${deg}° ${sl} ${dl}`, group: 'putar', kind: 'in', tags: ['spiral', 'putar'], easing: 'outCubic', duration: 0.8 + deg / 1800, from: { rot: deg * sg, scale: s, alpha: 0 } });
+      }
+    }
+  }
+  // Loop tambahan
+  const loops2: Array<[string, string, LoopSpec['wave'], Partial<Pose>, number]> = [
+    ['mengambang-miring', 'Mengambang Miring', 'sin', { y: 14, rot: 3 }, 2.6],
+    ['detak-lebar', 'Detak Melebar', 'pulse', { sx: 0.08 }, 1.1],
+    ['getar-putar', 'Getar Putar', 'shake', { rot: 4 }, 0.3],
+    ['pendulum', 'Pendulum', 'sin', { rot: 12 }, 2.2],
+    ['kedip-cepat', 'Kedip Cepat', 'flash', { alpha: 0.7 }, 0.4],
+    ['gelombang-miring', 'Gelombang Miring', 'sin', { skew: 8 }, 1.8],
+    ['denyut-jantung-besar', 'Denyut Besar', 'heartbeat', { scale: 0.2 }, 1.3],
+    ['lompat-kecil', 'Lompat Kecil', 'bounce', { y: -16 }, 0.6],
+    ['putar-balik', 'Putar Balik Terus', 'spin', { rot: -360 }, 4],
+    ['getar-vertikal', 'Getar Vertikal', 'shake', { y: 6 }, 0.25],
+    ['goyang-kepala', 'Goyang Kepala', 'wobble', { rot: 12 }, 1.2],
+    ['melayang-samping', 'Melayang Samping', 'sin', { x: 30, y: 10 }, 3],
+    ['putar-cepat', 'Putar Cepat', 'spin', { rot: 360 }, 1.5],
+    ['napas-blur', 'Napas Kabur', 'sin', { blur: 3 }, 2.8],
+    ['redup', 'Redup Terang', 'flash', { alpha: 0.3 }, 2],
+    ['pegas-tegak', 'Pegas Tegak', 'sin', { sy: 0.06, sx: -0.03 }, 0.7],
+  ];
+  for (const [k, l, wave, amp, period] of loops2) {
+    for (const [ik, il, m] of [
+      ['lembut', 'Lembut', 0.5],
+      ['sedang', 'Sedang', 1],
+      ['kuat', 'Kuat', 1.8],
+      ['ekstra', 'Ekstra', 2.6],
+    ] as const) {
+      const a: Partial<Pose> = {};
+      Object.entries(amp).forEach(([kk, vv]) => ((a as Record<string, number>)[kk] = (vv as number) * (wave === 'spin' ? 1 : m)));
+      add({ id: `loop-${k}-${ik}`, name: `${l} · ${il}`, group: 'loop', kind: 'loop', tags: ['loop', k], easing: 'linear', duration: period, loop: { wave, amp: a, period: wave === 'spin' ? period / m : period } });
+    }
+  }
+  for (const [k, l, wave, amp, period] of loops) {
+    const a: Partial<Pose> = {};
+    Object.entries(amp).forEach(([kk, vv]) => ((a as Record<string, number>)[kk] = (vv as number) * (wave === 'spin' ? 1 : 2.6)));
+    add({ id: `loop-${k}-ekstra`, name: `${l} · Ekstra`, group: 'loop', kind: 'loop', tags: ['loop', k], easing: 'linear', duration: period, loop: { wave, amp: a, period: wave === 'spin' ? period / 2.6 : period } });
   }
   return L;
 }

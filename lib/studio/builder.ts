@@ -195,7 +195,7 @@ function bodyText(c: Ctx, text: string, y: number, h: number, delay = 0.7): Text
 function kicker(c: Ctx, label: string, y: number): Layer | null {
   if (!label) return null;
   const { L, theme, k } = c;
-  if (L.id === 'editorial' || L.id === 'sinema' || L.id === 'minimal') {
+  if ((L.base || L.id) === 'editorial' || (L.base || L.id) === 'sinema' || (L.base || L.id) === 'minimal') {
     return makeText(c, label, c.x0, y, c.cw, 60 * k, {
       name: 'Label',
       font: theme.bodyFont,
@@ -339,7 +339,7 @@ function buildRole(item: PlanItem, c: Ctx): Layer[] {
     }
     case 'poin': {
       add(kicker(c, kickerFor(item, c), Y(0.06)));
-      if (L.id === 'majalah' && item.value) {
+      if ((L.base || L.id) === 'majalah' && item.value) {
         out.push(makeText(c, item.value.padStart(2, '0'), c.x0, Y(0.12), c.cw, area * 0.34, { name: 'Nomor', size: Math.round(420 * k), weight: 900, color: p.primary, align: 'left', lineHeight: 0.9, animIn: anim('pop-raksasa-tegas', 0.1) }));
         out.push(headline(c, item.title, Y(0.5), area * 0.24, 0.4));
         if (item.body) out.push(bodyText(c, item.body, Y(0.76), area * 0.14, 0.8));
@@ -392,7 +392,7 @@ function buildRole(item: PlanItem, c: Ctx): Layer[] {
       } else if (item.value && /^\d+$/.test(item.value)) {
         out.push(headline(c, item.title, Y(0.14), area * 0.24, 0.15));
         out.push(makeComponent(c, componentIdFor('progress', st), c.x0, Y(0.48), pw, 180 * k, { label: item.body || 'Terjual', value: item.value }, { animIn: anim(pick(L.elemAnim, c.idx), 0.5) }));
-      } else if (plan.intent === 'testimoni' || L.id === 'chat') {
+      } else if (plan.intent === 'testimoni' || (L.base || L.id) === 'chat') {
         out.push(makeComponent(c, componentIdFor('chat', st === 'brutal' ? 'minimal' : st), c.x0, Y(0.18), pw * 0.9, 240 * k, { name: item.title, text: item.body || '' }, { animIn: anim('geser-atas-pendek-membal', 0.1) }));
       } else {
         out.push(headline(c, item.title, Y(0.22), area * 0.3, 0.15));
@@ -402,8 +402,8 @@ function buildRole(item: PlanItem, c: Ctx): Layer[] {
       break;
     }
     case 'kutipan': {
-      const serif = L.id === 'sinema' || L.id === 'minimal' || L.id === 'editorial';
-      if (L.id === 'kaca' || L.id === 'chat' || L.id === 'brutal' || L.id === 'retro' || L.id === 'jualan') {
+      const serif = (L.base || L.id) === 'sinema' || (L.base || L.id) === 'minimal' || (L.base || L.id) === 'editorial';
+      if ((L.base || L.id) === 'kaca' || (L.base || L.id) === 'chat' || (L.base || L.id) === 'brutal' || (L.base || L.id) === 'retro' || (L.base || L.id) === 'jualan') {
         out.push(makeComponent(c, componentIdFor('quote', st), c.x0, Y(0.2), c.cw, area * 0.55, { text: item.title, author: item.body || (plan.handle ? `— ${plan.handle}` : '') }, { animIn: anim(pick(L.elemAnim, c.idx), 0.1) }));
       } else {
         out.push(makeText(c, '“', c.x0, Y(0.08), c.cw, 220 * k, { name: 'Tanda kutip', size: Math.round(300 * k), weight: 900, color: p.primary, align: L.align === 'left' ? 'left' : 'center', animIn: anim('pop-kecil-membal', 0) }));

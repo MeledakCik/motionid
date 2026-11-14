@@ -1,7 +1,7 @@
 import { EasingId, ease, clamp, hash01 } from '../easing';
 
 /**
- * Transition Pack — 300+ transisi antar scene.
+ * Transition Pack — 1000+ transisi antar scene (46 jenis render).
  * Setiap transisi = `kind` (algoritma gambar) + parameter. Admin bisa menambah transisi
  * lewat kode JSON (kind + params), atau mode "custom" dengan pose keluar/masuk + mask.
  */
@@ -37,6 +37,22 @@ export type TransitionKind =
   | 'dolly'
   | 'shatter'
   | 'sand'
+  | 'wave'
+  | 'zigzag'
+  | 'dots'
+  | 'rings'
+  | 'fan'
+  | 'pie'
+  | 'checker'
+  | 'carousel'
+  | 'tilt'
+  | 'stretch'
+  | 'colorbars'
+  | 'scan'
+  | 'diagblinds'
+  | 'filmroll'
+  | 'swing'
+  | 'curtain'
   | 'custom';
 
 export interface TransitionParams {
@@ -359,6 +375,246 @@ function buildLibrary(): TransitionSpec[] {
     add({ id: `flip-${d}`, name: `Balik 3D ${dl}`, group: '3d', kind: 'flip', tags: ['flip', '3d'], duration: 0.7, easing: 'inOutCubic', params: { dir: d }, energy: 2 });
     add({ id: `cube-${d}`, name: `Kubus 3D ${dl}`, group: '3d', kind: 'cube', tags: ['cube', '3d'], duration: 0.7, easing: 'inOutCubic', params: { dir: d }, energy: 2 });
   }
+
+  /* ================================================================ */
+  /* Pack Ekstra v7 — 16 jenis render baru + variasi gerak             */
+  /* Setiap variasi punya kombinasi parameter yang berbeda (tidak ada  */
+  /* dua transisi dengan kind + params + easing + durasi yang sama).   */
+  /* ================================================================ */
+  const COL4: Array<[NonNullable<TransitionParams['color']>, string]> = [
+    ['primary', 'Brand'],
+    ['secondary', 'Aksen'],
+    ['white', 'Putih'],
+    ['black', 'Hitam'],
+  ];
+  const ORIG5: Array<[NonNullable<TransitionParams['origin']>, string]> = [
+    ['center', 'Tengah'],
+    ['tl', 'Kiri Atas'],
+    ['tr', 'Kanan Atas'],
+    ['bl', 'Kiri Bawah'],
+    ['br', 'Kanan Bawah'],
+  ];
+
+  // Geser & Dorong dengan karakter gerak baru (pantul, kenyal, pegas, sentak)
+  for (const [d, dl] of DIR8) {
+    for (const [ek, el, e] of [
+      ['pantul', 'Memantul', 'outBounce'],
+      ['kenyal', 'Kenyal', 'outElastic'],
+      ['pegas', 'Pegas', 'spring'],
+      ['sentak', 'Sentak', 'snap'],
+    ] as const) {
+      add({ id: `slide-${d}-${ek}`, name: `Tutup dari ${dl} · ${el}`, group: 'geser', kind: 'slide', tags: ['slide', d, ek], duration: 0.7, easing: e, params: { dir: d }, energy: 3 });
+      add({ id: `push-${d}-${ek}`, name: `Dorong ke ${dl} · ${el}`, group: 'geser', kind: 'push', tags: ['push', d, ek], duration: 0.7, easing: e, params: { dir: d }, energy: 3 });
+    }
+  }
+
+  // 1. Gelombang — sapu dengan tepi sinus
+  for (const [d, dl] of DIR4) {
+    for (const n of [2, 3, 5, 8]) {
+      for (const [ak, al, a] of [
+        ['landai', 'Landai', 0.04],
+        ['sedang', 'Sedang', 0.08],
+        ['tinggi', 'Tinggi', 0.14],
+      ] as const) {
+        for (const [ek, el, e] of [EASE3[0], EASE3[1]]) {
+          add({ id: `wave-${d}-${n}-${ak}-${ek}`, name: `Gelombang ${dl} ${n} Lekuk ${al} · ${el}`, group: 'sapu', kind: 'wave', tags: ['wave', 'gelombang', 'air', d], duration: 0.75, easing: e, params: { dir: d, count: n, intensity: a }, energy: 2 });
+        }
+      }
+    }
+  }
+
+  // 2. Gerigi — sapu dengan tepi zigzag (+ garis warna opsional)
+  for (const [d, dl] of DIR4) {
+    for (const n of [4, 8, 14]) {
+      for (const [ak, al, a] of [
+        ['halus', 'Halus', 0.05],
+        ['tajam', 'Tajam', 0.1],
+      ] as const) {
+        for (const [ck, cl] of [
+          ['polos', ''],
+          ['primary', ' + Garis Brand'],
+        ] as const) {
+          add({ id: `zigzag-${d}-${n}-${ak}-${ck}`, name: `Gerigi ${dl} ${n} ${al}${cl}`, group: 'sapu', kind: 'zigzag', tags: ['zigzag', 'gerigi', d], duration: 0.65, easing: 'inOutCubic', params: ck === 'polos' ? { dir: d, count: n, intensity: a } : { dir: d, count: n, intensity: a, color: ck }, energy: 2 });
+        }
+      }
+    }
+  }
+
+  // 3. Titik Halftone — sel berbentuk yang tumbuh membuka scene baru
+  for (const [s, sl] of [
+    ['circle', 'Bulat'],
+    ['diamond', 'Berlian'],
+    ['square', 'Kotak'],
+    ['star', 'Bintang'],
+    ['hexagon', 'Heksagon'],
+    ['heart', 'Hati'],
+  ] as const) {
+    for (const n of [6, 9, 12, 16]) {
+      for (const [ok, ol] of [
+        ['random', 'Acak'],
+        ['diagonal', 'Diagonal'],
+        ['rows', 'Baris'],
+      ] as const) {
+        add({ id: `dots-${s}-${n}-${ok}`, name: `Titik ${sl} ${n} ${ol}`, group: 'pola', kind: 'dots', tags: ['dots', 'halftone', 'titik', s], duration: 0.8, easing: 'outCubic', params: { shape: s, count: n, order: ok }, energy: 2 });
+      }
+    }
+  }
+
+  // 4. Cincin Konsentris
+  for (const [o, ol] of ORIG5) {
+    for (const n of [3, 5, 8, 12]) {
+      for (const rev of [false, true]) {
+        add({ id: `rings-${o}-${n}${rev ? '-luar' : ''}`, name: `Cincin ${n} ${ol}${rev ? ' dari Luar' : ''}`, group: 'bentuk', kind: 'rings', tags: ['rings', 'cincin', 'riak', 'lingkaran'], duration: 0.8, easing: 'inOutSine', params: { origin: o, count: n, reverse: rev }, energy: 2 });
+      }
+    }
+  }
+
+  // 5. Kipas — beberapa jarum menyapu bersamaan
+  for (const [o, ol] of ORIG5) {
+    for (const n of [2, 3, 4, 6, 8]) {
+      for (const rev of [false, true]) {
+        add({ id: `fan-${o}-${n}${rev ? '-balik' : ''}`, name: `Kipas ${n} Bilah ${ol}${rev ? ' Berlawanan' : ''}`, group: 'bentuk', kind: 'fan', tags: ['fan', 'kipas', 'radial', 'clock'], duration: 0.7, easing: 'inOutCubic', params: { origin: o, count: n, reverse: rev }, energy: 2 });
+      }
+    }
+  }
+
+  // 6. Papan Catur
+  for (const n of [4, 6, 8, 12]) {
+    for (const [mk, ml, dir] of [
+      ['xy', 'Tumbuh', undefined],
+      ['x', 'Lipat Horizontal', 'left'],
+      ['y', 'Lipat Vertikal', 'up'],
+    ] as const) {
+      for (const [ok, ol] of [
+        ['catur', 'Catur'],
+        ['acak', 'Acak'],
+      ] as const) {
+        for (const [ek, el, e] of [
+          ['halus', 'Halus', 'inOutCubic'],
+          ['membal', 'Membal', 'outBack'],
+        ] as const) {
+          add({ id: `checker-${n}-${mk}-${ok}-${ek}`, name: `Papan ${ol} ${n} ${ml} · ${el}`, group: 'pola', kind: 'checker', tags: ['checker', 'catur', 'kotak'], duration: 0.8, easing: e, params: { count: n, ...(dir ? { dir } : {}), order: ok === 'acak' ? 'random' : 'diagonal' }, energy: 2 });
+        }
+      }
+    }
+  }
+
+  // 7. Karusel — scene mengecil, bergeser seperti slide aplikasi
+  for (const [d, dl] of DIR8) {
+    for (const [sk, sl, s] of [
+      ['dekat', 'Dekat', 0.85],
+      ['jauh', 'Jauh', 0.7],
+    ] as const) {
+      for (const [ek, el, e] of EASE3) {
+        add({ id: `carousel-${d}-${sk}-${ek}`, name: `Karusel ${dl} ${sl} · ${el}`, group: 'geser', kind: 'carousel', tags: ['carousel', 'karusel', 'slide', 'app'], duration: 0.8, easing: e, params: { dir: d, intensity: s }, energy: 2 });
+      }
+    }
+  }
+
+  // 8. Miring Geser — slide dengan skew dinamis
+  for (const [d, dl] of DIR4) {
+    for (const a of [10, 20, 35]) {
+      for (const [ek, el, e] of EASE3) {
+        add({ id: `tilt-${d}-${a}-${ek}`, name: `Geser Miring ${dl} ${a}° · ${el}`, group: 'geser', kind: 'tilt', tags: ['tilt', 'miring', 'skew', d], duration: 0.6, easing: e, params: { dir: d, angle: a }, energy: 3 });
+      }
+    }
+  }
+
+  // 9. Regang — scene meregang lalu scene baru kembali normal
+  for (const [d, dl] of DIR4) {
+    for (const [ik, il, i] of [
+      ['ringan', 'Ringan', 1.6],
+      ['sedang', 'Sedang', 3],
+      ['ekstrem', 'Ekstrem', 6],
+    ] as const) {
+      for (const [ek, el, e] of [
+        ['halus', 'Halus', 'inOutCubic'],
+        ['tegas', 'Tegas', 'inOutExpo'],
+      ] as const) {
+        add({ id: `stretch-${d}-${ik}-${ek}`, name: `Regang ke ${dl} ${il} · ${el}`, group: 'efek', kind: 'stretch', tags: ['stretch', 'regang', 'elastis', d], duration: 0.55, easing: e, params: { dir: d, intensity: i }, energy: 3 });
+      }
+    }
+  }
+
+  // 10. Bilah Warna — balok warna menyapu lalu membuka
+  for (const [d, dl] of DIR4) {
+    for (const n of [1, 3, 5, 8]) {
+      for (const [c, cl] of COL4) {
+        add({ id: `colorbars-${d}-${n}-${c}`, name: `Balok ${cl} ${n} ke ${dl}`, group: 'sapu', kind: 'colorbars', tags: ['colorbars', 'balok', 'brand', d], duration: 0.85, easing: 'inOutQuart', params: { dir: d, count: n, color: c }, energy: 3 });
+      }
+    }
+  }
+
+  // 11. Pindai Cahaya — garis bercahaya membuka scene
+  for (const [d, dl] of DIR4) {
+    for (const [c, cl] of COL4) {
+      for (const [wk, wl, w] of [
+        ['tipis', 'Tipis', 1],
+        ['tebal', 'Tebal', 3],
+      ] as const) {
+        add({ id: `scan-${d}-${c}-${wk}`, name: `Pindai ${cl} ${wl} ke ${dl}`, group: 'efek', kind: 'scan', tags: ['scan', 'pindai', 'laser', 'cahaya'], duration: 0.7, easing: 'inOutSine', params: { dir: d, color: c, intensity: w }, energy: 2 });
+      }
+    }
+  }
+
+  // 12. Kerai Diagonal
+  for (const a of [30, 45, 60, 120, 135, 150]) {
+    for (const n of [4, 8, 14]) {
+      for (const [ek, el, e] of [EASE3[0], EASE3[1]]) {
+        add({ id: `diagblinds-${a}-${n}-${ek}`, name: `Kerai Miring ${a}° ${n} · ${el}`, group: 'pola', kind: 'diagblinds', tags: ['blinds', 'kerai', 'diagonal'], duration: 0.65, easing: e, params: { angle: a, count: n }, energy: 2 });
+      }
+    }
+  }
+
+  // 13. Gulungan Film
+  for (const [d, dl] of DIR4) {
+    for (const [ek, el, e] of EASE3) {
+      add({ id: `filmroll-${d}-${ek}`, name: `Gulungan Film ke ${dl} · ${el}`, group: 'geser', kind: 'filmroll', tags: ['film', 'sinema', 'retro', 'roll'], duration: 0.9, easing: e, params: { dir: d }, energy: 2 });
+    }
+  }
+
+  // 14. Potongan Pie
+  for (const n of [3, 4, 6, 8, 12]) {
+    for (const [ok, ol, order, rev] of [
+      ['urut', 'Searah', 'rows', false],
+      ['balik', 'Berlawanan', 'rows', true],
+      ['acak', 'Acak', 'random', false],
+    ] as const) {
+      for (const [ek, el, e] of [EASE3[0], EASE3[2]]) {
+        add({ id: `pie-${n}-${ok}-${ek}`, name: `Potongan Pie ${n} ${ol} · ${el}`, group: 'bentuk', kind: 'pie', tags: ['pie', 'radial', 'potongan'], duration: 0.8, easing: e, params: { count: n, order, reverse: rev }, energy: 2 });
+      }
+    }
+  }
+
+  // 15. Ayun Pintu
+  for (const [d, dl] of DIR4) {
+    for (const [ek, el, e] of [
+      ['halus', 'Halus', 'inOutCubic'],
+      ['membal', 'Membal', 'outBack'],
+      ['pantul', 'Memantul', 'outBounce'],
+      ['kenyal', 'Kenyal', 'outElastic'],
+      ['pegas', 'Pegas', 'spring'],
+    ] as const) {
+      add({ id: `swing-${d}-${ek}`, name: `Ayun Pintu dari ${dl} · ${el}`, group: '3d', kind: 'swing', tags: ['swing', 'ayun', 'pintu', '3d'], duration: 0.8, easing: e, params: { dir: d }, energy: 2 });
+    }
+  }
+
+  // 16. Tirai Panggung
+  for (const [ax, axl] of [
+    ['left', 'Samping'],
+    ['up', 'Atas-Bawah'],
+  ] as const) {
+    for (const [c, cl] of COL4) {
+      for (const [fk, fl, f] of [
+        ['polos', 'Polos', 0],
+        ['lipit', 'Berlipit', 1],
+      ] as const) {
+        for (const [ek, el, e] of [EASE3[0], EASE3[1]]) {
+          add({ id: `curtain-${ax}-${c}-${fk}-${ek}`, name: `Tirai ${axl} ${cl} ${fl} · ${el}`, group: 'sapu', kind: 'curtain', tags: ['curtain', 'tirai', 'panggung', 'reveal'], duration: 1, easing: e, params: { dir: ax, color: c, intensity: f }, energy: 2 });
+        }
+      }
+    }
+  }
   return L;
 }
 
@@ -439,8 +695,8 @@ function colorOf(c: TransitionParams['color'], cols: TransitionColors): string {
   return cols.primary;
 }
 
-function shapePath(ctx: CanvasRenderingContext2D, shape: TransitionParams['shape'], cx: number, cy: number, r: number, rot = 0) {
-  ctx.beginPath();
+function shapePath(ctx: CanvasRenderingContext2D, shape: TransitionParams['shape'], cx: number, cy: number, r: number, rot = 0, fresh = true) {
+  if (fresh) ctx.beginPath();
   const poly = (n: number, inner?: number) => {
     const steps = inner ? n * 2 : n;
     for (let i = 0; i < steps; i++) {
@@ -490,6 +746,7 @@ function shapePath(ctx: CanvasRenderingContext2D, shape: TransitionParams['shape
       break;
     }
     default:
+      ctx.moveTo(cx + r, cy);
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
   }
 }
@@ -891,12 +1148,13 @@ export function drawTransition(
         for (let i = 0; i < n; i++) {
           ctx.save();
           const segs = vertical ? H / n : W / n;
-          ctx.beginPath();
-          if (vertical) ctx.rect(0, i * segs, W, segs + 1);
-          else ctx.rect(i * segs, 0, segs + 1, H);
-          ctx.clip();
           const dirSign = n === 2 ? (i === 0 ? -1 : 1) : i % 2 ? 1 : -1;
           const off = dirSign * (vertical ? H : W) * e * (n === 2 ? 0.5 : 1);
+          // area potongan ikut bergeser bersama daun pintu agar scene lama benar-benar keluar
+          ctx.beginPath();
+          if (vertical) ctx.rect(0, i * segs + off, W, segs + 1);
+          else ctx.rect(i * segs + off, 0, segs + 1, H);
+          ctx.clip();
           ctx.drawImage(A, vertical ? 0 : off, vertical ? off : 0, W, H);
           ctx.restore();
         }
@@ -1127,6 +1385,398 @@ export function drawTransition(
       break;
     }
 
+    /* ---------------- Pack Ekstra v7 ---------------- */
+    case 'wave':
+    case 'zigzag': {
+      drawFull(ctx, A, W, H);
+      const [dx, dy] = dirVec(P.dir);
+      const horiz = dx !== 0;
+      const fwd = horiz ? dx > 0 : dy > 0;
+      const L = horiz ? W : H;
+      const M = horiz ? H : W;
+      const n = P.count || 3;
+      const amp = (P.intensity || 0.08) * Math.min(W, H);
+      const pos = -amp + (L + amp * 2) * e;
+      const pt = (u: number, v: number): [number, number] => (horiz ? [fwd ? u : W - u, v] : [v, fwd ? u : H - u]);
+      const steps = spec.kind === 'wave' ? 48 : n * 2;
+      const edge: Array<[number, number]> = [];
+      for (let i = 0; i <= steps; i++) {
+        const v = (i / steps) * M;
+        const off = spec.kind === 'wave' ? Math.sin((v / M) * n * Math.PI * 2 + p * 6) : i % 2 ? 1 : -1;
+        edge.push(pt(pos + amp * off, v));
+      }
+      ctx.save();
+      ctx.beginPath();
+      const s0 = pt(-amp * 2, 0);
+      ctx.moveTo(s0[0], s0[1]);
+      for (const [x, y] of edge) ctx.lineTo(x, y);
+      const s1 = pt(-amp * 2, M);
+      ctx.lineTo(s1[0], s1[1]);
+      ctx.closePath();
+      ctx.clip();
+      drawFull(ctx, B, W, H);
+      ctx.restore();
+      if (P.color && p > 0 && p < 1) {
+        ctx.beginPath();
+        edge.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+        ctx.strokeStyle = colorOf(P.color, cols);
+        ctx.lineWidth = Math.max(2, amp * 0.5);
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+      }
+      break;
+    }
+
+    case 'dots': {
+      drawFull(ctx, A, W, H);
+      const n = P.count || 10;
+      const cw = W / n;
+      const rows = Math.ceil(H / cw);
+      const cover: Record<string, number> = { circle: 0.72, square: 0.72, diamond: 1.02, hexagon: 0.82, triangle: 1.4, star: 1.65, heart: 1.2 };
+      const k = cover[P.shape || 'circle'] || 0.75;
+      ctx.beginPath();
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < n; c++) {
+          const idx = r * n + c;
+          const delay = P.order === 'diagonal' ? ((r + c) / (rows + n)) * 0.6 : P.order === 'rows' ? (r / rows) * 0.6 : hash01(idx, 13) * 0.6;
+          const t = ease(spec.easing, clamp((p - delay) / 0.4));
+          if (t <= 0) continue;
+          shapePath(ctx, P.shape, c * cw + cw / 2, r * cw + cw / 2, Math.max(0.1, cw * k * t), 0, false);
+        }
+      }
+      ctx.clip();
+      drawFull(ctx, B, W, H);
+      break;
+    }
+
+    case 'rings': {
+      drawFull(ctx, A, W, H);
+      const [ox, oy] = originPt(P.origin, W, H);
+      const R = Math.hypot(Math.max(ox, W - ox), Math.max(oy, H - oy)) + 2;
+      const n = P.count || 5;
+      const w = R / n;
+      ctx.beginPath();
+      for (let i = 0; i < n; i++) {
+        const order = P.reverse ? n - 1 - i : i;
+        const t = ease(spec.easing, clamp((p - (order / n) * 0.5) / 0.5));
+        if (t <= 0) continue;
+        const mid = i * w + w / 2;
+        const outer = mid + (w / 2 + 0.5) * t;
+        const inner = Math.max(0, mid - (w / 2 + 0.5) * t);
+        ctx.moveTo(ox + outer, oy);
+        ctx.arc(ox, oy, outer, 0, Math.PI * 2, false);
+        if (inner > 0) {
+          ctx.moveTo(ox + inner, oy);
+          ctx.arc(ox, oy, inner, 0, Math.PI * 2, true);
+        }
+      }
+      ctx.clip();
+      drawFull(ctx, B, W, H);
+      break;
+    }
+
+    case 'fan': {
+      drawFull(ctx, A, W, H);
+      const [ox, oy] = originPt(P.origin, W, H);
+      const n = P.count || 3;
+      const span = (Math.PI * 2) / n;
+      const sgn = P.reverse ? -1 : 1;
+      if (e > 0) {
+        ctx.beginPath();
+        for (let i = 0; i < n; i++) {
+          const a0 = -Math.PI / 2 + i * span;
+          ctx.moveTo(ox, oy);
+          ctx.arc(ox, oy, diag * 1.2, a0, a0 + span * e * sgn, sgn < 0);
+          ctx.closePath();
+        }
+        ctx.clip();
+        drawFull(ctx, B, W, H);
+      }
+      break;
+    }
+
+    case 'pie': {
+      drawFull(ctx, A, W, H);
+      const n = P.count || 6;
+      const span = (Math.PI * 2) / n;
+      const R = diag * 0.6;
+      ctx.beginPath();
+      for (let i = 0; i < n; i++) {
+        const k = P.order === 'random' ? hash01(i, 17) : (P.reverse ? n - 1 - i : i) / n;
+        const t = ease(spec.easing, clamp((p - k * 0.5) / 0.5));
+        if (t <= 0) continue;
+        const a0 = -Math.PI / 2 + i * span;
+        ctx.moveTo(W / 2, H / 2);
+        ctx.arc(W / 2, H / 2, Math.max(0.1, R * t), a0, a0 + span + 0.01);
+        ctx.closePath();
+      }
+      ctx.clip();
+      drawFull(ctx, B, W, H);
+      break;
+    }
+
+    case 'checker': {
+      drawFull(ctx, A, W, H);
+      const n = P.count || 6;
+      const cw = W / n;
+      const rows = Math.ceil(H / cw);
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < n; c++) {
+          const first = P.order === 'random' ? hash01(r * n + c, 23) < 0.5 : (r + c) % 2 === 0;
+          const t = ease(spec.easing, clamp(first ? p * 2 : p * 2 - 1));
+          if (t <= 0) continue;
+          const sx = c * cw;
+          const sy = r * cw;
+          const ch = Math.min(cw, H - sy);
+          const kx = P.dir === 'up' ? 1 : t;
+          const ky = P.dir === 'left' ? 1 : t;
+          const dw = cw * kx;
+          const dh = ch * ky;
+          ctx.drawImage(B, sx, sy, cw, ch, sx + (cw - dw) / 2, sy + (ch - dh) / 2, dw + 0.5, dh + 0.5);
+        }
+      }
+      break;
+    }
+
+    case 'carousel': {
+      const [dx, dy] = dirVec(P.dir);
+      const sMin = P.intensity || 0.8;
+      const s = 1 - (1 - sMin) * Math.sin(Math.PI * clamp(e));
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, W, H);
+      const gx = W * 1.06 * s;
+      const gy = H * 1.06 * s;
+      const ax = dx * gx * e;
+      const ay = dy * gy * e;
+      drawTransformed(ctx, A, W, H, ax, ay, s, 0, 1 - e * 0.35);
+      drawTransformed(ctx, B, W, H, ax - dx * gx, ay - dy * gy, s, 0, 0.65 + e * 0.35);
+      break;
+    }
+
+    case 'tilt': {
+      drawFull(ctx, A, W, H);
+      const [dx, dy] = dirVec(P.dir);
+      const k = Math.tan(((P.angle || 20) * Math.PI) / 180) * (1 - clamp(e));
+      ctx.fillStyle = `rgba(0,0,0,${0.35 * Math.min(1, e)})`;
+      ctx.fillRect(0, 0, W, H);
+      ctx.translate(-dx * W * (1 - e), -dy * H * (1 - e));
+      if (dx !== 0) ctx.transform(1, 0, k * -dx, 1, (k * dx * H) / 2, 0);
+      else ctx.transform(1, k * -dy, 0, 1, 0, (k * dy * W) / 2);
+      drawFull(ctx, B, W, H);
+      break;
+    }
+
+    case 'stretch': {
+      const [dx, dy] = dirVec(P.dir);
+      const k = P.intensity || 3;
+      const horiz = dx !== 0;
+      const draw = (src: Src, t: number, toward: number) => {
+        const sc = 1 + (k - 1) * t * t;
+        // jangkar di sisi berlawanan arah regangan
+        const ax = horiz ? (toward > 0 ? 0 : W) : 0;
+        const ay = horiz ? 0 : toward > 0 ? 0 : H;
+        ctx.save();
+        ctx.translate(ax, ay);
+        ctx.scale(horiz ? sc : 1, horiz ? 1 : sc);
+        ctx.translate(-ax, -ay);
+        drawFull(ctx, src, W, H);
+        ctx.restore();
+      };
+      const dirSign = horiz ? dx : dy;
+      if (e < 0.5) draw(A, e * 2, dirSign);
+      else draw(B, (1 - e) * 2, -dirSign);
+      break;
+    }
+
+    case 'colorbars': {
+      drawFull(ctx, A, W, H);
+      const [dx, dy] = dirVec(P.dir);
+      const horiz = dx !== 0;
+      const fwd = horiz ? dx > 0 : dy > 0;
+      const L = horiz ? W : H;
+      const M = horiz ? H : W;
+      const n = P.count || 3;
+      const rectU = (u0: number, u1: number, v0: number, v1: number) => {
+        const a = fwd ? u0 : L - u1;
+        if (horiz) ctx.rect(a, v0, u1 - u0, v1 - v0);
+        else ctx.rect(v0, a, v1 - v0, u1 - u0);
+      };
+      const col = colorOf(P.color, cols);
+      for (let i = 0; i < n; i++) {
+        const local = clamp((p - (i / n) * 0.3) / 0.7);
+        const lead = ease(spec.easing, clamp(local * 2)) * L;
+        const tail = ease(spec.easing, clamp(local * 2 - 1)) * L;
+        const v0 = (i * M) / n;
+        const v1 = ((i + 1) * M) / n + 0.5;
+        if (tail > 0) {
+          ctx.save();
+          ctx.beginPath();
+          rectU(0, tail + 0.5, v0, v1);
+          ctx.clip();
+          drawFull(ctx, B, W, H);
+          ctx.restore();
+        }
+        if (lead > tail) {
+          ctx.beginPath();
+          rectU(tail, lead, v0, v1);
+          ctx.fillStyle = col;
+          ctx.fill();
+        }
+      }
+      break;
+    }
+
+    case 'scan': {
+      drawFull(ctx, A, W, H);
+      const [dx, dy] = dirVec(P.dir);
+      const horiz = dx !== 0;
+      const fwd = horiz ? dx > 0 : dy > 0;
+      const L = horiz ? W : H;
+      const band = Math.max(3, L * 0.012 * (P.intensity || 1));
+      const pos = -band + (L + band * 2) * e;
+      const a = fwd ? 0 : L - Math.max(0, pos);
+      ctx.save();
+      ctx.beginPath();
+      if (horiz) ctx.rect(a, 0, Math.max(0, pos), H);
+      else ctx.rect(0, a, W, Math.max(0, pos));
+      ctx.clip();
+      drawFull(ctx, B, W, H);
+      ctx.restore();
+      if (p > 0 && p < 1) {
+        const c = fwd ? pos : L - pos;
+        const g = horiz ? ctx.createLinearGradient(c - band * 3, 0, c + band * 3, 0) : ctx.createLinearGradient(0, c - band * 3, 0, c + band * 3);
+        const col = colorOf(P.color, cols);
+        g.addColorStop(0, 'rgba(255,255,255,0)');
+        g.addColorStop(0.4, col);
+        g.addColorStop(0.5, '#FFFFFF');
+        g.addColorStop(0.6, col);
+        g.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.globalAlpha = Math.sin(Math.PI * p);
+        ctx.fillStyle = g;
+        if (horiz) ctx.fillRect(c - band * 3, 0, band * 6, H);
+        else ctx.fillRect(0, c - band * 3, W, band * 6);
+      }
+      break;
+    }
+
+    case 'diagblinds': {
+      drawFull(ctx, A, W, H);
+      const n = P.count || 8;
+      const a = ((P.angle || 45) * Math.PI) / 180;
+      const sw = diag / n;
+      ctx.translate(W / 2, H / 2);
+      ctx.rotate(a);
+      ctx.beginPath();
+      for (let i = 0; i < n; i++) {
+        const local = ease(spec.easing, clamp(p * 1.3 - (i / n) * 0.3));
+        if (local <= 0) continue;
+        ctx.rect(-diag / 2 + i * sw, -diag / 2, sw * local + 0.8, diag);
+      }
+      ctx.clip();
+      ctx.rotate(-a);
+      ctx.translate(-W / 2, -H / 2);
+      drawFull(ctx, B, W, H);
+      break;
+    }
+
+    case 'filmroll': {
+      const [dx, dy] = dirVec(P.dir);
+      const horiz = dx !== 0;
+      const s = 1 - 0.16 * Math.sin(Math.PI * clamp(e));
+      ctx.fillStyle = '#0B0B0B';
+      ctx.fillRect(0, 0, W, H);
+      const gx = W * s * 1.08;
+      const gy = H * s * 1.08;
+      const ax = dx * gx * e;
+      const ay = dy * gy * e;
+      drawTransformed(ctx, A, W, H, ax, ay, s);
+      drawTransformed(ctx, B, W, H, ax - dx * gx, ay - dy * gy, s);
+      // lubang sprocket di dua sisi pita
+      const hole = Math.min(W, H) * 0.035;
+      const gap = hole * 2.2;
+      const shift = horiz ? ax : ay;
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      const margin = ((horiz ? H : W) * (1 - s)) / 4;
+      if (margin > hole * 0.6) {
+        const L = horiz ? W : H;
+        const M = horiz ? H : W;
+        const start = (((shift % gap) + gap) % gap) - gap;
+        for (let u = start; u < L + gap; u += gap) {
+          for (const v of [margin - hole / 2, M - margin - hole / 2]) {
+            if (horiz) ctx.fillRect(u, v, hole, hole * 0.8);
+            else ctx.fillRect(v, u, hole * 0.8, hole);
+          }
+        }
+      }
+      break;
+    }
+
+    case 'swing': {
+      drawFull(ctx, A, W, H);
+      ctx.fillStyle = `rgba(0,0,0,${0.45 * clamp(p)})`;
+      ctx.fillRect(0, 0, W, H);
+      const [dx, dy] = dirVec(P.dir);
+      const horiz = dx !== 0;
+      const hx = horiz ? (dx > 0 ? 0 : W) : 0;
+      const hy = horiz ? 0 : dy > 0 ? 0 : H;
+      const k = Math.max(0.001, e);
+      const shrink = 1 - 0.12 * (1 - clamp(e));
+      if (horiz) {
+        ctx.translate(hx, H / 2);
+        ctx.scale(k, shrink);
+        ctx.translate(-hx, -H / 2);
+      } else {
+        ctx.translate(W / 2, hy);
+        ctx.scale(shrink, k);
+        ctx.translate(-W / 2, -hy);
+      }
+      drawFull(ctx, B, W, H);
+      break;
+    }
+
+    case 'curtain': {
+      const horiz = P.dir !== 'up';
+      const closing = p < 0.5;
+      const t = closing ? ease(spec.easing, p * 2) : 1 - ease(spec.easing, p * 2 - 1);
+      drawFull(ctx, closing ? A : B, W, H);
+      const col = colorOf(P.color, cols);
+      const L = horiz ? W : H;
+      const half = (L / 2) * t;
+      const panel = (u0: number, len: number, flip: boolean) => {
+        if (len <= 0) return;
+        ctx.fillStyle = col;
+        if (horiz) ctx.fillRect(u0, 0, len, H);
+        else ctx.fillRect(0, u0, W, len);
+        if (P.intensity) {
+          const folds = 6;
+          for (let f = 0; f < folds; f++) {
+            const fu = u0 + (len / folds) * f;
+            const g = horiz ? ctx.createLinearGradient(fu, 0, fu + len / folds, 0) : ctx.createLinearGradient(0, fu, 0, fu + len / folds);
+            g.addColorStop(0, 'rgba(0,0,0,0.28)');
+            g.addColorStop(0.5, 'rgba(255,255,255,0.10)');
+            g.addColorStop(1, 'rgba(0,0,0,0.28)');
+            ctx.fillStyle = g;
+            if (horiz) ctx.fillRect(fu, 0, len / folds + 0.5, H);
+            else ctx.fillRect(0, fu, W, len / folds + 0.5);
+          }
+        }
+        // bayangan tepi tirai
+        const edgeU = flip ? u0 : u0 + len;
+        const g2 = horiz ? ctx.createLinearGradient(edgeU - 12, 0, edgeU + 12, 0) : ctx.createLinearGradient(0, edgeU - 12, 0, edgeU + 12);
+        g2.addColorStop(0, 'rgba(0,0,0,0)');
+        g2.addColorStop(0.5, 'rgba(0,0,0,0.35)');
+        g2.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g2;
+        if (horiz) ctx.fillRect(edgeU - 12, 0, 24, H);
+        else ctx.fillRect(0, edgeU - 12, W, 24);
+      };
+      if (half >= 0.5) {
+        panel(0, half + 0.5, false);
+        panel(L - half - 0.5, half + 0.5, true);
+      }
+      break;
+    }
+
     case 'custom': {
       const lerpP = (a: CustomPose | undefined, b: CustomPose | undefined, t: number) => ({
         x: ((a?.x ?? 0) + ((b?.x ?? 0) - (a?.x ?? 0)) * t) * (W / 1080),
@@ -1168,7 +1818,8 @@ function getScratch(w: number, h: number): HTMLCanvasElement {
 /* ------------------------------------------------------------------ */
 const KINDS: TransitionKind[] = [
   'cut', 'fade', 'slide', 'push', 'wipe', 'iris', 'shape', 'zoom', 'blinds', 'grid', 'stripes', 'spin', 'flip', 'cube',
-  'whip', 'glitch', 'flash', 'blur', 'split', 'clock', 'pixelate', 'ink', 'slice', 'colorwipe', 'burst', 'shake', 'card', 'dolly', 'shatter', 'sand', 'custom',
+  'whip', 'glitch', 'flash', 'blur', 'split', 'clock', 'pixelate', 'ink', 'slice', 'colorwipe', 'burst', 'shake', 'card', 'dolly', 'shatter', 'sand',
+  'wave', 'zigzag', 'dots', 'rings', 'fan', 'pie', 'checker', 'carousel', 'tilt', 'stretch', 'colorbars', 'scan', 'diagblinds', 'filmroll', 'swing', 'curtain', 'custom',
 ];
 
 export function parseTransitionCode(raw: string, fallbackName = 'Transisi Custom'): { ok: boolean; error?: string; spec?: TransitionSpec } {

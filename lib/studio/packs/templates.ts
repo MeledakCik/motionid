@@ -1,7 +1,7 @@
 import type { BgPattern, FontId, Intent, Palette } from '../types';
 
 /**
- * Template Pack — 30 tema warna × 12 layout = 360 template.
+ * Template Pack — 45 tema warna × 24 layout = 1080 template.
  * Tema menentukan palet, font, dan pola latar. Layout menentukan susunan elemen tiap scene,
  * gaya komponen, pilihan animasi, dan transisi. Prompt engine memilih kombinasi terbaik.
  */
@@ -37,6 +37,8 @@ export interface LayoutDef {
   transitions: string[];
   pattern?: BgPattern;
   energy: 1 | 2 | 3;
+  /** Layout induk: perilaku khusus builder (angka besar, bubble chat, serif, dll.) ikut induk ini. */
+  base?: string;
 }
 
 export interface TemplateDef {
@@ -100,6 +102,23 @@ export const THEMES: ThemeDef[] = [
   T('rempah', 'Rempah Nusantara', ['#2B0F0A', '#5A2312', '#F08A24', '#8FB339', '#FFF3E3', '#D8B79A', '#3A160D'], 'Montserrat', 'Poppins', 'halftone', ['rendang', 'nasi', 'sate', 'warung', 'masakan', 'resep', 'katering', 'padang', 'soto'], ['hangat', 'energik']),
   T('lavender', 'Lavender Calm', ['#EFEAFB', '#DCD2F5', '#6D4AE0', '#F59E8B', '#241A3D', '#6E6488', '#FFFFFF'], 'Playfair Display', 'Plus Jakarta Sans', 'bokeh', ['tenang', 'meditasi', 'yoga', 'mental', 'self love', 'healing', 'jurnal'], ['tenang', 'galau'], 135),
   T('teh-tarik', 'Teh Tarik', ['#E9D3B6', '#D4B18A', '#6B3E1F', '#C2410C', '#2E1A0D', '#6E5038', '#F7EBDD'], 'Bebas Neue', 'Poppins', 'noise', ['teh', 'boba', 'milk tea', 'minuman', 'thai tea', 'es teh'], ['hangat', 'lucu'], 135),
+  // ---- Tema tambahan v7 ----
+  T('es-krim', 'Es Krim Stroberi', ['#FFF1F4', '#FFD6E0', '#FF4D7A', '#3CCFB0', '#3A1020', '#8C5566', '#FFFFFF'], 'Poppins', 'Poppins', 'dots', ['es krim', 'ice cream', 'gelato', 'stroberi', 'strawberry', 'sundae', 'mochi'], ['lucu', 'hangat'], 135),
+  T('kopi-susu', 'Kopi Susu Krem', ['#F4E9DC', '#E6D2BC', '#6F4A2E', '#D97B3F', '#2C1C10', '#7A6150', '#FFF9F2'], 'Montserrat', 'Plus Jakarta Sans', 'noise', ['kopi susu', 'gula aren', 'susu', 'latte', 'kedai', 'roti bakar'], ['hangat', 'tenang'], 135),
+  T('senja-ungu', 'Senja Ungu', ['#1E0B2E', '#4A1559', '#FF8A3D', '#FFD166', '#FFF5EC', '#D0B3CF', '#2E1240'], 'Playfair Display', 'Poppins', 'rays', ['senja', 'sunset', 'puisi', 'sore', 'langit'], ['galau', 'hangat']),
+  T('aurora', 'Aurora Utara', ['#04141A', '#0B2F3A', '#3EF2B8', '#B46BFF', '#EFFFFB', '#9CC5BE', '#0A222B'], 'Space Grotesk', 'Plus Jakarta Sans', 'bokeh', ['aurora', 'malam', 'bintang', 'mimpi', 'kreatif', 'musik'], ['tenang', 'energik']),
+  T('terracotta', 'Terracotta', ['#2A140E', '#5C2A1B', '#E07A4F', '#F2C79B', '#FFF4EC', '#D7B3A0', '#3A1D14'], 'Playfair Display', 'Montserrat', 'halftone', ['keramik', 'gerabah', 'interior', 'handmade', 'kriya', 'pot', 'tanaman hias'], ['hangat', 'mewah']),
+  T('denim', 'Denim Biru', ['#0F1E3A', '#1D3766', '#6EA8FF', '#FFFFFF', '#F2F6FF', '#9FB2D6', '#162A50'], 'Bebas Neue', 'Montserrat', 'noise', ['jeans', 'denim', 'jaket', 'kaos', 'baju', 'outfit', 'ootd', 'thrift'], ['serius', 'energik']),
+  T('sawah', 'Sawah Pagi', ['#F3FBE6', '#DDF2C0', '#3F8F2F', '#F5B700', '#1C2B10', '#5C6E4A', '#FFFFFF'], 'Montserrat', 'Poppins', 'waves', ['desa', 'sawah', 'petani', 'pertanian', 'beras', 'pupuk', 'umkm desa', 'pagi'], ['tenang', 'hangat'], 135),
+  T('grafit-oranye', 'Grafit Oranye', ['#141414', '#262626', '#FF7A00', '#FFFFFF', '#FAFAFA', '#A6A6A6', '#1E1E1E'], 'Space Grotesk', 'Montserrat', 'grid', ['konstruksi', 'teknik', 'bengkel', 'alat', 'tukang', 'renovasi', 'industri'], ['serius', 'energik']),
+  T('ramadan', 'Ramadan Hijau Emas', ['#06231A', '#0E4433', '#E6C065', '#7FD1AE', '#FFF9E8', '#B7CDBE', '#0A3226'], 'Playfair Display', 'Poppins', 'bokeh', ['ramadan', 'puasa', 'lebaran', 'idul fitri', 'takjil', 'sahur', 'mudik', 'zakat', 'islami', 'kajian'], ['tenang', 'mewah']),
+  T('imlek', 'Imlek Merah Emas', ['#5A0A0A', '#8C1414', '#FFC94A', '#FF7043', '#FFF5E1', '#F0C4A8', '#6E0F0F'], 'Playfair Display', 'Montserrat', 'halftone', ['imlek', 'angpao', 'chinese', 'tahun baru', 'barongsai', 'hoki'], ['mewah', 'energik']),
+  T('koran', 'Koran Pagi', ['#F2EFE6', '#E4DFD0', '#111111', '#D62828', '#111111', '#55524A', '#FFFFFF'], 'Playfair Display', 'Montserrat', 'noise', ['berita', 'news', 'info', 'koran', 'update', 'breaking', 'kabar', 'pengumuman'], ['serius'], 135),
+  T('kosmik', 'Kosmik', ['#05031A', '#160B45', '#7B61FF', '#3DDCFF', '#F4F2FF', '#A39DD1', '#0F0836'], 'Space Grotesk', 'Space Grotesk', 'bokeh', ['luar angkasa', 'galaksi', 'astronomi', 'roket', 'sains', 'planet', 'futuristik'], ['serius', 'tenang']),
+  T('tropis-jus', 'Jus Tropis', ['#FF8A00', '#FFB703', '#E63971', '#2EC4B6', '#2A0F00', '#6E3B1A', '#FFF4E0'], 'Anton', 'Poppins', 'blobs', ['jus', 'buah', 'smoothie', 'mangga', 'semangka', 'segar', 'es buah', 'rujak'], ['energik', 'lucu'], 135),
+  T('sport-biru', 'Sport Elektrik', ['#06122B', '#0B2A66', '#00A3FF', '#C6FF3D', '#FFFFFF', '#9CB3D9', '#0A1E45'], 'Anton', 'Montserrat', 'stripes', ['olahraga', 'futsal', 'sepak bola', 'bola', 'lari', 'badminton', 'fitness', 'turnamen', 'basket'], ['energik']),
+  T('hijab-mauve', 'Mauve Muslimah', ['#F5E9EE', '#E8CFDA', '#9C4F73', '#C9A27E', '#3A1E2B', '#7E6070', '#FFFAFC'], 'Playfair Display', 'Poppins', 'bokeh', ['hijab', 'gamis', 'muslimah', 'fashion muslim', 'mukena', 'kerudung', 'syari'], ['tenang', 'mewah'], 135),
+  T('properti-navy', 'Properti Navy', ['#0B1630', '#172A55', '#E2B65C', '#FFFFFF', '#F7F9FF', '#A9B5CF', '#13234A'], 'Montserrat', 'Plus Jakarta Sans', 'grid', ['rumah', 'kpr', 'properti', 'kontrakan', 'kos', 'apartemen', 'tanah', 'perumahan', 'cluster'], ['serius', 'mewah']),
 ];
 
 const ALL_INTENTS: Intent[] = ['promo-produk', 'flash-sale', 'menu-kuliner', 'launching', 'event', 'tips', 'tutorial', 'fakta', 'quote-motivasi', 'quote-galau', 'testimoni', 'before-after', 'lowongan', 'pengumuman', 'ucapan', 'travel', 'cerita'];
@@ -176,6 +195,79 @@ export const LAYOUTS: LayoutDef[] = [
     align: 'center', compStyle: 'elegan', headlineSize: 92, upper: false, highlight: false, photo: 'bg', decor: 'letterbox', pattern: 'noise',
     headAnim: ['teks-word-blur-lambat', 'teks-line-muncul-lambat', 'blur-kabut-halus'], bodyAnim: ['fade-slow', 'blur-fokus-halus'], elemAnim: ['fade-slow'],
     loops: ['loop-napas-lembut', 'loop-zoom-pelan-lembut'], transitions: ['fade-black-lambat', 'blur-berat', 'dolly-lembut', 'fade-none-lambat'], energy: 1,
+  },
+  // ---- Layout tambahan v7 ----
+  {
+    id: 'kertas', name: 'Catatan Kertas', desc: 'Kartu kertas bertekstur, rata kiri — hangat untuk tips & cerita.', intents: ['tips', 'tutorial', 'cerita', 'quote-motivasi'], base: 'editorial',
+    align: 'left', compStyle: 'kertas', headlineSize: 100, upper: false, highlight: true, photo: 'frame', decor: 'lines', pattern: 'noise',
+    headAnim: ['teks-line-naik-normal', 'teks-word-naik-normal'], bodyAnim: ['teks-line-muncul-normal', 'fade'], elemAnim: ['geser-kanan-pendek-halus', 'pop-kecil-membal'],
+    loops: ['loop-napas-lembut'], transitions: ['wave-up-3-landai-halus', 'tilt-left-10-halus', 'zigzag-up-8-halus-polos', 'fade-none-normal'], energy: 1,
+  },
+  {
+    id: 'ombak', name: 'Ombak Lembut', desc: 'Latar bergelombang, transisi air — santai & puitis.', intents: ['travel', 'quote-galau', 'ucapan', 'cerita'], base: 'sinema',
+    align: 'center', compStyle: 'soft', headlineSize: 96, upper: false, highlight: false, photo: 'bg', decor: 'bubbles', pattern: 'waves',
+    headAnim: ['teks-word-blur-normal', 'blur-fokus-naik-halus'], bodyAnim: ['fade-slow', 'geser-atas-pendek-halus'], elemAnim: ['fade', 'pop-sedang-halus'],
+    loops: ['loop-melayang-lembut', 'loop-napas-lembut'], transitions: ['wave-up-5-tinggi-halus', 'wave-left-3-sedang-halus', 'rings-center-5', 'blur-sedang'], energy: 1,
+  },
+  {
+    id: 'retro-tv', name: 'Retro TV', desc: 'Bingkai siaran jadul, garis pindai & gulungan film.', intents: ['fakta', 'event', 'pengumuman', 'launching'], base: 'listicle',
+    align: 'center', compStyle: 'retro', headlineSize: 112, upper: true, highlight: false, photo: 'frame', decor: 'corners', pattern: 'stripes',
+    headAnim: ['teks-decode-normal', 'teks-word-pop-normal'], bodyAnim: ['teks-ketik-cepat', 'geser-atas-pendek-tegas'], elemAnim: ['gaya-kilat-cepat', 'pop-kecil-membal'],
+    loops: ['loop-kedip-lembut'], transitions: ['filmroll-left-halus', 'scan-down-white-tebal', 'pixel-sedang', 'checker-8-xy-catur-halus'], energy: 2,
+  },
+  {
+    id: 'poster', name: 'Poster Konser', desc: 'Judul raksasa, balok warna, sinar — gaya poster acara.', intents: ['event', 'launching', 'promo-produk', 'pengumuman'], base: 'bold',
+    align: 'center', compStyle: 'gelap', headlineSize: 136, upper: true, highlight: true, photo: 'bg', decor: 'stickers', pattern: 'rays',
+    headAnim: ['gaya-tumbuk-cepat', 'teks-word-pop-cepat'], bodyAnim: ['pop-besar-tegas', 'geser-atas-pendek-membal'], elemAnim: ['gaya-tada-cepat', 'fisika-jatuh-pantul-kuat'],
+    loops: ['loop-detak-sedang', 'loop-denyut-sedang'], transitions: ['colorbars-left-3-primary', 'stretch-left-sedang-tegas', 'burst-8', 'colorbars-up-5-secondary'], energy: 3,
+  },
+  {
+    id: 'feed-app', name: 'Feed Aplikasi', desc: 'Kartu kaca di bingkai HP, geser ala karusel aplikasi.', intents: ['testimoni', 'tips', 'promo-produk', 'launching'], base: 'chat',
+    align: 'center', compStyle: 'kaca', headlineSize: 96, upper: false, highlight: false, photo: 'phone', decor: 'bubbles',
+    headAnim: ['teks-word-naik-normal', 'pop-kecil-membal'], bodyAnim: ['geser-atas-pendek-membal', 'fade'], elemAnim: ['geser-atas-jauh-membal', 'fisika-pegas-lembut'],
+    loops: ['loop-melayang-lembut'], transitions: ['carousel-left-dekat-halus', 'carousel-up-dekat-membal', 'swing-left-membal', 'carousel-right-jauh-halus'], energy: 2,
+  },
+  {
+    id: 'undangan', name: 'Undangan Elegan', desc: 'Serif emas, tirai panggung — untuk ucapan & acara resmi.', intents: ['ucapan', 'event', 'quote-motivasi', 'pengumuman'], base: 'sinema',
+    align: 'center', compStyle: 'elegan', headlineSize: 92, upper: false, highlight: false, photo: 'frame', decor: 'lines', pattern: 'bokeh',
+    headAnim: ['teks-word-muncul-lambat', 'teks-line-muncul-lambat'], bodyAnim: ['fade-slow', 'blur-fokus-halus'], elemAnim: ['fade-slow', 'pop-sedang-halus'],
+    loops: ['loop-napas-lembut', 'loop-zoom-pelan-lembut'], transitions: ['curtain-left-secondary-lipit-halus', 'fade-white-lambat', 'rings-center-3', 'iris-center-halus'], energy: 1,
+  },
+  {
+    id: 'pasar', name: 'Pasar Murah', desc: 'Split foto + stiker harga, gerigi & balok warna — jualan ramai.', intents: ['flash-sale', 'menu-kuliner', 'promo-produk'], base: 'jualan',
+    align: 'left', compStyle: 'pop', headlineSize: 118, upper: true, highlight: true, photo: 'split', decor: 'stickers', pattern: 'halftone',
+    headAnim: ['teks-word-pop-cepat', 'fisika-elastis-kuat'], bodyAnim: ['pop-besar-tegas', 'geser-kanan-jauh-tegas'], elemAnim: ['gaya-tada-normal', 'putar-kanan-30-membal'],
+    loops: ['loop-goyang-sedang', 'loop-detak-sedang'], transitions: ['zigzag-left-8-tajam-primary', 'colorbars-up-5-secondary', 'dots-star-9-random', 'stretch-up-ekstrem-tegas'], energy: 3,
+  },
+  {
+    id: 'tekno', name: 'Grid Teknologi', desc: 'Garis grid, angka besar, kerai miring — rapi untuk edukasi.', intents: ['tutorial', 'fakta', 'tips', 'launching'], base: 'majalah',
+    align: 'left', compStyle: 'garis', headlineSize: 108, upper: false, highlight: true, photo: 'split', decor: 'grid', pattern: 'grid',
+    headAnim: ['teks-char-muncul-cepat', 'teks-word-naik-normal'], bodyAnim: ['teks-word-naik-cepat', 'wipe-left-tegas'], elemAnim: ['stretch-h-tegas', 'pop-raksasa-tegas'],
+    loops: ['loop-denyut-lembut'], transitions: ['diagblinds-45-8-tegas', 'scan-right-primary-tipis', 'checker-12-x-acak-halus', 'fan-tl-2'], energy: 2,
+  },
+  {
+    id: 'komik', name: 'Panel Komik', desc: 'Garis tebal, halftone, gerak miring — gaya komik pop.', intents: ['fakta', 'cerita', 'tips', 'promo-produk'], base: 'brutal',
+    align: 'left', compStyle: 'brutal', headlineSize: 124, upper: true, highlight: true, photo: 'frame', decor: 'stickers', pattern: 'halftone',
+    headAnim: ['fisika-snap-kuat', 'gaya-jelly-cepat'], bodyAnim: ['geser-kanan-jauh-tegas', 'pop-kecil-membal'], elemAnim: ['putar-kiri-12-membal', 'fisika-jatuh-pantul-kuat'],
+    loops: ['loop-lompat-lembut', 'loop-goyang-sedang'], transitions: ['tilt-left-35-tegas', 'dots-circle-12-diagonal', 'slide-left-sentak', 'shatter-center'], energy: 3,
+  },
+  {
+    id: 'papan-info', name: 'Papan Info', desc: 'Minimal & jelas, potongan pie & langkah — untuk lowongan/info.', intents: ['lowongan', 'pengumuman', 'event', 'tutorial'], base: 'listicle',
+    align: 'center', compStyle: 'minimal', headlineSize: 100, upper: false, highlight: false, photo: 'frame', decor: 'lines',
+    headAnim: ['teks-word-naik-normal', 'gaya-roket-cepat'], bodyAnim: ['geser-kiri-jauh-membal', 'geser-atas-pendek-halus'], elemAnim: ['fisika-pegas-kiri-kuat', 'pop-kecil-membal'],
+    loops: ['loop-denyut-lembut'], transitions: ['pie-4-urut-halus', 'push-up-pegas', 'wave-left-2-landai-halus', 'checker-6-y-catur-membal'], energy: 2,
+  },
+  {
+    id: 'galeri', name: 'Galeri Foto', desc: 'Foto penuh berbingkai sinema, gulungan film & karusel.', intents: ['travel', 'before-after', 'menu-kuliner', 'testimoni'],
+    align: 'center', compStyle: 'soft', headlineSize: 96, upper: false, highlight: false, photo: 'bg', decor: 'letterbox',
+    headAnim: ['teks-word-blur-normal', 'wipe-up-halus'], bodyAnim: ['geser-atas-pendek-halus', 'fade'], elemAnim: ['pop-kecil-membal', 'fade'],
+    loops: ['loop-zoom-pelan-lembut'], transitions: ['filmroll-up-halus', 'carousel-left-jauh-halus', 'dolly-lembut', 'rings-br-5'], energy: 2,
+  },
+  {
+    id: 'neon-jalan', name: 'Neon Jalanan', desc: 'HUD neon, laser pindai & regang ekstrem — promo malam.', intents: ['flash-sale', 'event', 'launching', 'pengumuman'], base: 'neon',
+    align: 'center', compStyle: 'neon', headlineSize: 116, upper: true, highlight: true, photo: 'bg', decor: 'corners', pattern: 'grid',
+    headAnim: ['gaya-glitch-masuk-cepat', 'teks-decode-normal'], bodyAnim: ['teks-ketik-cepat', 'pop-besar-tegas'], elemAnim: ['gaya-kilat-cepat', 'gaya-tada-cepat'],
+    loops: ['loop-kedip-lembut', 'loop-detak-sedang'], transitions: ['scan-left-secondary-tebal', 'glitch-blok-sedang', 'zigzag-right-14-tajam-primary', 'stretch-right-ekstrem-tegas'], energy: 3,
   },
 ];
 
