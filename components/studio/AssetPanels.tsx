@@ -40,11 +40,12 @@ export function TemplatePanel() {
   const [theme, setTheme] = useState('all');
   const [limit, setLimit] = useState(PAGE);
   const [confirm, setConfirm] = useState<string | null>(null);
+  const [moreFit, setMoreFit] = useState(false);
   const ranked = useMemo(
     () => rankTemplates({ intent: doc.plan.intent, mood: doc.plan.mood, keywords: doc.plan.keywords, hasPhotos: Object.keys(doc.assets).length > 0 }, 18),
     [doc.plan, doc.assets]
   );
-  const list = tab === 'cocok' ? ranked : TEMPLATES.filter((t) => (layout === 'all' || t.layoutId === layout) && (theme === 'all' || t.themeId === theme));
+  const list = tab === 'cocok' ? ranked.slice(0, moreFit ? 18 : 8) : TEMPLATES.filter((t) => (layout === 'all' || t.layoutId === layout) && (theme === 'all' || t.themeId === theme));
   const apply = (id: string) => {
     commit((d) => applyTemplate(d, id));
     setConfirm(null);
@@ -102,7 +103,13 @@ export function TemplatePanel() {
         })}
       </div>
       <div className="px-3 pb-4">
-        <MoreButton shown={Math.min(limit, list.length)} total={list.length} onMore={() => setLimit((l) => l + PAGE)} />
+        {tab === 'cocok' ? (
+          <button type="button" className="mk-btn-ghost mt-3 w-full text-xs" onClick={() => (moreFit ? setTab('semua') : setMoreFit(true))}>
+            {moreFit ? `Jelajahi semua ${TEMPLATES.length} template` : 'Tampilkan rekomendasi lainnya'}
+          </button>
+        ) : (
+          <MoreButton shown={Math.min(limit, list.length)} total={list.length} onMore={() => setLimit((l) => l + PAGE)} />
+        )}
       </div>
     </div>
   );

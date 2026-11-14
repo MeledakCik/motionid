@@ -64,6 +64,15 @@ function LayerInspector({ layer, pro, onOpenTool, aspect }: { layer: Layer; pro:
   const animName = layer.animIn ? getAnimation(layer.animIn.id)?.name : null;
   return (
     <div>
+      {layer.placeholder && (
+        <div className="mx-4 mt-3 rounded-xl bg-mk-amber/10 p-3 text-xs text-mk-amber">
+          <div className="font-extrabold">Ini teks contoh</div>
+          <p className="mt-0.5 text-mk-muted">Dibuat otomatis, belum tentu benar. Ganti dengan info aslimu.</p>
+          <button type="button" className="mt-2 font-bold underline" onClick={() => up(layer.id, { placeholder: false })}>
+            Sudah benar, hapus tanda
+          </button>
+        </div>
+      )}
       <Section title={layer.name} right={<span className="rounded bg-mk-panel-3 px-1.5 py-0.5 text-[10px] font-bold uppercase text-mk-muted">{layer.kind}</span>}>
         <LayerActions layer={layer} />
       </Section>

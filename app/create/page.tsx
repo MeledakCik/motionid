@@ -19,6 +19,8 @@ import { allEffects } from '@/lib/studio/packs/effects';
 import { cx, LazyVisible, Logo } from '@/components/studio/ui';
 import { TemplateThumb } from '@/components/studio/Thumbs';
 import LivePreview from '@/components/studio/LivePreview';
+import { useUser } from '@/lib/studio/useUser';
+import { placeholderList } from '@/store/useStudio';
 import ExportDialog from '@/components/studio/ExportDialog';
 
 const EXAMPLES = [
@@ -33,6 +35,19 @@ const EXAMPLES = [
   '3 fakta unik tentang kucing yang jarang diketahui',
   'Selamat hari raya Idul Fitri dari Toko Berkah',
 ];
+
+const ROLE_LABEL: Record<string, string> = {
+  hook: 'Pembuka',
+  masalah: 'Masalah',
+  poin: 'Poin',
+  langkah: 'Langkah',
+  produk: 'Produk',
+  harga: 'Harga',
+  bukti: 'Bukti',
+  kutipan: 'Kutipan',
+  info: 'Info',
+  cta: 'Ajakan',
+};
 
 const ASPECTS: Array<{ id: Aspect; label: string; sub: string }> = [
   { id: '9:16', label: '9:16', sub: 'TikTok · Reels · Shorts' },
@@ -53,11 +68,14 @@ export default function CreatePage() {
   const [seed, setSeed] = useState(1);
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [moreFit, setMoreFit] = useState(false);
   const [allLimit, setAllLimit] = useState(24);
   const [saving, setSaving] = useState(false);
   const [exportDoc, setExportDoc] = useState<ProjectDoc | null>(null);
   const [overrides, setOverrides] = useState<{ product?: string; price?: string; store?: string }>({});
   const fileRef = useRef<HTMLInputElement>(null);
+  const auth = useUser();
+  const guest = !auth.loading && !auth.user;
   const resultRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -116,7 +134,7 @@ export default function CreatePage() {
     <div className="mk-page">
       <header className="sticky top-0 z-30 border-b border-mk-line bg-mk-ink/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4">
-          <Link href="/dashboard" className="mk-btn-icon" aria-label="Kembali ke dashboard">
+          <Link href={guest ? '/' : '/dashboard'} className="mk-btn-icon" aria-label="Kembali">
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <Logo className="text-sm" />
@@ -269,9 +287,10 @@ export default function CreatePage() {
                       <input
                         className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none"
                         value={it.title}
-                        onChange={(e) => setPlan((p) => (p ? { ...p, items: p.items.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)) } : p))}
+                        onChange={(e) => setPlan((p) => (p ? { ...p, items: p.items.map((x, j) => (j === i ? { ...x, title: e.target.value, placeholder: false } : x)) } : p))}
                       />
-                      <span className="shrink-0 rounded bg-mk-panel-3 px-1.5 py-0.5 text-[10px] font-bold uppercase text-mk-dim">{it.role}</span>
+                      {it.placeholder && <span className="shrink-0 rounded bg-mk-amber/15 px-1.5 py-0.5 text-[10px] font-bold text-mk-amber">contoh · ganti</span>}
+                      <span className="shrink-0 rounded bg-mk-panel-3 px-1.5 py-0.5 text-[10px] font-bold text-mk-dim">{ROLE_LABEL[it.role] || it.role}</span>
                     </li>
                   ))}
                 </ol>
@@ -285,7 +304,7 @@ export default function CreatePage() {
                   </button>
                 </div>
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
-                  {(showAll ? TEMPLATES.slice(0, allLimit) : ranked).map((t) => (
+                  {(showAll ? TEMPLATES.slice(0, allLimit) : ranked.slice(0, moreFit ? 12 : 6)).map((t) => (
                     <button key={t.id} type="button" onClick={() => setTemplateId(t.id)} className={cx('relative overflow-hidden rounded-xl border text-left', activeTemplate === t.id ? 'border-mk-coral ring-2 ring-mk-coral/40' : 'border-mk-line hover:border-mk-line-2')} title={`${t.name} — ${getLayout(t.layoutId).desc}`}>
                       <LazyVisible minH={110} className="aspect-[9/14] bg-mk-ink">
                         <TemplateThumb plan={plan} templateId={t.id} aspect={aspect} assets={assets} />
@@ -302,6 +321,11 @@ export default function CreatePage() {
                 {showAll && allLimit < TEMPLATES.length && (
                   <button type="button" className="mk-btn-ghost mt-3 w-full text-xs" onClick={() => setAllLimit((l) => l + 36)}>
                     Tampilkan lagi
+                  </button>
+                )}
+                {!showAll && !moreFit && (
+                  <button type="button" className="mk-btn-ghost mt-3 w-full text-xs" onClick={() => setMoreFit(true)}>
+                    Lihat 6 rekomendasi lainnya
                   </button>
                 )}
                 {!showAll && ranked[0] && <p className="mt-2 text-[11px] text-mk-dim">Rekomendasi teratas: {ranked.find((r) => r.id === activeTemplate)?.reason || ranked[0].reason}</p>}
@@ -327,7 +351,16 @@ export default function CreatePage() {
           </section>
         )}
       </main>
-      {exportDoc && <ExportDialog doc={exportDoc} onClose={() => setExportDoc(null)} />}
+      {exportDoc && (
+        <ExportDialog
+          doc={exportDoc}
+          guest={guest}
+          placeholders={placeholderList(exportDoc).length}
+          onFixPlaceholders={goEditor}
+          onBeforeLogin={async () => `/editor/${(await saveProject({ ...exportDoc, id: uid('local') })).id}`}
+          onClose={() => setExportDoc(null)}
+        />
+      )}
     </div>
   );
 }

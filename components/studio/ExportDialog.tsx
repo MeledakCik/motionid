@@ -1,14 +1,31 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { CheckCircle2, Download, Loader2, Share2, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, Loader2, LogIn, Share2, X } from 'lucide-react';
 import type { ProjectDoc } from '@/lib/studio/types';
 import { docDuration } from '@/lib/studio/types';
 import { exportVideo, ExportResult, supportsSmoothExport } from '@/lib/studio/exporter';
 import { getDeviceProfile } from '@/lib/studio/device';
 import { cx, Segmented } from './ui';
 
-export default function ExportDialog({ doc, onClose }: { doc: ProjectDoc; onClose: () => void }) {
+export default function ExportDialog({
+  doc,
+  onClose,
+  guest,
+  placeholders = 0,
+  onFixPlaceholders,
+  onBeforeLogin,
+}: {
+  doc: ProjectDoc;
+  onClose: () => void;
+  guest?: boolean;
+  placeholders?: number;
+  onFixPlaceholders?: () => void;
+  /** simpan proyek dulu sebelum pindah ke halaman login; boleh kembalikan path untuk kembali */
+  onBeforeLogin?: () => Promise<string | void>;
+}) {
+  const [ignorePh, setIgnorePh] = useState(false);
+  const [goingLogin, setGoingLogin] = useState(false);
   const low = getDeviceProfile().tier === 'low';
   const [quality, setQuality] = useState<'720p' | '1080p'>(low ? '720p' : '1080p');
   const [fps, setFps] = useState<30 | 60>(30);
@@ -57,7 +74,47 @@ export default function ExportDialog({ doc, onClose }: { doc: ProjectDoc; onClos
           </button>
         </div>
 
-        {state === 'idle' || state === 'error' ? (
+        {guest ? (
+          <div className="space-y-4 text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-mk-coral/15 text-mk-coral">
+              <LogIn className="h-6 w-6" />
+            </div>
+            <div>
+              <div className="text-base font-extrabold">Masuk dulu untuk menyimpan video</div>
+              <p className="mt-1 text-sm text-mk-muted">Gratis, cukup akun Google. Hasil editanmu tidak hilang — kamu langsung kembali ke sini setelah masuk.</p>
+            </div>
+            <button
+              type="button"
+              disabled={goingLogin}
+              className="mk-btn-primary w-full py-3"
+              onClick={async () => {
+                setGoingLogin(true);
+                const back = (await onBeforeLogin?.()) || window.location.pathname;
+                window.location.href = `/login?next=${encodeURIComponent(back)}`;
+              }}
+            >
+              {goingLogin ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />} Masuk dengan Google
+            </button>
+          </div>
+        ) : placeholders > 0 && !ignorePh && state === 'idle' ? (
+          <div className="space-y-4">
+            <div className="flex items-start gap-3 rounded-2xl bg-mk-amber/10 p-4 text-mk-amber">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+              <div className="text-sm">
+                <div className="font-extrabold">Masih ada {placeholders} teks contoh</div>
+                <p className="mt-1 text-mk-muted">Teks contoh dibuat otomatis dan belum tentu benar untuk usahamu. Ganti dulu dengan info aslimu supaya video tidak menyesatkan penonton.</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" className="mk-btn-primary" onClick={onFixPlaceholders}>
+                Ganti sekarang
+              </button>
+              <button type="button" className="mk-btn-ghost" onClick={() => setIgnorePh(true)}>
+                Tetap export
+              </button>
+            </div>
+          </div>
+        ) : state === 'idle' || state === 'error' ? (
           <div className="space-y-4">
             <div className="mk-card-2 grid grid-cols-3 divide-x divide-mk-line text-center">
               <div className="p-2.5">

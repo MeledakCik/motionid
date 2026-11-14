@@ -173,7 +173,18 @@ export function unregisterEffect(id: string) {
   if (i >= 0) LIB.splice(i, 1);
   BY_ID.delete(id);
 }
-export const effectKinds = () => DEFS.map((d) => ({ kind: d.kind, label: d.label, layer: d.layer, styles: d.styles.map((s) => s[0]) }));
+export const effectKinds = () =>
+  DEFS.map((d) => ({ kind: d.kind, label: d.label, group: d.group, layer: d.layer, tags: d.tags, styles: d.styles.map((s) => ({ id: s[0], label: s[1] })) }));
+export const INTENSITY_LEVELS = INT.map(([id, label]) => ({ id, label }));
+/** id efek untuk kombinasi jenis + gaya + intensitas */
+export const effectId = (kind: string, style: string, lvl = 'sedang') => `${kind}-${style}-${lvl}`;
+/** pecah id efek bawaan menjadi bagian-bagiannya */
+export function splitEffectId(id: string): { kind: string; style: string; lvl: string } | null {
+  const e = getEffect(id);
+  if (!e || e.author === 'admin') return null;
+  const lvl = INT.find(([k]) => id.endsWith(`-${k}`))?.[0] || 'sedang';
+  return { kind: e.kind, style: e.params.style, lvl };
+}
 
 /** Cari efek yang cocok dengan kata kunci prompt. */
 export function suggestEffects(words: string[], mood: string, intent: string): string[] {

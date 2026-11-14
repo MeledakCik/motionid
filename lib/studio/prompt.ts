@@ -283,7 +283,10 @@ function detectTopic(clean: string): string {
   const m =
     /(?:tentang|soal|mengenai)\s+([a-z0-9\s\-&']{3,60})/i.exec(clean) ||
     /(?:untuk|promo|jual|jualan|diskon|launching|menu|tips|cara|fakta|resep|tutorial|review|lowongan kerja|lowongan|loker|dicari|flash sale)\s+([a-z0-9\s\-&']{3,60})/i.exec(clean);
-  let core = (m ? m[1] : clean).replace(DATE_WORDS, ' ').replace(INTENT_WORDS, ' ');
+  let core = (m ? m[1] : clean)
+    .replace(DATE_WORDS, ' ')
+    .replace(/\b(gratis ongkir|free ongkir|ongkir|cod|bayar di tempat|halal|garansi|original|ori|tanpa pengawet|delivery|bisa antar|24 ?jam)\b/gi, ' ')
+    .replace(INTENT_WORDS, ' ');
   core = core
     .replace(/\b(rp\.?\s*)?\d[\d.,]*\s*(rb|ribu|k|jt|juta|%)?/gi, ' ')
     .replace(/\b(di|ke|dari|dengan|cuma|hanya|mulai|harga|seharga|diskon|potongan|buat|untuk|yang|biar|agar)\b.*$/i, '')
@@ -443,60 +446,90 @@ export function analyzePrompt(promptRaw: string, opts: AnalyzeOptions = {}): Con
 
   const items: PlanItem[] = [];
   const iconFor = (words: string, fb = 'sparkles') => findIconFor(words.split(/\s+/).concat(keywords), fb);
-  const push = (role: SceneRole, title: string, body?: string, value?: string, icon?: string) => items.push({ role, title, body, value, icon: icon || iconFor(title) });
+  /** p = true → teks contoh dari bank, wajib diganti user (ditandai di editor & saat export) */
+  const push = (role: SceneRole, title: string, body?: string, value?: string, icon?: string, p = false) =>
+    items.push({ role, title, body, value, icon: icon || iconFor(title), ...(p ? { placeholder: true } : {}) });
 
   const wantPoints = (fallback: number) => Math.max(2, Math.min(8, nAsked || listed.length || fallback));
-  const bankItems = (bank: string[][], n: number, ordered = false): Array<[string, string]> => {
-    const out: Array<[string, string]> = [];
+  /** ambil isi dari daftar user; sisanya dari bank (ditandai contoh kecuali bank berisi saran umum yang valid) */
+  const bankItems = (bank: string[][], n: number, ordered = false, bankIsSample = true): Array<[string, string, boolean]> => {
+    const out: Array<[string, string, boolean]> = [];
     for (let i = 0; i < n; i++) {
-      if (listed[i]) out.push([titleCase(listed[i]), '']);
+      if (listed[i]) out.push([titleCase(listed[i]), '', false]);
       else {
         const b = bank[((ordered ? 0 : seed) + i) % bank.length];
-        out.push([b[0], b[1]]);
+        out.push([b[0], b[1], bankIsSample]);
       }
     }
     return out;
   };
 
+  // Bukti hanya dari data yang benar-benar ditulis user (tidak mengarang rating / angka penjualan)
+  const ratingM = /(?:rating|bintang)\s*(\d(?:[.,]\d)?)/i.exec(prompt);
+  const soldM = /(?:terjual|sold|pembeli|pelanggan|ulasan|review)\s*(\d[\d.]*)\+?|(\d[\d.]*)\+?\s*(?:terjual|sold|pembeli|pelanggan|ulasan|review)/i.exec(prompt);
+  const soldN = soldM ? (soldM[1] || soldM[2] || '').replace(/\./g, '') : '';
+  const pushProof = () => {
+    if (ratingM) push('bukti', `Rating ${ratingM[1].replace(',', '.')}`, soldN ? `Dari ${Number(soldN).toLocaleString('id-ID')}+ ulasan` : '', ratingM[1].replace(',', '.'), 'star');
+    else if (soldN && Number(soldN) > 100) push('bukti', `${Number(soldN).toLocaleString('id-ID')}+ terjual`, '', soldN, 'users');
+  };
+  const BENEFIT_WORDS: Array<[RegExp, string]> = [
+    [/gratis ongkir|free ongkir|free shipping/i, 'Gratis ongkir'],
+    [/\bcod\b|bayar di tempat/i, 'Bisa COD'],
+    [/halal/i, 'Halal'],
+    [/garansi/i, 'Bergaransi'],
+    [/original|ori\b|asli/i, 'Original'],
+    [/home ?made|buatan rumah/i, 'Homemade'],
+    [/tanpa pengawet/i, 'Tanpa pengawet'],
+    [/delivery|antar|gofood|grabfood|shopeefood/i, 'Bisa diantar'],
+    [/24 ?jam/i, 'Buka 24 jam'],
+    [/murah|hemat|terjangkau/i, 'Harga terjangkau'],
+  ];
+  const benefits = BENEFIT_WORDS.filter(([re]) => re.test(prompt)).map(([, l]) => l);
+  const timeLimited = /hari ini|terbatas|limited|sampai|s\.d|sd jam|malam ini|weekend|akhir pekan|flash/i.test(prompt);
+
   switch (intent) {
     case 'flash-sale':
-      push('hook', hook, discount ? `Diskon ${discount} khusus hari ini` : 'Hanya hari ini!', undefined, 'zap');
-      push('produk', product, store ? `Langsung dari ${store}` : 'Kualitas terbaik, harga bersahabat', undefined, iconFor(product, 'shopping-bag'));
+      push('hook', hook, discount ? `Diskon ${discount}${/hari ini/i.test(prompt) ? ' khusus hari ini' : ''}` : '', undefined, 'zap');
+      push('produk', product, store ? `Langsung dari ${store}` : '', undefined, iconFor(product, 'shopping-bag'));
       listed.slice(0, 3).forEach((l) => push('poin', titleCase(l), '', undefined, iconFor(l, 'check')));
-      push('harga', price || 'Harga Spesial', oldPrice, discount, 'badge-percent');
-      push('bukti', 'Stok menipis!', 'Sudah terjual ratusan, sisa sedikit lagi', '87', 'flame');
+      if (benefits.length && !listed.length) push('poin', benefits[0], benefits.slice(1).join(' • '), benefits.join('|'), 'badge-check');
+      push('harga', price || 'Harga Spesial', oldPrice, discount, 'badge-percent', !price);
+      pushProof();
       push('cta', cta, store, undefined, 'shopping-cart');
       break;
     case 'promo-produk':
     case 'menu-kuliner': {
-      push('hook', hook, intent === 'menu-kuliner' ? 'Menu favorit pelanggan' : 'Promo spesial minggu ini', undefined, iconFor(product, 'flame'));
+      push('hook', hook, intent === 'menu-kuliner' ? (store ? `Menu ${store}` : '') : timeLimited ? 'Promo terbatas' : '', undefined, iconFor(product, 'flame'));
       if (listed.length >= 2) {
-        listed.slice(0, 6).forEach((l, i) => push(intent === 'menu-kuliner' ? 'produk' : 'poin', titleCase(l), i === 0 ? 'Paling laris' : '', perItemPrice[i] ? formatRupiah(perItemPrice[i]) : undefined, iconFor(l, 'utensils')));
+        listed.slice(0, 6).forEach((l, i) => push(intent === 'menu-kuliner' ? 'produk' : 'poin', titleCase(l), '', perItemPrice[i] ? formatRupiah(perItemPrice[i]) : undefined, iconFor(l, 'utensils')));
       } else {
-        push('produk', product, store ? `Hanya di ${store}` : 'Dibuat dengan bahan pilihan', undefined, iconFor(product, 'gift'));
-        const benefits = intent === 'menu-kuliner' ? ['Porsi melimpah', 'Rasa autentik', 'Harga ramah kantong'] : ['Kualitas terjamin', 'Pengiriman cepat', 'Bisa COD'];
-        push('poin', benefits[0], benefits.slice(1).join(' • '), benefits.join('|'), 'badge-check');
+        push('produk', product, store ? `Hanya di ${store}` : '', undefined, iconFor(product, 'gift'));
+        if (benefits.length) push('poin', benefits[0], benefits.slice(1).join(' • '), benefits.length > 1 ? benefits.join('|') : undefined, 'badge-check');
+        else push('poin', 'Tulis keunggulan produkmu', 'Misal: bahan, rasa, ukuran, atau bonus', undefined, 'badge-check', true);
       }
       if (price) push('harga', price, oldPrice, discount, 'tag');
       if (location || date) push('info', location ? 'Lokasi kami' : 'Catat tanggalnya', location || date, date, location ? 'map-pin' : 'calendar');
-      push('bukti', 'Rating 4.9 dari pelanggan', 'Sudah dipercaya ribuan pembeli', '4.9', 'star');
+      pushProof();
       push('cta', cta, handle || store, undefined, 'shopping-cart');
       break;
     }
     case 'launching':
-      push('hook', hook, 'Sesuatu yang baru telah hadir', undefined, 'rocket');
-      push('masalah', 'Capek dengan cara lama?', 'Ribet, lama, dan mahal', undefined, 'frown');
-      push('produk', product, store ? `Persembahan ${store}` : 'Solusi baru yang lebih mudah', undefined, iconFor(product, 'sparkles'));
-      bankItems([['Lebih cepat', 'Hemat waktu sampai 2x'], ['Lebih mudah', 'Bisa dipakai siapa saja'], ['Lebih hemat', 'Harga perkenalan spesial']], wantPoints(3)).forEach(([t, b]) => push('poin', t, b));
+      push('hook', hook, '', undefined, 'rocket');
+      push('produk', product, store ? `Persembahan ${store}` : '', undefined, iconFor(product, 'sparkles'));
+      if (listed.length) bankItems([], Math.min(6, listed.length)).forEach(([t]) => push('poin', t, ''));
+      else push('poin', 'Fitur unggulan', 'Ceritakan apa yang baru dan kenapa beda', undefined, 'sparkles', true);
       if (price) push('harga', price, oldPrice, discount || 'BARU', 'tag');
+      if (date) push('info', `Rilis ${date}`, location || '', date, 'calendar');
       push('cta', cta, handle || store, undefined, 'arrow-right');
       break;
     case 'event':
-      push('hook', hook, store ? `Diselenggarakan oleh ${store}` : 'Jangan sampai ketinggalan', undefined, 'calendar');
-      push('info', date ? `Tanggal: ${date}` : 'Segera hadir', 'Catat di kalendermu', date, 'calendar');
-      push('info', location ? 'Lokasi' : 'Tempat', location || 'Online & offline', undefined, 'map-pin');
-      bankItems([['Materi daging', 'Langsung dari praktisi'], ['Networking', 'Ketemu banyak teman baru'], ['Doorprize', 'Hadiah menarik untuk peserta']], wantPoints(3)).forEach(([t, b]) => push('poin', t, b));
+      push('hook', hook, store ? `Diselenggarakan oleh ${store}` : '', undefined, 'calendar');
+      push('info', date ? `Tanggal: ${date}` : 'Tanggal acara', date ? '' : 'Isi tanggal & jam acaramu', date, 'calendar', !date);
+      const place = /zoom|online|daring|google meet|youtube|live/i.exec(prompt)?.[0];
+      push('info', location || place ? 'Lokasi' : 'Tempat acara', location || (place ? titleCase(place) : 'Isi lokasi acaramu'), undefined, 'map-pin', !location && !place);
+      if (listed.length) bankItems([], Math.min(5, listed.length)).forEach(([t]) => push('poin', t, ''));
       if (price) push('harga', price, oldPrice, discount, 'ticket');
+      else if (/gratis|free/i.test(prompt)) push('harga', 'GRATIS', '', undefined, 'ticket');
       push('cta', cta, handle, undefined, 'ticket');
       break;
     case 'tips':
@@ -504,9 +537,14 @@ export function analyzePrompt(promptRaw: string, opts: AnalyzeOptions = {}): Con
     case 'travel': {
       const n = wantPoints(intent === 'travel' ? 4 : 3);
       vars.n = String(n);
-      push('hook', fill(hookBank[seeded(seed, hookBank.length)], vars), intent === 'fakta' ? 'Nomor terakhir paling mengejutkan' : 'Simpan biar nggak lupa', undefined, intent === 'fakta' ? 'lightbulb' : intent === 'travel' ? 'plane' : 'lightbulb');
-      const bank = intent === 'fakta' ? FACT_BANK : intent === 'travel' ? [['Spot sunrise', 'Datang sebelum jam 5 pagi'], ['Kuliner lokal', 'Cobain makanan khas setempat'], ['Hidden beach', 'Masih sepi dan bersih'], ['Penginapan murah', 'Mulai 150 ribuan per malam'], ['Pusat oleh-oleh', 'Harga lebih miring'], ['Spot foto', 'Paling instagramable']] : TIPS_BANK[pickDomain(clean)];
-      bankItems(bank, n).forEach(([t, b], i) => push('poin', t, b, String(i + 1)));
+      push('hook', fill(hookBank[seeded(seed, hookBank.length)], vars), intent === 'fakta' ? '' : 'Simpan biar nggak lupa', undefined, intent === 'fakta' ? 'lightbulb' : intent === 'travel' ? 'plane' : 'lightbulb');
+      const domain = pickDomain(clean);
+      // tips keuangan/belajar/dll = saran umum yang valid; fakta & spot wisata harus diisi user (tidak mengarang fakta)
+      const bank = intent === 'fakta' ? FACT_BANK : intent === 'travel' ? [['Nama tempat #1', 'Tulis alasan wajib dikunjungi'], ['Nama tempat #2', 'Tulis jam buka / harga tiket'], ['Nama tempat #3', 'Tulis tips ke sana'], ['Nama tempat #4', 'Tulis kuliner khasnya'], ['Nama tempat #5', ''], ['Nama tempat #6', '']] : TIPS_BANK[domain];
+      const sample = intent !== 'tips' || domain === 'umum';
+      bankItems(bank, n, intent !== 'tips', sample).forEach(([t, b, p], i) =>
+        intent === 'fakta' && p ? push('poin', `Fakta #${i + 1}`, 'Tulis faktanya di sini (cek sumbernya ya)', String(i + 1), 'lightbulb', true) : push('poin', t, b, String(i + 1), undefined, p)
+      );
       push('cta', cta, handle, undefined, 'bookmark');
       break;
     }
@@ -514,31 +552,31 @@ export function analyzePrompt(promptRaw: string, opts: AnalyzeOptions = {}): Con
       const n = wantPoints(4);
       vars.n = String(n);
       push('hook', fill(hookBank[seeded(seed, hookBank.length)], vars), 'Ikuti sampai selesai', undefined, 'list-checks');
-      bankItems(STEP_BANK, n, true).forEach(([t, b], i) => push('langkah', t, b, String(i + 1)));
-      push('bukti', 'Hasilnya!', 'Mudah kan? Coba sekarang juga', undefined, 'party-popper');
+      bankItems(STEP_BANK, n, true).forEach(([t, b, p], i) => push('langkah', p ? `Langkah ${i + 1}: tulis di sini` : t, p ? 'Jelaskan singkat apa yang dilakukan' : b, String(i + 1), undefined, p));
+      push('bukti', 'Hasilnya!', '', undefined, 'party-popper');
       push('cta', cta, handle, undefined, 'bookmark');
       break;
     }
     case 'testimoni':
-      push('hook', hook, 'Review asli tanpa settingan', undefined, 'message-circle');
-      push('bukti', 'Pelanggan', listed[0] || `Suka banget sama ${product}, bakal order lagi!`, undefined, 'message-circle');
-      push('bukti', 'Rating', 'Dari ratusan ulasan', '4.9', 'star');
-      push('bukti', 'Pelanggan setia', listed[1] || 'Pelayanannya ramah dan cepat', '1000', 'users');
-      push('produk', product, store ? `Hanya di ${store}` : 'Buktikan sendiri', undefined, iconFor(product, 'gift'));
+      push('hook', hook, '', undefined, 'message-circle');
+      if (listed.length) listed.slice(0, 3).forEach((l) => push('bukti', 'Kata pelanggan', titleCase(l), undefined, 'message-circle'));
+      else push('bukti', 'Kata pelanggan', 'Tempel ulasan asli pelangganmu di sini', undefined, 'message-circle', true);
+      pushProof();
+      push('produk', product, store ? `Hanya di ${store}` : '', undefined, iconFor(product, 'gift'));
       push('cta', cta, handle || store, undefined, 'shopping-cart');
       break;
     case 'before-after':
       push('hook', hook, 'Lihat perbedaannya', undefined, 'sparkles');
-      push('masalah', 'Sebelum', listed[0] || 'Kusam, ribet, dan bikin nggak pede', undefined, 'frown');
-      push('produk', 'Sesudah', listed[1] || `Pakai ${product}, hasilnya langsung terasa`, undefined, 'smile');
-      push('bukti', 'Hasil nyata', 'Dalam hitungan hari', '7', 'calendar-check');
+      push('masalah', 'Sebelum', listed[0] || 'Tulis kondisi sebelum', undefined, 'frown', !listed[0]);
+      push('produk', 'Sesudah', listed[1] || `Tulis hasil setelah pakai ${product}`, undefined, 'smile', !listed[1]);
       if (price) push('harga', price, oldPrice, discount, 'tag');
       push('cta', cta, handle || store, undefined, 'shopping-cart');
       break;
     case 'lowongan': {
-      push('hook', fill(hookBank[seeded(seed, hookBank.length)], vars), store ? `Bergabung bersama ${store}` : 'Kesempatan terbuka untuk kamu', undefined, 'briefcase');
-      bankItems([['Usia 18–30 tahun', ''], ['Komunikatif & jujur', ''], ['Siap kerja shift', ''], ['Pengalaman jadi nilai plus', '']], wantPoints(3)).forEach(([t, b], i) => push('poin', t, b, String(i + 1), 'check'));
-      push('info', 'Benefit', 'Gaji kompetitif • Bonus • Jenjang karier', 'Gaji kompetitif|Bonus|Jenjang karier', 'gift');
+      push('hook', fill(hookBank[seeded(seed, hookBank.length)], vars), store ? `Bergabung bersama ${store}` : '', undefined, 'briefcase');
+      if (listed.length) bankItems([], Math.min(6, listed.length)).forEach(([t], i) => push('poin', t, '', String(i + 1), 'check'));
+      else push('poin', 'Kualifikasi', 'Tulis syarat pelamar di sini', 'Syarat 1|Syarat 2|Syarat 3', 'check', true);
+      if (/gaji|bonus|benefit|bpjs|makan|mess/i.test(prompt)) push('info', 'Benefit', '', undefined, 'gift');
       push('cta', cta, handle, undefined, 'send');
       break;
     }
@@ -583,7 +621,7 @@ export function analyzePrompt(promptRaw: string, opts: AnalyzeOptions = {}): Con
     let extra = 0;
     while (items.length < opts.sceneCount) {
       const b = TIPS_BANK[pickDomain(clean)][(seed + extra++) % 8];
-      items.splice(items.length - 1, 0, { role: 'poin', title: b[0], body: b[1], icon: findIconFor(b[0].split(' '), 'sparkles') });
+      items.splice(items.length - 1, 0, { role: 'poin', title: b[0], body: b[1], icon: findIconFor(b[0].split(' '), 'sparkles'), placeholder: pickDomain(clean) === 'umum' || intent !== 'tips' });
     }
   }
 
