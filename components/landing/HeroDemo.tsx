@@ -28,7 +28,7 @@ export default function HeroDemo() {
 
   return (
     <div className="grid items-center gap-8 lg:grid-cols-[1.05fr_1fr]">
-      <div>
+      <div className="min-w-0">
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -44,14 +44,14 @@ export default function HeroDemo() {
         <div className="mt-4 space-y-1.5">
           <div className="text-[11px] font-bold uppercase tracking-wider text-mk-dim">Lihat contoh dari satu kalimat:</div>
           {DEMOS.map((d, i) => (
-            <button key={d} type="button" onClick={() => setActive(i)} className={cx('flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left text-sm transition', i === active ? 'border-mk-coral/60 bg-mk-coral/10 text-mk-cream' : 'border-mk-line bg-mk-panel/60 text-mk-muted hover:text-mk-cream')}>
-              <span className="truncate">“{d}”</span>
+            <button key={d} type="button" onClick={() => setActive(i)} className={cx('flex w-full min-w-0 items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left text-sm transition', i === active ? 'border-mk-coral/60 bg-mk-coral/10 text-mk-cream' : 'border-mk-line bg-mk-panel/60 text-mk-muted hover:text-mk-cream')}>
+              <span className="min-w-0 truncate">“{d}”</span>
               {i === active && <span className="shrink-0 rounded-full bg-mk-coral/20 px-2 py-0.5 text-[10px] font-bold text-mk-coral">{INTENT_LABELS[doc.plan.intent]} · {doc.scenes.length} scene</span>}
             </button>
           ))}
         </div>
       </div>
-      <div className="flex justify-center">
+      <div className="flex min-w-0 justify-center">
         <div className="relative">
           <div className="absolute -inset-6 -z-10 rounded-[40px] bg-mk-coral/20 blur-3xl" />
           <LivePreview doc={doc} width={260} />
