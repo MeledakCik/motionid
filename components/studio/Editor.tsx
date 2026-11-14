@@ -35,7 +35,7 @@ import { saveProject } from '@/lib/studio/persist';
 import { changeAspect } from '@/lib/studio/builder';
 import { loadTraining } from '@/lib/studio/training';
 import { Renderer, settleTime } from '@/lib/studio/renderer';
-import { cx, Logo, Segmented, useMediaQuery } from './ui';
+import { cx, Dropdown, Logo, RatioIcon, Segmented, useMediaQuery } from './ui';
 import Stage from './Stage';
 import Timeline from './Timeline';
 import { BackgroundPanel, ElementsPanel, IconsPanel, MediaPanel, MusicPanel, TemplatePanel, TextPanel } from './AssetPanels';
@@ -263,17 +263,21 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
           <button type="button" className="mk-btn-icon" onClick={st.redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)">
             <Redo2 className="h-4 w-4" />
           </button>
-          <select
+          <Dropdown
+            label="Rasio video"
             value={doc.aspect}
-            onChange={(e) => st.commit((d) => changeAspect(d, e.target.value as Aspect))}
-            className="rounded-lg border border-mk-line bg-mk-panel-2 px-1.5 py-1.5 text-xs font-bold"
-            title="Rasio video (menyusun ulang layout)"
-          >
-            <option value="9:16">{desktop ? '9:16 TikTok/Reels' : '9:16'}</option>
-            <option value="4:5">{desktop ? '4:5 Feed IG' : '4:5'}</option>
-            <option value="1:1">{desktop ? '1:1 Kotak' : '1:1'}</option>
-            <option value="16:9">{desktop ? '16:9 YouTube' : '16:9'}</option>
-          </select>
+            onChange={(v) => st.commit((d) => changeAspect(d, v as Aspect))}
+            align="right"
+            menuWidth={250}
+            className="px-2.5 py-2"
+            compactLabel={(o) => (desktop ? o.label : o.value)}
+            options={[
+              { value: '9:16', label: '9:16 TikTok / Reels', desc: 'Vertikal penuh, Shorts, Status WA', icon: <RatioIcon ratio="9:16" /> },
+              { value: '4:5', label: '4:5 Feed Instagram', desc: 'Postingan feed IG & Facebook', icon: <RatioIcon ratio="4:5" /> },
+              { value: '1:1', label: '1:1 Kotak', desc: 'Feed, marketplace, katalog', icon: <RatioIcon ratio="1:1" /> },
+              { value: '16:9', label: '16:9 YouTube', desc: 'Horizontal, presentasi', icon: <RatioIcon ratio="16:9" /> },
+            ]}
+          />
           <div className="hidden w-[150px] md:block">
             <Segmented size="sm" value={mode} onChange={st.setMode} options={[{ value: 'mudah', label: 'Mudah' }, { value: 'pro', label: 'Pro' }]} />
           </div>

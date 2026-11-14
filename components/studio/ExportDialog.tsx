@@ -1,12 +1,39 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Download, Loader2, LogIn, Share2, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, Loader2, LogIn, MessageCircle, Share2, Smartphone, Sparkles, X, Zap } from 'lucide-react';
 import type { ProjectDoc } from '@/lib/studio/types';
 import { docDuration } from '@/lib/studio/types';
 import { exportVideo, ExportResult, supportsSmoothExport } from '@/lib/studio/exporter';
 import { getDeviceProfile } from '@/lib/studio/device';
 import { cx, Segmented } from './ui';
+
+type PresetId = 'wa' | 'tiktok' | 'halus' | 'ringan';
+interface Preset {
+  id: PresetId;
+  label: string;
+  desc: string;
+  emoji: React.ReactNode;
+  quality: '720p' | '1080p';
+  fps: 30 | 60;
+  maxBytes?: number;
+}
+const WA_MAX = 10 * 1000 * 1000;
+const PRESETS: Preset[] = [
+  { id: 'wa', label: 'Status WhatsApp', desc: '720p · otomatis di bawah 10 MB', emoji: <MessageCircle className="h-4 w-4" />, quality: '720p', fps: 30, maxBytes: WA_MAX },
+  { id: 'tiktok', label: 'TikTok / Reels / Shorts', desc: '1080p · 30 fps · tajam', emoji: <Smartphone className="h-4 w-4" />, quality: '1080p', fps: 30 },
+  { id: 'halus', label: 'Super halus', desc: '1080p · 60 fps · file lebih besar', emoji: <Sparkles className="h-4 w-4" />, quality: '1080p', fps: 60 },
+  { id: 'ringan', label: 'Ringan & cepat', desc: '720p · 30 fps · cocok HP lama', emoji: <Zap className="h-4 w-4" />, quality: '720p', fps: 30 },
+];
+function estimateMB(p: Preset, dur: number, audio: boolean): number {
+  const short = p.quality === '1080p' ? 1080 : 720;
+  const px = short * Math.round((short * 16) / 9);
+  const natural = px * p.fps * 0.12;
+  const audioBps = audio ? (p.maxBytes ? 96_000 : 160_000) : 0;
+  const v = p.maxBytes ? Math.min(natural, (p.maxBytes * 8 * 0.9) / Math.max(1, dur) - audioBps) : natural;
+  // encoder H.264 untuk motion graphic biasanya ~55% dari target bitrate
+  return ((Math.max(400_000, v) * (p.maxBytes ? 0.9 : 0.55) + audioBps) * dur) / 8 / 1_000_000;
+}
 
 export default function ExportDialog({
   doc,
@@ -27,8 +54,9 @@ export default function ExportDialog({
   const [ignorePh, setIgnorePh] = useState(false);
   const [goingLogin, setGoingLogin] = useState(false);
   const low = getDeviceProfile().tier === 'low';
-  const [quality, setQuality] = useState<'720p' | '1080p'>(low ? '720p' : '1080p');
-  const [fps, setFps] = useState<30 | 60>(30);
+  const [preset, setPreset] = useState<PresetId>(low ? 'ringan' : 'tiktok');
+  const P = PRESETS.find((p) => p.id === preset)!;
+  const dur = docDuration(doc);
   const [state, setState] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
   const [progress, setProgress] = useState(0);
   const [label, setLabel] = useState('');
@@ -49,7 +77,7 @@ export default function ExportDialog({
     const ac = new AbortController();
     abortRef.current = ac;
     try {
-      const r = await exportVideo(doc, { quality, fps, signal: ac.signal, onProgress: (p, l) => (setProgress(p), setLabel(l)) });
+      const r = await exportVideo(doc, { quality: P.quality, fps: P.fps, maxBytes: P.maxBytes, signal: ac.signal, onProgress: (p, l) => (setProgress(p), setLabel(l)) });
       setResult({ ...r, url: URL.createObjectURL(r.blob) });
       setState('done');
     } catch (e) {
@@ -131,12 +159,25 @@ export default function ExportDialog({
               </div>
             </div>
             <div>
-              <span className="mk-label">Kualitas</span>
-              <Segmented value={quality} onChange={setQuality} options={[{ value: '720p', label: '720p · ringan' }, { value: '1080p', label: '1080p · tajam' }]} />
-            </div>
-            <div>
-              <span className="mk-label">Kehalusan gerak</span>
-              <Segmented value={String(fps) as '30' | '60'} onChange={(v) => setFps(Number(v) as 30 | 60)} options={[{ value: '30', label: '30 fps' }, { value: '60', label: '60 fps · super halus' }]} />
+              <span className="mk-label">Mau dipakai untuk apa?</span>
+              <div className="grid gap-1.5">
+                {PRESETS.map((p) => {
+                  const on = preset === p.id;
+                  return (
+                    <button key={p.id} type="button" onClick={() => setPreset(p.id)} className={cx('flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition', on ? 'border-mk-coral bg-mk-coral/10' : 'border-mk-line bg-mk-panel-2 hover:border-mk-line-2')}>
+                      <span className={cx('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-base', on ? 'bg-mk-coral text-mk-ink' : 'bg-mk-ink')}>{p.emoji}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-bold">{p.label}</span>
+                        <span className="block text-[11px] text-mk-dim">{p.desc}</span>
+                      </span>
+                      <span className="shrink-0 text-right text-[11px] font-bold text-mk-muted">≈ {estimateMB(p, dur, doc.music.id !== 'none').toFixed(1)} MB</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {preset === 'wa' && dur > 60 && (
+                <p className="mt-2 rounded-xl bg-mk-amber/10 px-3 py-2 text-[11px] text-mk-amber">Video {Math.round(dur)} detik. Status WhatsApp hanya menampilkan 60 detik pertama, sisanya akan terpotong — kurangi durasi scene dulu kalau perlu.</p>
+              )}
             </div>
             <p className={cx('rounded-xl px-3 py-2 text-[11px]', smooth ? 'bg-mk-mint/10 text-mk-mint' : 'bg-mk-amber/10 text-mk-amber')}>
               {smooth
@@ -164,6 +205,13 @@ export default function ExportDialog({
         ) : (
           result && (
             <div className="space-y-3">
+              {preset === 'wa' && (
+                <p className={cx('rounded-xl px-3 py-2 text-xs', result.blob.size <= WA_MAX ? 'bg-mk-mint/10 text-mk-mint' : 'bg-mk-amber/10 text-mk-amber')}>
+                  {result.blob.size <= WA_MAX
+                    ? `Siap untuk Status WA: ${(result.blob.size / 1_000_000).toFixed(1)} MB (batas 10 MB). Unduh lalu unggah dari galeri ke Status.`
+                    : `File ${(result.blob.size / 1_000_000).toFixed(1)} MB masih di atas 10 MB. Coba kurangi durasi atau jumlah efek, lalu export lagi.`}
+                </p>
+              )}
               <div className="flex items-center gap-2 text-sm font-bold text-mk-mint">
                 <CheckCircle2 className="h-4 w-4" /> Video siap! ({(result.blob.size / 1024 / 1024).toFixed(1)} MB · {result.ext.toUpperCase()})
               </div>

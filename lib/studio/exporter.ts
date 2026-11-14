@@ -16,6 +16,8 @@ import { ensureFonts } from './fonts';
 export interface ExportOptions {
   quality: '720p' | '1080p';
   fps: 30 | 60;
+  /** batas ukuran file (byte), mis. 10 MB untuk Status WhatsApp. Bitrate dihitung otomatis. */
+  maxBytes?: number;
   onProgress?: (p: number, label: string) => void;
   signal?: AbortSignal;
 }
@@ -37,9 +39,16 @@ function dims(doc: ProjectDoc, quality: ExportOptions['quality']) {
   return { width: even(w * s), height: even(h * s) };
 }
 
-async function pickVideoConfig(width: number, height: number, fps: number): Promise<VideoEncoderConfig | null> {
+/** bitrate video (bps) supaya total file ≤ maxBytes; audio & overhead MP4 sudah diperhitungkan */
+export function bitrateFor(width: number, height: number, fps: number, duration: number, maxBytes?: number, audioBps = 0): number {
+  const natural = Math.round(width * height * fps * 0.12);
+  if (!maxBytes) return natural;
+  const budget = (maxBytes * 8 * 0.9) / Math.max(1, duration) - audioBps;
+  return Math.max(400_000, Math.min(natural, Math.round(budget)));
+}
+
+async function pickVideoConfig(width: number, height: number, fps: number, bitrate: number): Promise<VideoEncoderConfig | null> {
   if (typeof VideoEncoder === 'undefined') return null;
-  const bitrate = Math.round(width * height * fps * 0.12);
   const codecs = ['avc1.640033', 'avc1.640028', 'avc1.4d0028', 'avc1.42e028', 'avc1.42001f'];
   for (const codec of codecs) {
     const cfg: VideoEncoderConfig = { codec, width, height, bitrate, framerate: fps, avc: { format: 'avc' }, latencyMode: 'quality' };
@@ -53,11 +62,11 @@ async function pickVideoConfig(width: number, height: number, fps: number): Prom
   return null;
 }
 
-async function pickAudioConfig(): Promise<{ cfg: AudioEncoderConfig; muxCodec: 'aac' | 'opus' } | null> {
+async function pickAudioConfig(small = false): Promise<{ cfg: AudioEncoderConfig; muxCodec: 'aac' | 'opus' } | null> {
   if (typeof AudioEncoder === 'undefined') return null;
   const tries: Array<{ cfg: AudioEncoderConfig; muxCodec: 'aac' | 'opus' }> = [
-    { cfg: { codec: 'mp4a.40.2', numberOfChannels: 2, sampleRate: 44100, bitrate: 160_000 }, muxCodec: 'aac' },
-    { cfg: { codec: 'opus', numberOfChannels: 2, sampleRate: 48000, bitrate: 128_000 }, muxCodec: 'opus' },
+    { cfg: { codec: 'mp4a.40.2', numberOfChannels: 2, sampleRate: 44100, bitrate: small ? 96_000 : 160_000 }, muxCodec: 'aac' },
+    { cfg: { codec: 'opus', numberOfChannels: 2, sampleRate: 48000, bitrate: small ? 80_000 : 128_000 }, muxCodec: 'opus' },
   ];
   for (const t of tries) {
     try {
@@ -90,16 +99,25 @@ export async function exportVideo(doc: ProjectDoc, opts: ExportOptions): Promise
   canvas.height = height;
   const ctx = canvas.getContext('2d', { alpha: false })!;
 
-  const vcfg = await pickVideoConfig(width, height, fps);
+  const audioBps = doc.music.id !== 'none' ? (opts.maxBytes ? 96_000 : 160_000) : 0;
+  let bitrate = bitrateFor(width, height, fps, duration, opts.maxBytes, audioBps);
+  const vcfg = await pickVideoConfig(width, height, fps, bitrate);
   if (vcfg && typeof VideoFrame !== 'undefined') {
     try {
-      return await exportWebCodecs(doc, renderer, canvas, ctx, vcfg, fps, totalFrames, duration, opts, report);
+      let res = await exportWebCodecs(doc, renderer, canvas, ctx, vcfg, fps, totalFrames, duration, opts, report);
+      // encoder kadang melebihi target: ulang sekali dengan bitrate yang dikecilkan
+      if (opts.maxBytes && res.blob.size > opts.maxBytes) {
+        bitrate = Math.max(300_000, Math.round(bitrate * (opts.maxBytes / res.blob.size) * 0.85));
+        report(0, `File ${(res.blob.size / 1048576).toFixed(1)} MB, dikecilkan agar muat…`);
+        res = await exportWebCodecs(doc, renderer, canvas, ctx, { ...vcfg, bitrate }, fps, totalFrames, duration, opts, report);
+      }
+      return res;
     } catch (e) {
       if (opts.signal?.aborted) throw e;
       console.warn('WebCodecs gagal, pindah ke MediaRecorder', e);
     }
   }
-  return exportMediaRecorder(doc, renderer, canvas, ctx, fps, totalFrames, duration, opts, report);
+  return exportMediaRecorder(doc, renderer, canvas, ctx, fps, totalFrames, duration, opts, report, bitrate);
 }
 
 async function exportWebCodecs(
@@ -114,7 +132,7 @@ async function exportWebCodecs(
   opts: ExportOptions,
   report: (p: number, l: string) => void
 ): Promise<ExportResult> {
-  const acfg = doc.music.id !== 'none' ? await pickAudioConfig() : null;
+  const acfg = doc.music.id !== 'none' ? await pickAudioConfig(!!opts.maxBytes) : null;
   const audio = acfg ? await renderMusic(doc.music.id, duration, acfg.cfg.sampleRate, doc.audio?.data) : null;
 
   const muxer = new Muxer({
@@ -200,7 +218,8 @@ async function exportMediaRecorder(
   totalFrames: number,
   duration: number,
   opts: ExportOptions,
-  report: (p: number, l: string) => void
+  report: (p: number, l: string) => void,
+  bitrate?: number
 ): Promise<ExportResult> {
   if (typeof MediaRecorder === 'undefined' || typeof canvas.captureStream !== 'function') {
     throw new Error('Browser ini belum mendukung export video. Gunakan Chrome / Edge / Firefox versi terbaru.');
@@ -226,7 +245,7 @@ async function exportMediaRecorder(
   }
   const mimes = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
   const mime = mimes.find((m) => MediaRecorder.isTypeSupported(m)) || '';
-  const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: canvas.width * canvas.height * 6 } : undefined);
+  const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: bitrate || canvas.width * canvas.height * 6 } : undefined);
   const chunks: BlobPart[] = [];
   rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
   const done = new Promise<void>((res) => (rec.onstop = () => res()));

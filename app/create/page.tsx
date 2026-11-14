@@ -16,7 +16,7 @@ import { allComponents } from '@/lib/studio/packs/components';
 import { allTransitions } from '@/lib/studio/packs/transitions';
 import { allAnimations } from '@/lib/studio/packs/animations';
 import { allEffects, effectKinds, getEffect, suggestEffects } from '@/lib/studio/packs/effects';
-import { cx, LazyVisible, Logo } from '@/components/studio/ui';
+import { cx, Dropdown, LazyVisible, Logo } from '@/components/studio/ui';
 import { TemplateThumb } from '@/components/studio/Thumbs';
 import LivePreview from '@/components/studio/LivePreview';
 import { useUser } from '@/lib/studio/useUser';
@@ -220,25 +220,21 @@ export default function CreatePage() {
                   <Wand2 className="h-4 w-4 text-mk-coral" /> Hasil baca prompt
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <label className="block">
+                  <div>
                     <span className="mk-label">Jenis video</span>
-                    <select
+                    <Dropdown
+                      label="Jenis video"
                       value={plan.intent}
-                      onChange={(e) => {
-                        const v = e.target.value as Intent;
+                      className="w-full py-2.5 text-sm"
+                      menuWidth={260}
+                      onChange={(v) => {
                         setIntent(v);
                         setSceneCount(null);
                         runAnalyze({ intent: v, count: null });
                       }}
-                      className="mk-input py-2"
-                    >
-                      {(Object.keys(INTENT_LABELS) as Intent[]).map((k) => (
-                        <option key={k} value={k}>
-                          {INTENT_LABELS[k]}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                      options={(Object.keys(INTENT_LABELS) as Intent[]).map((k) => ({ value: k, label: INTENT_LABELS[k] }))}
+                    />
+                  </div>
                   <div>
                     <span className="mk-label">Jumlah scene</span>
                     <div className="flex items-center gap-2">

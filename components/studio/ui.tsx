@@ -220,3 +220,155 @@ export function Logo({ className }: { className?: string }) {
     </span>
   );
 }
+
+export interface DropdownOption<T extends string> {
+  value: T;
+  label: string;
+  desc?: string;
+  icon?: React.ReactNode;
+}
+
+/** Dropdown bergaya MotionKu (pengganti <select> bawaan browser). */
+export function Dropdown<T extends string>({
+  value,
+  options,
+  onChange,
+  label,
+  compactLabel,
+  className,
+  menuWidth = 240,
+  align = 'left',
+}: {
+  value: T;
+  options: Array<DropdownOption<T>>;
+  onChange: (v: T) => void;
+  label?: string;
+  /** teks tombol yang lebih pendek (mis. di HP) */
+  compactLabel?: (o: DropdownOption<T>) => React.ReactNode;
+  className?: string;
+  menuWidth?: number;
+  align?: 'left' | 'right';
+}) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number; up: boolean }>({ top: 0, left: 0, width: menuWidth, up: false });
+  const [hi, setHi] = useState(0);
+  const btn = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const cur = options.find((o) => o.value === value) || options[0];
+
+  const place = () => {
+    const r = btn.current?.getBoundingClientRect();
+    if (!r) return;
+    const w = Math.min(Math.max(menuWidth, r.width), window.innerWidth - 16);
+    let left = align === 'right' ? r.right - w : r.left;
+    left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
+    const estH = Math.min(360, options.length * 52 + 12);
+    const up = r.bottom + estH > window.innerHeight - 8 && r.top > estH;
+    setPos({ top: up ? r.top - 6 : r.bottom + 6, left, width: w, up });
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    place();
+    setHi(Math.max(0, options.findIndex((o) => o.value === value)));
+    const close = (e: Event) => {
+      const t = e.target as Node;
+      if (!menu.current?.contains(t) && !btn.current?.contains(t)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+      else if (e.key === 'ArrowDown') (e.preventDefault(), setHi((h) => Math.min(options.length - 1, h + 1)));
+      else if (e.key === 'ArrowUp') (e.preventDefault(), setHi((h) => Math.max(0, h - 1)));
+      else if (e.key === 'Enter') {
+        e.preventDefault();
+        setHi((h) => {
+          onChange(options[h].value);
+          return h;
+        });
+        setOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', close);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', close);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('keydown', onKey);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  return (
+    <>
+      <button
+        ref={btn}
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={label}
+        onClick={() => setOpen((o) => !o)}
+        className={cx(
+          'inline-flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left text-xs font-bold transition',
+          open ? 'border-mk-coral bg-mk-panel-3 ring-2 ring-mk-coral/20' : 'border-mk-line bg-mk-panel-2 hover:border-mk-line-2',
+          className
+        )}
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          {cur?.icon}
+          <span className="truncate">{compactLabel ? compactLabel(cur) : cur?.label}</span>
+        </span>
+        <svg viewBox="0 0 24 24" width="14" height="14" className={cx('shrink-0 text-mk-muted transition', open && 'rotate-180')} fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </button>
+      {open && (
+        <div
+          ref={menu}
+          role="listbox"
+          className="mk-scroll fixed z-[80] max-h-[360px] animate-mk-up overflow-y-auto rounded-2xl border border-mk-line-2 bg-mk-panel p-1.5 shadow-2xl"
+          style={{ left: pos.left, width: pos.width, ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }) }}
+        >
+          {label && <div className="px-2.5 pb-1 pt-1.5 text-[11px] font-extrabold uppercase tracking-wider text-mk-dim">{label}</div>}
+          {options.map((o, i) => {
+            const sel = o.value === value;
+            return (
+              <button
+                key={o.value}
+                type="button"
+                role="option"
+                aria-selected={sel}
+                onMouseEnter={() => setHi(i)}
+                onClick={() => {
+                  onChange(o.value);
+                  setOpen(false);
+                }}
+                className={cx('flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition', sel ? 'bg-mk-coral/15' : i === hi ? 'bg-mk-panel-3' : '')}
+              >
+                {o.icon && <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-mk-ink text-mk-cream">{o.icon}</span>}
+                <span className="min-w-0 flex-1">
+                  <span className={cx('block truncate text-sm font-bold', sel ? 'text-mk-coral' : 'text-mk-cream')}>{o.label}</span>
+                  {o.desc && <span className="block truncate text-[11px] text-mk-dim">{o.desc}</span>}
+                </span>
+                {sel && (
+                  <svg viewBox="0 0 24 24" width="16" height="16" className="shrink-0 text-mk-coral" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}
+
+/** Ikon kecil bentuk rasio video. */
+export function RatioIcon({ ratio }: { ratio: string }) {
+  const [a, b] = ratio.split(':').map(Number);
+  const s = 18 / Math.max(a, b);
+  return <span className="inline-block rounded-[3px] border-2 border-current" style={{ width: Math.max(6, a * s), height: Math.max(6, b * s) }} />;
+}
