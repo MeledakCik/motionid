@@ -25,14 +25,16 @@ const STATS = [
   ['360', 'template'],
   ['360', 'komponen'],
   ['630', 'ikon'],
-  ['310', 'transisi'],
+  ['328', 'transisi'],
   ['342', 'animasi'],
+  ['370', 'efek'],
 ];
 
 const FEATURES = [
   { icon: Wand2, title: 'Prompt yang benar-benar dibaca', desc: 'Bukan cuma pilih 3 kategori. 17 jenis video dikenali otomatis — promo, flash sale, menu, tips, tutorial, quote, lowongan, event — dan jumlah scene mengikuti isi prompt.' },
   { icon: MousePointer2, title: 'Edit bebas ala Figma', desc: 'Klik elemen, seret, ubah ukuran, putar, snap ke tengah. Ketuk dua kali untuk mengetik langsung di video.' },
   { icon: Film, title: 'Timeline ala CapCut', desc: 'Atur durasi scene, transisi antar scene, dan waktu muncul tiap elemen. Undo/redo tanpa batas.' },
+  { icon: Sparkles, title: '370+ efek visual', desc: 'Kaca pecah, pasir, hujan, salju, confetti, kembang api, petir, bara api, VHS, film grain, hujan emoji, dan banyak lagi — tinggal klik per scene.' },
   { icon: Layers, title: 'Foto, latar & komponen', desc: 'Unggah foto produk sebagai latar atau elemen. Tambah label harga, tombol, rating, chat, countdown, mockup HP.' },
   { icon: Zap, title: 'Export MP4 super mulus', desc: 'Dirender frame-per-frame dengan timestamp pasti, jadi video tidak patah-patah meski HP sedang sibuk.' },
   { icon: MonitorSmartphone, title: 'Ringan di HP kentang', desc: 'Resolusi preview & efek otomatis menyesuaikan kemampuan perangkat. Nyaman di layar kecil, tablet, dan desktop.' },
@@ -80,7 +82,7 @@ export default function LandingPage() {
         </section>
 
         <section className="mx-auto max-w-6xl px-5 pb-16" aria-label="Jumlah aset">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
             {STATS.map(([n, l]) => (
               <div key={l} className="mk-card px-4 py-4 text-center">
                 <div className="text-3xl font-extrabold text-mk-coral">{n}+</div>

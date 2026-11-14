@@ -20,6 +20,7 @@ import {
   SlidersHorizontal,
   Smile,
   Shuffle,
+  CloudRain,
   Trash2,
   Type,
   Undo2,
@@ -37,7 +38,7 @@ import { BottomSheet, cx, Logo, Segmented, useMediaQuery } from './ui';
 import Stage from './Stage';
 import Timeline from './Timeline';
 import { BackgroundPanel, ElementsPanel, IconsPanel, MediaPanel, MusicPanel, TemplatePanel, TextPanel } from './AssetPanels';
-import { AnimationPanel, TransitionPanel } from './MotionPanels';
+import { AnimationPanel, EffectsPanel, TransitionPanel } from './MotionPanels';
 import { Inspector, LayersPanel } from './Inspector';
 import ExportDialog from './ExportDialog';
 
@@ -48,6 +49,7 @@ const TOOLS: Array<{ id: Tool; label: string; icon: React.ComponentType<{ classN
   { id: 'elemen', label: 'Elemen', icon: Shapes },
   { id: 'ikon', label: 'Ikon', icon: Smile },
   { id: 'latar', label: 'Latar', icon: Palette },
+  { id: 'efek', label: 'Efek', icon: CloudRain },
   { id: 'musik', label: 'Musik', icon: Music },
   { id: 'transisi', label: 'Transisi', icon: Shuffle, pro: true },
   { id: 'animasi', label: 'Animasi', icon: Wand2, pro: true },
@@ -55,6 +57,7 @@ const TOOLS: Array<{ id: Tool; label: string; icon: React.ComponentType<{ classN
 ];
 
 const TOOL_TITLE: Record<Tool, string> = {
+  efek: 'Efek (370+)',
   template: 'Template (360)',
   teks: 'Teks',
   foto: 'Foto & Media',
@@ -182,6 +185,8 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
         return <BackgroundPanel />;
       case 'musik':
         return <MusicPanel />;
+      case 'efek':
+        return <EffectsPanel clock={clock} />;
       case 'transisi':
         return <TransitionPanel clock={clock} />;
       case 'animasi':
@@ -353,7 +358,7 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
       )}
 
       {!desktop && (
-        <BottomSheet open={!!tool} onClose={() => openTool(null)} title={TOOL_TITLE[tool || 'properti']} tall={tool === 'template' || tool === 'elemen' || tool === 'transisi' || tool === 'animasi'}>
+        <BottomSheet open={!!tool} onClose={() => openTool(null)} title={TOOL_TITLE[tool || 'properti']} tall={tool === 'template' || tool === 'efek' || tool === 'elemen' || tool === 'transisi' || tool === 'animasi'}>
           {panel(tool)}
         </BottomSheet>
       )}

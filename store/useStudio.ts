@@ -7,7 +7,7 @@ import { uid } from '@/lib/studio/types';
  * undo/redo murah walau dokumen berisi foto.
  */
 
-export type Tool = 'template' | 'teks' | 'elemen' | 'ikon' | 'foto' | 'latar' | 'transisi' | 'animasi' | 'musik' | 'layer' | 'properti';
+export type Tool = 'efek' | 'template' | 'teks' | 'elemen' | 'ikon' | 'foto' | 'latar' | 'transisi' | 'animasi' | 'musik' | 'layer' | 'properti';
 
 interface StudioState {
   doc: ProjectDoc | null;

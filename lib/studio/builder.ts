@@ -19,6 +19,7 @@ import { componentIdFor, getComponent } from './packs/components';
 import { getAnimation } from './packs/animations';
 import { getTransition, hasTransition } from './packs/transitions';
 import { readableOn, rgba } from './color';
+import { getEffect, suggestEffects } from './packs/effects';
 
 /**
  * Builder — mengubah ContentPlan + template menjadi ProjectDoc yang bisa diedit penuh
@@ -481,6 +482,17 @@ export function buildScenes(plan: ContentPlan, templateId: string, aspect: Aspec
   const base = ctxFor(plan, theme, L, aspect, seed);
   let photoCursor = 0;
   let prevTr: string | undefined;
+  const fxIds = suggestEffects([plan.prompt, ...plan.keywords], plan.mood, plan.intent);
+  const AMBIENT = ['hujan', 'salju', 'pasir', 'bokeh', 'kabut', 'matrix', 'debu', 'sakura', 'daun', 'bara', 'film', 'kilau'];
+  const effectsFor = (role: string, idx: number) =>
+    fxIds
+      .filter((id) => {
+        const kind = getEffect(id)?.kind || '';
+        if (AMBIENT.includes(kind)) return true;
+        if (kind === 'kaca-pecah') return idx === 0;
+        return role === 'hook' || role === 'cta' || role === 'harga';
+      })
+      .map((id) => ({ id }));
   return plan.items.map((item, idx) => {
     const wantsPhoto = photoIds.length > 0 && (item.role === 'hook' || item.role === 'produk' || L.photo === 'bg' || photoIds.length > photoCursor);
     const photo = wantsPhoto ? photoIds[photoCursor++ % photoIds.length] : undefined;
@@ -496,6 +508,7 @@ export function buildScenes(plan: ContentPlan, templateId: string, aspect: Aspec
       background: backgroundFor(c, item),
       layers,
       transition: tr,
+      effects: effectsFor(item.role, idx),
     };
   });
 }

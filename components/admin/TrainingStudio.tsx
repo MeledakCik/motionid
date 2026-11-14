@@ -9,18 +9,21 @@ import { allComponents, COMPONENT_CODE_EXAMPLE, componentKinds, ComponentDef, dr
 import { allTransitions, drawTransition, parseTransitionCode, TRANSITION_CODE_EXAMPLE, TransitionSpec } from '@/lib/studio/packs/transitions';
 import { allAnimations, ANIMATION_CODE_EXAMPLE, AnimSpec, evalIn, evalLoop, parseAnimationCode } from '@/lib/studio/packs/animations';
 import { TEMPLATES, THEMES } from '@/lib/studio/packs/templates';
+import { allEffects, EFFECT_CODE_EXAMPLE, effectKinds, EffectSpec, parseEffectCode } from '@/lib/studio/packs/effects';
+import { EffectThumb } from '@/components/studio/Thumbs';
 import { applyRow, loadTraining, removeRow, TrainingRow } from '@/lib/studio/training';
 import { canvasFamily, ensureFonts } from '@/lib/studio/fonts';
 import { EASINGS } from '@/lib/studio/easing';
 import { cx, Logo, Segmented } from '@/components/studio/ui';
 
-type Tab = 'icon_pack' | 'component_pack' | 'transition_pack' | 'animation_pack' | 'teks';
+type Tab = 'icon_pack' | 'component_pack' | 'transition_pack' | 'animation_pack' | 'effect_pack' | 'teks';
 
 const TABS: Array<{ id: Tab; label: string; short: string }> = [
   { id: 'icon_pack', label: 'Input SVG Ikon', short: 'Ikon' },
   { id: 'component_pack', label: 'Input Kode Komponen', short: 'Komponen' },
   { id: 'transition_pack', label: 'Input Kode Transisi', short: 'Transisi' },
   { id: 'animation_pack', label: 'Input Kode Animasi', short: 'Animasi' },
+  { id: 'effect_pack', label: 'Input Kode Efek', short: 'Efek' },
   { id: 'teks', label: 'Bank Teks (Hook/CTA)', short: 'Teks' },
 ];
 
@@ -33,6 +36,22 @@ const ICON_EXAMPLE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24
 </svg>`;
 
 const GUIDE: Record<Exclude<Tab, 'teks'>, React.ReactNode> = {
+  effect_pack: (
+    <ul className="list-disc space-y-1 pl-4">
+      <li>
+        <b>kind</b>: {effectKinds().map((k) => k.kind).join(', ')}.
+      </li>
+      <li>
+        <b>style</b> per kind, contoh hujan: lurus | miring-kiri | miring-kanan | neon | petir | malam; kaca-pecah: tengah | kiri-atas | kanan-bawah | hamburan | jatuh | layar-hp; pasir: badai-kanan | badai-kiri | jatuh | gurun | emas.
+      </li>
+      <li>
+        <b>intensity</b> 0.1–4 (jumlah partikel / kekuatan). Untuk kind <code>emoji</code> isi <code>&quot;emoji&quot;: &quot;🧋&quot;</code>.
+      </li>
+      <li>
+        <b>layer</b> (opsional): <code>under</code> (di belakang teks) atau <code>over</code> (di depan).
+      </li>
+    </ul>
+  ),
   icon_pack: (
     <ul className="list-disc space-y-1 pl-4">
       <li>Tempel SVG utuh (dari Figma/Illustrator/Lucide) atau hanya isi atribut <code>d</code>.</li>
@@ -281,6 +300,7 @@ interface Validation {
   comp?: ComponentDef;
   tr?: TransitionSpec;
   anim?: AnimSpec;
+  fx?: EffectSpec;
 }
 
 function validate(tab: Tab, code: string, name: string): Validation {
@@ -302,6 +322,10 @@ function validate(tab: Tab, code: string, name: string): Validation {
       const r = parseAnimationCodeSafe(code, name);
       return r;
     }
+    case 'effect_pack': {
+      const r = parseEffectCode(code, name);
+      return r.ok ? { ok: true, fx: r.spec } : { ok: false, error: r.error };
+    }
     default:
       return { ok: true };
   }
@@ -316,6 +340,7 @@ const EXAMPLES: Record<Exclude<Tab, 'teks'>, string> = {
   component_pack: COMPONENT_CODE_EXAMPLE,
   transition_pack: TRANSITION_CODE_EXAMPLE,
   animation_pack: ANIMATION_CODE_EXAMPLE,
+  effect_pack: EFFECT_CODE_EXAMPLE,
 };
 
 export default function TrainingStudio() {
@@ -345,7 +370,7 @@ export default function TrainingStudio() {
     const { data, error } = await supabase
       .from('ai_training_data')
       .select('id,type,category,content_text,subtext,metadata_json,created_at')
-      .in('type', ['icon_pack', 'component_pack', 'transition_pack', 'animation_pack', 'hook', 'cta'])
+      .in('type', ['icon_pack', 'component_pack', 'transition_pack', 'animation_pack', 'effect_pack', 'hook', 'cta'])
       .order('created_at', { ascending: false })
       .limit(500);
     if (error) setNotice({ ok: false, text: /does not exist|schema/i.test(error.message) ? 'Tabel ai_training_data belum ada. Jalankan supabase/migration.sql.' : error.message });
@@ -423,6 +448,7 @@ export default function TrainingStudio() {
     component_pack: allComponents().length,
     transition_pack: allTransitions().length,
     animation_pack: allAnimations().length,
+    effect_pack: allEffects().length,
   };
 
   return (
@@ -441,13 +467,14 @@ export default function TrainingStudio() {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 pb-20 pt-6">
-        <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-5">
+        <div className="mb-5 grid grid-cols-3 gap-2 sm:grid-cols-6">
           {[
             ['Template', TEMPLATES.length],
             ['Komponen', counts.component_pack],
             ['Ikon', counts.icon_pack],
             ['Transisi', counts.transition_pack],
             ['Animasi', counts.animation_pack],
+            ['Efek', counts.effect_pack],
           ].map(([l, n]) => (
             <div key={l as string} className="mk-card px-4 py-3">
               <div className="text-xl font-extrabold">{n}</div>
@@ -575,6 +602,10 @@ export default function TrainingStudio() {
               <PreviewTransition spec={v.tr} />
             ) : v.anim ? (
               <PreviewAnimation spec={v.anim} />
+            ) : v.fx ? (
+              <div className="mx-auto aspect-[16/10] w-full overflow-hidden rounded-2xl">
+                <EffectThumb spec={v.fx} primary="#FF6A3D" secondary="#FFB547" autoplay w={640} h={400} />
+              </div>
             ) : null}
           </div>
         </div>

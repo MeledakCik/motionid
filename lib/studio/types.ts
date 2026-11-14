@@ -173,6 +173,8 @@ export interface Scene {
   layers: Layer[];
   /** transisi masuk ke scene ini (diabaikan di scene pertama) */
   transition: { id: string; duration: number };
+  /** efek visual (hujan, kaca pecah, pasir, confetti, dll) */
+  effects?: Array<{ id: string; amount?: number }>;
 }
 
 export interface Palette {

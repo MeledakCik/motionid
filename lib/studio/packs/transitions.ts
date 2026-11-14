@@ -35,6 +35,8 @@ export type TransitionKind =
   | 'shake'
   | 'card'
   | 'dolly'
+  | 'shatter'
+  | 'sand'
   | 'custom';
 
 export interface TransitionParams {
@@ -86,6 +88,7 @@ export const TRANSITION_GROUPS: Array<{ id: string; label: string }> = [
   { id: 'pola', label: 'Pola & Bilah' },
   { id: 'efek', label: 'Efek & Glitch' },
   { id: '3d', label: '3D & Putar' },
+  { id: 'hancur', label: 'Kaca Pecah & Pasir' },
   { id: 'custom', label: 'Custom Admin' },
 ];
 
@@ -290,6 +293,22 @@ function buildLibrary(): TransitionSpec[] {
     ['kasar', 'Kasar', 48],
   ] as const) {
     add({ id: `pixel-${k}`, name: `Piksel · ${l}`, group: 'efek', kind: 'pixelate', tags: ['pixel', 'retro', 'game'], duration: 0.6, easing: 'inOutSine', params: { intensity: i }, energy: 2 });
+  }
+
+  // Kaca pecah & pasir
+  for (const [o, ol] of [
+    ['center', 'Tengah'],
+    ['tl', 'Kiri Atas'],
+    ['tr', 'Kanan Atas'],
+    ['bl', 'Kiri Bawah'],
+    ['br', 'Kanan Bawah'],
+  ] as const) {
+    add({ id: `shatter-${o}`, name: `Kaca Pecah ${ol}`, group: 'hancur', kind: 'shatter', tags: ['kaca', 'pecah', 'shatter'], duration: 0.9, easing: 'inCubic', params: { origin: o, count: 7 }, energy: 3 });
+    add({ id: `shatter-${o}-halus`, name: `Kaca Pecah Halus ${ol}`, group: 'hancur', kind: 'shatter', tags: ['kaca', 'pecah'], duration: 1, easing: 'inCubic', params: { origin: o, count: 11 }, energy: 3 });
+  }
+  for (const [d, dl] of DIR4) {
+    add({ id: `sand-${d}`, name: `Jadi Pasir ke ${dl}`, group: 'hancur', kind: 'sand', tags: ['pasir', 'sand', 'thanos', 'debu'], duration: 1.1, easing: 'linear', params: { dir: d, count: 28 }, energy: 2 });
+    add({ id: `sand-${d}-halus`, name: `Jadi Pasir Halus ke ${dl}`, group: 'hancur', kind: 'sand', tags: ['pasir', 'sand'], duration: 1.3, easing: 'linear', params: { dir: d, count: 40 }, energy: 2 });
   }
 
   // Variasi tambahan
@@ -1009,6 +1028,105 @@ export function drawTransition(
       break;
     }
 
+    case 'shatter': {
+      // B di belakang; A terbelah jadi pecahan segitiga yang terlempar & jatuh
+      drawFull(ctx, B, W, H);
+      const [ox, oy] = originPt(P.origin, W, H);
+      const n = P.count || 7;
+      const cols = n;
+      const rows = Math.round(n * (H / W));
+      const cw = W / cols;
+      const ch = H / rows;
+      const crack = clamp(p / 0.18);
+      const fly = clamp((p - 0.18) / 0.82);
+      const pt = (c: number, r: number): [number, number] => {
+        const jx = c > 0 && c < cols ? (hash01(c * 31 + r, 1) - 0.5) * cw * 0.7 : 0;
+        const jy = r > 0 && r < rows ? (hash01(c * 17 + r, 2) - 0.5) * ch * 0.7 : 0;
+        return [c * cw + jx, r * ch + jy];
+      };
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const a = pt(c, r);
+          const b = pt(c + 1, r);
+          const d = pt(c, r + 1);
+          const e = pt(c + 1, r + 1);
+          const tris: Array<Array<[number, number]>> = (c + r) % 2 ? [[a, b, e], [a, e, d]] : [[a, b, d], [b, e, d]];
+          tris.forEach((tri, ti) => {
+            const cx = (tri[0][0] + tri[1][0] + tri[2][0]) / 3;
+            const cy = (tri[0][1] + tri[1][1] + tri[2][1]) / 3;
+            const dx = cx - ox;
+            const dy = cy - oy;
+            const dist = Math.hypot(dx, dy) / Math.hypot(W, H);
+            const delay = dist * 0.28;
+            const f = ease('inCubic', clamp((fly - delay) / (1 - delay)));
+            const id = (r * cols + c) * 2 + ti;
+            const sp = 0.6 + hash01(id, 3);
+            const tx = (dx / (Math.hypot(dx, dy) || 1)) * W * 0.35 * sp * f;
+            const ty = (dy / (Math.hypot(dx, dy) || 1)) * H * 0.15 * sp * f + H * 1.8 * f * f;
+            const rot = (hash01(id, 4) - 0.5) * 6 * f;
+            if (ty > H * 1.5) return;
+            ctx.save();
+            ctx.globalAlpha = 1 - f * 0.3;
+            ctx.translate(cx + tx, cy + ty);
+            ctx.rotate(rot);
+            ctx.scale(1 - f * 0.25, 1 - f * 0.25);
+            ctx.translate(-cx, -cy);
+            ctx.beginPath();
+            ctx.moveTo(tri[0][0], tri[0][1]);
+            ctx.lineTo(tri[1][0], tri[1][1]);
+            ctx.lineTo(tri[2][0], tri[2][1]);
+            ctx.closePath();
+            ctx.save();
+            ctx.clip();
+            ctx.drawImage(A, 0, 0, W, H);
+            ctx.restore();
+            ctx.strokeStyle = `rgba(255,255,255,${0.75 * crack})`;
+            ctx.lineWidth = Math.max(1, W / 540);
+            ctx.stroke();
+            ctx.restore();
+          });
+        }
+      }
+      if (p < 0.1) {
+        ctx.fillStyle = `rgba(255,255,255,${0.7 * (1 - p / 0.1)})`;
+        ctx.fillRect(0, 0, W, H);
+      }
+      break;
+    }
+
+    case 'sand': {
+      // A hancur jadi butiran pasir yang tertiup angin, memperlihatkan B
+      drawFull(ctx, B, W, H);
+      const [dx, dy] = dirVec(P.dir);
+      const cols = P.count || 28;
+      const cs = W / cols;
+      const rows = Math.ceil(H / cs);
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const id = r * cols + c;
+          // urutan hancur: dari sisi berlawanan arah angin + acak
+          const along = dx ? (dx > 0 ? c / cols : 1 - c / cols) : dy > 0 ? r / rows : 1 - r / rows;
+          const start = (1 - along) * 0.5 + hash01(id, 1) * 0.3;
+          const q = clamp((p - start) / 0.4);
+          const x = c * cs;
+          const y = r * cs;
+          if (q <= 0) {
+            ctx.drawImage(A, (x / W) * (A as HTMLCanvasElement).width, (y / H) * (A as HTMLCanvasElement).height, (cs / W) * (A as HTMLCanvasElement).width, (cs / H) * (A as HTMLCanvasElement).height, x, y, cs + 0.6, cs + 0.6);
+            continue;
+          }
+          if (q >= 1) continue;
+          const drift = q * q;
+          const px = x + dx * W * 0.35 * drift + (hash01(id, 2) - 0.5) * cs * 3 * q;
+          const py = y + dy * H * 0.2 * drift - H * 0.08 * drift * hash01(id, 3) + (hash01(id, 4) - 0.5) * cs * 2 * q;
+          const sz = cs * (1 - q * 0.7);
+          ctx.globalAlpha = 1 - q;
+          ctx.drawImage(A, (x / W) * (A as HTMLCanvasElement).width, (y / H) * (A as HTMLCanvasElement).height, (cs / W) * (A as HTMLCanvasElement).width, (cs / H) * (A as HTMLCanvasElement).height, px, py, sz, sz);
+          ctx.globalAlpha = 1;
+        }
+      }
+      break;
+    }
+
     case 'custom': {
       const lerpP = (a: CustomPose | undefined, b: CustomPose | undefined, t: number) => ({
         x: ((a?.x ?? 0) + ((b?.x ?? 0) - (a?.x ?? 0)) * t) * (W / 1080),
@@ -1050,7 +1168,7 @@ function getScratch(w: number, h: number): HTMLCanvasElement {
 /* ------------------------------------------------------------------ */
 const KINDS: TransitionKind[] = [
   'cut', 'fade', 'slide', 'push', 'wipe', 'iris', 'shape', 'zoom', 'blinds', 'grid', 'stripes', 'spin', 'flip', 'cube',
-  'whip', 'glitch', 'flash', 'blur', 'split', 'clock', 'pixelate', 'ink', 'slice', 'colorwipe', 'burst', 'shake', 'card', 'dolly', 'custom',
+  'whip', 'glitch', 'flash', 'blur', 'split', 'clock', 'pixelate', 'ink', 'slice', 'colorwipe', 'burst', 'shake', 'card', 'dolly', 'shatter', 'sand', 'custom',
 ];
 
 export function parseTransitionCode(raw: string, fallbackName = 'Transisi Custom'): { ok: boolean; error?: string; spec?: TransitionSpec } {

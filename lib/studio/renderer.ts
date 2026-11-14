@@ -4,6 +4,7 @@ import { combinePose, evalIn, evalLoop, getAnimation, IDENTITY, Pose, TextAnimSp
 import { drawTransition, getTransition } from './packs/transitions';
 import { drawComponent, getComponent } from './packs/components';
 import { drawIcon } from './packs/icons';
+import { cameraTransform, drawEffect, drawPostEffect, EffectCtx, EffectSpec, getEffect } from './packs/effects';
 import { canvasFamily } from './fonts';
 import { clamp, ease, hash01 } from './easing';
 import { rgba } from './color';
@@ -185,14 +186,39 @@ export class Renderer {
     const doc = this.doc!;
     const { w: BW, h: BH } = canvasSize(doc.aspect);
     const s = pw / BW;
+    const fx = (scene.effects || [])
+      .map((r) => ({ spec: getEffect(r.id), amount: r.amount ?? 1 }))
+      .filter((f): f is { spec: EffectSpec; amount: number } => !!f.spec);
+    const ec: EffectCtx = {
+      W: BW,
+      H: BH,
+      t: local,
+      dur: scene.duration,
+      primary: doc.theme.palette.primary,
+      secondary: doc.theme.palette.secondary,
+      ps: this.opts.particleScale,
+      allowBlur: this.opts.allowBlur,
+    };
     ctx.save();
     ctx.setTransform(s, 0, 0, ph / BH, 0, 0);
+    // efek kamera (guncang / denyut) membungkus seluruh scene
+    for (const f of fx) {
+      if (f.spec.layer !== 'camera') continue;
+      const cam = cameraTransform(f.spec, ec, f.amount);
+      ctx.translate(BW / 2 + cam.x, BH / 2 + cam.y);
+      ctx.rotate(cam.r);
+      ctx.scale(cam.s, cam.s);
+      ctx.translate(-BW / 2, -BH / 2);
+    }
     this.drawBackground(ctx, BW, BH, scene.background, local, scene.duration);
+    for (const f of fx) if (f.spec.layer === 'under') drawEffect(ctx, f.spec, ec, f.amount);
     for (const layer of scene.layers) {
       if (layer.hidden || layer.id === this.skipLayerId) continue;
       this.drawLayer(ctx, layer, local);
     }
+    for (const f of fx) if (f.spec.layer === 'over') drawEffect(ctx, f.spec, ec, f.amount);
     ctx.restore();
+    for (const f of fx) if (f.spec.layer === 'post') drawPostEffect(ctx, f.spec, ec, pw, ph, f.amount);
   }
 
   /* -------------------------- latar -------------------------- */

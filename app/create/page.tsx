@@ -15,6 +15,7 @@ import { allIcons } from '@/lib/studio/packs/icons';
 import { allComponents } from '@/lib/studio/packs/components';
 import { allTransitions } from '@/lib/studio/packs/transitions';
 import { allAnimations } from '@/lib/studio/packs/animations';
+import { allEffects } from '@/lib/studio/packs/effects';
 import { cx, LazyVisible, Logo } from '@/components/studio/ui';
 import { TemplateThumb } from '@/components/studio/Thumbs';
 import LivePreview from '@/components/studio/LivePreview';
@@ -109,7 +110,7 @@ export default function CreatePage() {
     router.push(`/editor/${r.id}`);
   };
 
-  const counts = { t: TEMPLATES.length, c: allComponents().length, i: allIcons().length, tr: allTransitions().length, a: allAnimations().length };
+  const counts = { t: TEMPLATES.length, c: allComponents().length, i: allIcons().length, tr: allTransitions().length, a: allAnimations().length, e: allEffects().length };
 
   return (
     <div className="mk-page">
@@ -120,7 +121,7 @@ export default function CreatePage() {
           </Link>
           <Logo className="text-sm" />
           <span className="ml-auto hidden text-[11px] text-mk-dim sm:block">
-            {counts.t} template · {counts.c} komponen · {counts.i} ikon · {counts.tr} transisi · {counts.a} animasi
+            {counts.t} template · {counts.c} komponen · {counts.i} ikon · {counts.tr} transisi · {counts.a} animasi · {counts.e} efek
           </span>
         </div>
       </header>

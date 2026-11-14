@@ -194,7 +194,8 @@ alter table public.ai_training_data
       'icon_pack',
       'component_pack',
       'transition_pack',
-      'animation_pack'
+      'animation_pack',
+      'effect_pack'
     )
   )
   not valid;

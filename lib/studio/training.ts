@@ -4,13 +4,14 @@ import { parseComponentCode, registerComponent, unregisterComponent } from './pa
 import { parseTransitionCode, registerTransition, unregisterTransition } from './packs/transitions';
 import { parseAnimationCode, registerAnimation, unregisterAnimation } from './packs/animations';
 import { registerCta, registerHook, registerQuote } from './prompt';
+import { parseEffectCode, registerEffect, unregisterEffect } from './packs/effects';
 
 /**
  * Menyuntikkan hasil training admin (tabel ai_training_data) ke registry pack.
  * Semua kode admin berupa JSON/SVG deklaratif — tidak ada eval/JS yang dijalankan.
  */
 
-export type PackType = 'icon_pack' | 'component_pack' | 'transition_pack' | 'animation_pack';
+export type PackType = 'icon_pack' | 'component_pack' | 'transition_pack' | 'animation_pack' | 'effect_pack';
 
 export interface TrainingRow {
   id: string;
@@ -55,6 +56,12 @@ export function applyRow(row: TrainingRow): { ok: boolean; error?: string } {
       registerAnimation({ ...r.spec, id: packId(row, row.type), name, tags: [...r.spec.tags, ...tags] });
       return { ok: true };
     }
+    case 'effect_pack': {
+      const r = parseEffectCode(row.content_text, name);
+      if (!r.ok || !r.spec) return { ok: false, error: r.error };
+      registerEffect({ ...r.spec, id: packId(row, row.type), name, tags: [...r.spec.tags, ...tags] });
+      return { ok: true };
+    }
     case 'hook':
       registerHook(row.category, row.content_text);
       return { ok: true };
@@ -77,6 +84,7 @@ export function removeRow(row: Pick<TrainingRow, 'id' | 'type'>) {
   if (row.type === 'component_pack') unregisterComponent(id);
   if (row.type === 'transition_pack') unregisterTransition(id);
   if (row.type === 'animation_pack') unregisterAnimation(id);
+  if (row.type === 'effect_pack') unregisterEffect(id);
 }
 
 let inflight: Promise<number> | null = null;
@@ -90,7 +98,7 @@ export function loadTraining(force = false): Promise<number> {
       const { data, error } = await supabase
         .from('ai_training_data')
         .select('id,type,category,content_text,subtext,metadata_json,created_at')
-        .in('type', ['icon_pack', 'component_pack', 'transition_pack', 'animation_pack', 'hook', 'cta', 'scene2', 'scene3'])
+        .in('type', ['icon_pack', 'component_pack', 'transition_pack', 'animation_pack', 'effect_pack', 'hook', 'cta', 'scene2', 'scene3'])
         .order('created_at', { ascending: true })
         .limit(2000);
       if (error || !data) return 0;

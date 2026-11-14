@@ -8,7 +8,8 @@ import { allAnimations, ANIM_GROUPS, getAnimation } from '@/lib/studio/packs/ani
 import { sceneStarts } from '@/lib/studio/renderer';
 import type { PlaybackClock } from '@/lib/studio/clock';
 import { ChipRow, cx, LazyVisible, SearchBox, Section, Segmented, Slider } from './ui';
-import { AnimationThumb, TransitionThumb } from './Thumbs';
+import { AnimationThumb, EffectThumb, TransitionThumb } from './Thumbs';
+import { allEffects, EFFECT_GROUPS, getEffect } from '@/lib/studio/packs/effects';
 
 const PAGE = 30;
 
@@ -186,6 +187,103 @@ export function AnimationPanel({ clock }: { clock: PlaybackClock }) {
             <div className="truncate px-1.5 py-1 text-[10px] font-semibold text-mk-muted">{a.name}</div>
           </button>
         ))}
+      </div>
+      <div className="px-3 pb-4">
+        {limit < list.length && (
+          <button type="button" onClick={() => setLimit((l) => l + PAGE)} className="mk-btn-ghost w-full text-xs">
+            Tampilkan lagi ({list.length - limit})
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function EffectsPanel({ clock }: { clock: PlaybackClock }) {
+  const doc = useStudio((s) => s.doc)!;
+  const sceneIdx = useStudio((s) => s.sceneIdx);
+  const updateScene = useStudio((s) => s.updateScene);
+  const commit = useStudio((s) => s.commit);
+  const [group, setGroup] = useState('all');
+  const [q, setQ] = useState('');
+  const [limit, setLimit] = useState(PAGE);
+  const scene = doc.scenes[sceneIdx];
+  const active = scene.effects || [];
+  const list = useMemo(() => {
+    const qq = q.trim().toLowerCase();
+    return allEffects().filter((e) => (group === 'all' || e.group === group) && (!qq || e.name.toLowerCase().includes(qq) || e.tags.some((g) => g.includes(qq))));
+  }, [group, q]);
+
+  const play = () => {
+    const st = sceneStarts(doc)[sceneIdx];
+    clock.seek(st);
+    clock.play();
+  };
+  const toggle = (id: string) => {
+    const on = active.some((a) => a.id === id);
+    const kind = getEffect(id)?.kind;
+    // satu efek per jenis: ganti varian jenis yang sama
+    const next = on ? active.filter((a) => a.id !== id) : [...active.filter((a) => getEffect(a.id)?.kind !== kind), { id, amount: 1 }].slice(-4);
+    updateScene(sceneIdx, { effects: next });
+    if (!on) setTimeout(play, 30);
+  };
+
+  return (
+    <div>
+      <Section title={`Efek scene ${sceneIdx + 1}`} right={<span className="text-[10px] text-mk-dim">{allEffects().length} efek</span>}>
+        {active.length === 0 ? (
+          <p className="text-[11px] text-mk-dim">Belum ada efek. Pilih di bawah — maksimal 4 efek per scene.</p>
+        ) : (
+          <div className="space-y-2">
+            {active.map((a) => {
+              const e = getEffect(a.id);
+              if (!e) return null;
+              return (
+                <div key={a.id} className="rounded-xl bg-mk-ink p-2.5">
+                  <div className="flex items-center justify-between text-xs font-bold">
+                    <span className="truncate">{e.name}</span>
+                    <button type="button" className="text-mk-dim hover:text-red-300" onClick={() => toggle(a.id)}>
+                      Hapus
+                    </button>
+                  </div>
+                  <Slider
+                    label="Kekuatan"
+                    value={a.amount ?? 1}
+                    min={0.2}
+                    max={2}
+                    step={0.05}
+                    onChange={(v) => useStudio.getState().live((d) => ({ ...d, scenes: d.scenes.map((s, i) => (i === sceneIdx ? { ...s, effects: (s.effects || []).map((x) => (x.id === a.id ? { ...x, amount: v } : x)) } : s)) }))}
+                    onCommit={useStudio.getState().endDrag}
+                    format={(v) => `${Math.round(v * 100)}%`}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-1.5">
+          <button type="button" className="mk-btn-ghost text-[11px]" onClick={() => commit((d) => ({ ...d, scenes: d.scenes.map((s) => ({ ...s, effects: active.map((x) => ({ ...x })) })) }))}>
+            Pakai di semua scene
+          </button>
+          <button type="button" className="mk-btn-ghost text-[11px]" onClick={() => updateScene(sceneIdx, { effects: [] })} disabled={!active.length}>
+            Hapus semua efek
+          </button>
+        </div>
+        <SearchBox value={q} onChange={(v) => (setQ(v), setLimit(PAGE))} placeholder="Cari efek… (hujan, kaca pecah, pasir, confetti)" />
+        <ChipRow value={group} onChange={(v) => (setGroup(v), setLimit(PAGE))} options={[{ id: 'all', label: 'Semua' }, ...EFFECT_GROUPS]} />
+      </Section>
+      <div className="grid grid-cols-3 gap-2 p-3 lg:grid-cols-2">
+        {list.slice(0, limit).map((e) => {
+          const on = active.some((a) => a.id === e.id);
+          return (
+            <button key={e.id} type="button" onClick={() => toggle(e.id)} className={cx('overflow-hidden rounded-xl border text-left transition', on ? 'border-mk-coral ring-2 ring-mk-coral/30' : 'border-mk-line bg-mk-panel-2 hover:border-mk-line-2')}>
+              <LazyVisible minH={60} className="aspect-[16/10] bg-mk-ink">
+                <EffectThumb spec={e} primary={doc.theme.palette.primary} secondary={doc.theme.palette.secondary} />
+              </LazyVisible>
+              <div className="truncate px-1.5 py-1 text-[10px] font-semibold text-mk-muted">{e.name}</div>
+            </button>
+          );
+        })}
       </div>
       <div className="px-3 pb-4">
         {limit < list.length && (

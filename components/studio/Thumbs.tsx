@@ -6,6 +6,7 @@ import { canvasSize } from '@/lib/studio/types';
 import { drawComponent, getComponent } from '@/lib/studio/packs/components';
 import { AnimSpec, evalIn, evalLoop } from '@/lib/studio/packs/animations';
 import { drawTransition, TransitionSpec } from '@/lib/studio/packs/transitions';
+import { cameraTransform, drawEffect, drawPostEffect, EffectCtx, EffectSpec } from '@/lib/studio/packs/effects';
 import { Renderer, settleTime } from '@/lib/studio/renderer';
 import { buildScenes, themeOf } from '@/lib/studio/builder';
 import { getTemplate, getTheme } from '@/lib/studio/packs/templates';
@@ -237,4 +238,49 @@ export function TemplateThumb({ plan, templateId, aspect, assets, live }: { plan
   const { w, h } = canvasSize(aspect);
   const tw = 180;
   return <canvas ref={ref} width={tw} height={Math.round((tw * h) / w)} className="h-full w-full object-cover" />;
+}
+
+/** Thumbnail efek: contoh latar + kartu teks + efek (beranimasi saat disentuh). */
+export function EffectThumb({ spec, primary, secondary, autoplay, w = 160, h = 100 }: { spec: EffectSpec; primary: string; secondary: string; autoplay?: boolean; w?: number; h?: number }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const draw = React.useCallback(
+    (_p: number, t: number) => {
+      const c = ref.current;
+      if (!c) return;
+      const ctx = c.getContext('2d')!;
+      const W = 1080;
+      const H = Math.round((1080 * c.height) / c.width);
+      const s = c.width / W;
+      const ec: EffectCtx = { W, H, t, dur: 4, primary, secondary, ps: 0.6, allowBlur: false };
+      ctx.setTransform(s, 0, 0, s, 0, 0);
+      if (spec.layer === 'camera') {
+        const cam = cameraTransform(spec, ec, 1.4);
+        ctx.translate(W / 2 + cam.x, H / 2 + cam.y);
+        ctx.rotate(cam.r);
+        ctx.scale(cam.s, cam.s);
+        ctx.translate(-W / 2, -H / 2);
+      }
+      const g = ctx.createLinearGradient(0, 0, W, H);
+      g.addColorStop(0, '#2A1D18');
+      g.addColorStop(1, '#4A2C20');
+      ctx.fillStyle = g;
+      ctx.fillRect(-60, -60, W + 120, H + 120);
+      if (spec.layer === 'under') drawEffect(ctx, spec, ec);
+      ctx.fillStyle = primary;
+      ctx.beginPath();
+      ctx.roundRect(W * 0.2, H * 0.36, W * 0.6, H * 0.28, 40);
+      ctx.fill();
+      ctx.fillStyle = '#120E0C';
+      ctx.font = `900 ${H * 0.13}px ${canvasFamily('Plus Jakarta Sans')}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('PROMO', W / 2, H / 2 + 4);
+      if (spec.layer === 'over') drawEffect(ctx, spec, ec);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      if (spec.layer === 'post') drawPostEffect(ctx, spec, ec, c.width, c.height);
+    },
+    [spec, primary, secondary]
+  );
+  useHoverLoop(ref, draw, 4, autoplay);
+  return <canvas ref={ref} width={w} height={h} className="h-full w-full" />;
 }
