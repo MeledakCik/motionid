@@ -17,26 +17,36 @@ export interface AnimatedTextProps {
   animation?: AnimationType;
   headlineAnim?: HeadlineAnim;
   className?: string;
+  style?: React.CSSProperties;
+  delay?: number;
+  highlightColor?: string;
   accentColor?: string;
   highlightWords?: boolean;
 }
 
-export const AnimatedText: React.FC<AnimatedTextProps> = ({
+export function AnimatedText({
   text,
   animation = 'pop',
   headlineAnim = 'word-pop',
   className = '',
+  style,
+  delay = 0.05,
+  highlightColor,
   accentColor = '#38BDF8',
   highlightWords = true,
-}) => {
+}: AnimatedTextProps): JSX.Element {
+  const effectiveAccent = highlightColor || accentColor;
   const words = String(text || '').split(/\s+/).filter(Boolean);
 
   return (
-    <div className={`inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-1.5 ${className}`}>
+    <div
+      style={style}
+      className={`inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-1.5 ${className}`}
+    >
       {words.map((word, idx) => {
         const isEmphasized =
           highlightWords && (idx === 0 || /\d|rp|promo|gratis|diskon|cuan|10x/i.test(word));
-        const delayMs = idx * 65;
+        const delayMs = Math.round(idx * (delay < 1 ? delay * 1000 : delay));
 
         let animStyle: React.CSSProperties = {
           transition: 'all 420ms cubic-bezier(0.22, 1.35, 0.36, 1)',
@@ -62,12 +72,12 @@ export const AnimatedText: React.FC<AnimatedTextProps> = ({
               isEmphasized
                 ? {
                     ...animStyle,
-                    backgroundColor: `${accentColor}26`,
-                    border: `1px solid ${accentColor}`,
+                    backgroundColor: `${effectiveAccent}26`,
+                    border: `1px solid ${effectiveAccent}`,
                     color: '#FFFFFF',
                     padding: '2px 10px',
                     borderRadius: '10px',
-                    boxShadow: `0 0 22px ${accentColor}33`,
+                    boxShadow: `0 0 22px ${effectiveAccent}33`,
                   }
                 : animStyle
             }
@@ -79,28 +89,33 @@ export const AnimatedText: React.FC<AnimatedTextProps> = ({
       })}
     </div>
   );
-};
+}
 
 export const KineticText = AnimatedText;
 
 export interface KenBurnsProps {
   src?: string;
   alt?: string;
+  duration?: number;
   className?: string;
+  seed?: number;
   opacity?: number;
   sceneIndex?: number;
 }
 
-export const KenBurns: React.FC<KenBurnsProps> = ({
+export function KenBurns({
   src,
   alt = 'Scene Visual',
+  duration = 6,
   className = '',
-  opacity = 0.42,
+  seed = 0,
+  opacity = 0.44,
   sceneIndex = 0,
-}) => {
+}: KenBurnsProps): JSX.Element | null {
   if (!src) return null;
-  const scale = sceneIndex % 2 === 0 ? 1.08 : 1.14;
-  const rot = sceneIndex % 2 === 0 ? -1.2 : 1.2;
+  const idx = sceneIndex || seed;
+  const scale = idx % 2 === 0 ? 1.08 : 1.14;
+  const rot = idx % 2 === 0 ? -1.2 : 1.2;
 
   return (
     <div className={`pointer-events-none absolute inset-0 overflow-hidden ${className}`}>
@@ -110,14 +125,14 @@ export const KenBurns: React.FC<KenBurnsProps> = ({
         style={{
           opacity,
           transform: `scale(${scale}) rotate(${rot}deg)`,
-          transition: 'transform 2.4s cubic-bezier(0.16, 1, 0.3, 1)',
+          transition: `transform ${duration}s cubic-bezier(0.16, 1, 0.3, 1)`,
         }}
         className="h-full w-full object-cover"
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-black/50" />
     </div>
   );
-};
+}
 
 export interface AmbientBackdropProps {
   colors: ColorPalette;
@@ -180,9 +195,6 @@ export interface CursorAnimationLayerProps {
   accentColor?: string;
 }
 
-/**
- * Layer Kursor Interaktif Real-Time (Single Pro @depup.web, Multi-Agent Swarm @voynann, & Tutorial Spotlight)
- */
 export const CursorAnimationLayer: React.FC<CursorAnimationLayerProps> = ({
   mode = 'single-pro',
   skin = 'figma-pill',
@@ -210,7 +222,6 @@ export const CursorAnimationLayer: React.FC<CursorAnimationLayerProps> = ({
 
   return (
     <div className="pointer-events-none absolute inset-0 z-40 overflow-hidden">
-      {/* Spotlight Halo jika mode tutorial-spotlight */}
       {mode === 'tutorial-spotlight' && (
         <div
           style={{
@@ -223,7 +234,6 @@ export const CursorAnimationLayer: React.FC<CursorAnimationLayerProps> = ({
         />
       )}
 
-      {/* Multi-Agent Swarm Cursors (@voynann style) */}
       {mode === 'multi-agent-swarm' &&
         cursor.swarmAgents.map((ag) => (
           <div
@@ -252,7 +262,6 @@ export const CursorAnimationLayer: React.FC<CursorAnimationLayerProps> = ({
           </div>
         ))}
 
-      {/* Main Director Cursor */}
       <div
         style={{
           left: `${cursor.x}%`,
@@ -287,28 +296,99 @@ export const CursorAnimationLayer: React.FC<CursorAnimationLayerProps> = ({
 };
 
 export interface MotionOverlayProps {
+  accent?: string;
   accentColor?: string;
+  sceneKey?: string | number;
+  duration?: number;
+  intensity?: number;
   showParticles?: boolean;
   cursorMode?: CursorAnimationMode;
   sceneIndex?: number;
 }
 
-export const MotionOverlay: React.FC<MotionOverlayProps> = ({
+export function MotionOverlay({
+  accent,
   accentColor = '#38BDF8',
+  sceneKey = 0,
   cursorMode = 'single-pro',
   sceneIndex = 0,
-}) => {
+}: MotionOverlayProps): JSX.Element {
+  const effectiveAccent = accent || accentColor;
+  const idx = typeof sceneKey === 'number' ? sceneKey : sceneIndex;
   return (
     <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden">
       <div
         className="absolute inset-3 rounded-2xl border opacity-30"
-        style={{ borderColor: accentColor }}
+        style={{ borderColor: effectiveAccent }}
       />
       <CursorAnimationLayer
         mode={cursorMode}
-        sceneIndex={sceneIndex}
-        accentColor={accentColor}
+        sceneIndex={idx}
+        accentColor={effectiveAccent}
       />
     </div>
   );
-};
+}
+
+export const ScaleIn: React.FC<{
+  children: React.ReactNode;
+  delay?: number;
+  className?: string;
+}> = ({ children, className = '' }) => (
+  <div className={`transition-transform duration-300 ${className}`}>{children}</div>
+);
+
+export const MotionWrapper: React.FC<{
+  children: React.ReactNode;
+  animation?: AnimationType;
+  delay?: number;
+  className?: string;
+}> = ({ children, className = '' }) => (
+  <div className={`transition-all duration-300 ${className}`}>{children}</div>
+);
+
+export const GradientBackground: React.FC<{
+  preset?: string;
+  children?: React.ReactNode;
+  className?: string;
+}> = ({ preset, children, className = '' }) => (
+  <div
+    style={{ background: preset || 'linear-gradient(135deg, #070815, #1E1B4B)' }}
+    className={`relative h-full w-full overflow-hidden ${className}`}
+  >
+    {children}
+  </div>
+);
+
+export interface DynamicMotionSceneProps {
+  stepBadge?: string;
+  title?: string;
+  subtext?: string;
+  widgetType?:
+    | 'repo_input_card'
+    | 'repo_scanner_card'
+    | 'terminal_build_card'
+    | 'bento_metrics_grid'
+    | string;
+  primaryInput?: string;
+  secondaryBadge?: string;
+  terminalLines?: string[];
+  paletteId?: 'depup-lavender' | 'midnight-indigo' | 'aurora-mint' | 'cyber-sunset' | string;
+  progress?: number;
+  fontFamily?: string;
+}
+
+export const DynamicMotionTemplate: React.FC<DynamicMotionSceneProps> = ({
+  stepBadge = '01 // STEP',
+  title = 'MotionID Dynamic Scene',
+  subtext = 'Powered by Smart Google Data Pack Engine',
+}) => (
+  <div className="relative flex h-full w-full flex-col justify-between bg-[#070815] p-6 text-white">
+    <div className="font-mono text-xs text-cyan-400">{stepBadge}</div>
+    <div>
+      <h2 className="text-xl font-extrabold">{title}</h2>
+      <p className="mt-1 text-xs text-slate-300">{subtext}</p>
+    </div>
+    <CursorAnimationLayer mode="single-pro" sceneIndex={0} accentColor="#38BDF8" />
+  </div>
+);

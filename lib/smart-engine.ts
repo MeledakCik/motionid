@@ -1,9 +1,9 @@
 /**
- * MotionID / MotionKu Smart Engine v5.0 (`lib/smart-engine.ts`)
- * - 100% Lokal & Bebas Biaya API Eksternal
- * - Terintegrasi dengan Sistem Pembuat Gambar Otomatis dari Google/Web Data Pack (`lib/google-datapack-image-engine.ts`)
- * - Engine Variasi Transisi & Animasi Anti-Kembar (Scene 1..4 dijamin berbeda transisi, kamera, layout, & animasi)
- * - Mode Animasi Kursor Pintar (`off` | `single-pro` | `multi-agent-swarm` | `tutorial-spotlight`)
+ * MotionID / MotionKu Smart Engine v5.1 (`lib/smart-engine.ts`)
+ * - 100% Kompatibel dengan seluruh kontrak `lib/training.ts`, `app/page.tsx`, `app/create/page.tsx`, `app/editor/*`, dan `app/admin/page.tsx`
+ * - Sistem Pembuat Gambar Otomatis dari Data Pack Google/Web (`lib/google-datapack-image-engine.ts`)
+ * - Engine Variasi Transisi & Animasi Anti-Kembar (`buildNonRepeatingSequence`)
+ * - Mode Animasi Kursor Pintar (`single-pro`, `multi-agent-swarm`, `tutorial-spotlight`, `off`)
  */
 
 import {
@@ -22,7 +22,10 @@ export interface SpringConfig {
   initialVelocity?: number;
 }
 
-export function solveSpring(t: number, config: SpringConfig = { stiffness: 220, damping: 18, mass: 1 }): number {
+export function solveSpring(
+  t: number,
+  config: SpringConfig = { stiffness: 220, damping: 18, mass: 1 }
+): number {
   const clampedT = Math.max(0, Math.min(2.5, t));
   const dt = 1 / 240;
   const steps = Math.floor(clampedT / dt);
@@ -55,8 +58,17 @@ export function smoothStep(edge0: number, edge1: number, x: number): number {
   return t * t * (3 - 2 * t);
 }
 
-export type CursorAnimationMode = 'off' | 'single-pro' | 'multi-agent-swarm' | 'tutorial-spotlight';
-export type CursorVisualSkin = 'macos-pro' | 'figma-pill' | 'cyber-crosshair' | 'neon-touch';
+export type CursorAnimationMode =
+  | 'off'
+  | 'single-pro'
+  | 'multi-agent-swarm'
+  | 'tutorial-spotlight';
+
+export type CursorVisualSkin =
+  | 'macos-pro'
+  | 'figma-pill'
+  | 'cyber-crosshair'
+  | 'neon-touch';
 
 export interface CursorAgentPoint {
   name: string;
@@ -86,10 +98,6 @@ export interface CursorKeyframeState {
   swarmAgents: CursorAgentPoint[];
 }
 
-/**
- * Menghitung koreografi kursor pintar per scene (mendukung mode Single Pro @depup.web,
- * Multi-Agent Swarm @voynann, Tutorial Spotlight, maupun Off).
- */
 export function computeCursorChoreography(
   sceneProgress: number,
   sceneIndex: number = 0,
@@ -119,7 +127,6 @@ export function computeCursorChoreography(
     };
   }
 
-  // Waypoint berbeda untuk setiap scene agar gerakan kursor tidak monoton!
   const waypointsByScene: Array<Array<{ x: number; y: number; label: string }>> = [
     [
       { x: 82, y: 84, label: 'Init Studio' },
@@ -181,14 +188,13 @@ export function computeCursorChoreography(
   const highlightProgress = smoothStep(0.18, 0.56, p);
   const typingProgress = smoothStep(0.12, 0.64, p);
 
-  // Kamera dinamis mengikuti kursor saat mode single-pro atau tutorial-spotlight
-  const focusBoost = mode === 'tutorial-spotlight' ? 0.22 : mode === 'single-pro' ? 0.16 : 0.08;
+  const focusBoost =
+    mode === 'tutorial-spotlight' ? 0.22 : mode === 'single-pro' ? 0.16 : 0.08;
   const cameraZoom = 1 + Math.sin(p * Math.PI) * focusBoost;
   const cameraPanX = (50 - x) * 0.18 * Math.sin(p * Math.PI);
   const cameraPanY = (50 - y) * 0.14 * Math.sin(p * Math.PI);
   const cameraTiltDeg = Math.sin(p * Math.PI * 2) * (sceneIndex % 2 === 0 ? 1.4 : -1.4);
 
-  // Jika mode Multi-Agent Swarm (@voynann style), bangkitkan 5 agen kursor kolaborator!
   const swarmSpecs = [
     { name: 'Director', color: '#F59E0B', phaseOffset: 0.0, radiusX: 18, radiusY: 14, tag: 'Wireframe' },
     { name: 'DataPack', color: '#38BDF8', phaseOffset: 1.25, radiusX: 24, radiusY: 18, tag: 'Synth Image' },
@@ -202,7 +208,10 @@ export function computeCursorChoreography(
       ? swarmSpecs.map((ag, idx) => {
           const angle = p * Math.PI * 2.2 + ag.phaseOffset + sceneIndex * 0.9;
           const ax = Math.max(10, Math.min(90, x + Math.cos(angle) * ag.radiusX + (idx - 2) * 5));
-          const ay = Math.max(12, Math.min(88, y + Math.sin(angle) * ag.radiusY + (idx % 2 === 0 ? -6 : 6)));
+          const ay = Math.max(
+            12,
+            Math.min(88, y + Math.sin(angle) * ag.radiusY + (idx % 2 === 0 ? -6 : 6))
+          );
           return {
             name: ag.name,
             color: ag.color,
@@ -259,7 +268,19 @@ export interface EngineTypography {
   monoFont: string;
 }
 
+/**
+ * Mencakup seluruh varian nama widget baik di `app/create/page.tsx`, `app/page.tsx`, maupun `MotionStudioEngine.tsx`
+ */
 export type WidgetBlueprintType =
+  | 'quote_card'
+  | 'checklist_card'
+  | 'price_tag_card'
+  | 'step_number_card'
+  | 'cta_button_card'
+  | 'repo_input_card'
+  | 'repo_scanner_card'
+  | 'terminal_build_card'
+  | 'bento_metrics_grid'
   | 'step-paste-card'
   | 'step-check-card'
   | 'step-deploy-card'
@@ -271,6 +292,34 @@ export type WidgetBlueprintType =
   | 'quiz-poll-card'
   | 'quote-glass-frame';
 
+export function normalizeWidgetType(raw?: string): WidgetBlueprintType {
+  const valid: WidgetBlueprintType[] = [
+    'quote_card',
+    'checklist_card',
+    'price_tag_card',
+    'step_number_card',
+    'cta_button_card',
+    'repo_input_card',
+    'repo_scanner_card',
+    'terminal_build_card',
+    'bento_metrics_grid',
+    'step-paste-card',
+    'step-check-card',
+    'step-deploy-card',
+    'terminal-log-box',
+    'metric-flip-counter',
+    'price-slash-sticker',
+    'countdown-flash-bar',
+    'before-after-slider',
+    'quiz-poll-card',
+    'quote-glass-frame',
+  ];
+  if (raw && valid.includes(raw as WidgetBlueprintType)) {
+    return raw as WidgetBlueprintType;
+  }
+  return 'quote_card';
+}
+
 export interface CustomWidgetBlueprint {
   id: string;
   type: WidgetBlueprintType;
@@ -281,20 +330,34 @@ export interface CustomWidgetBlueprint {
   accentHex: string;
 }
 
-export type MotionTelemetryProfile = {
+export interface MotionTelemetryProfile {
   fps: number;
   springStiffness: number;
   springDamping: number;
   motionBlurSamples: number;
   cursorActive: boolean;
-};
+  tempoBpm?: number;
+  cutFrequencySec?: number;
+  cameraEnergy?: 'calm' | 'dynamic' | 'hyper';
+  transitionSequence?: SceneTransition[];
+  animationSequence?: AnimationType[];
+}
+
+export interface TrainedVideoPreset {
+  id: string;
+  title: string;
+  description: string;
+  category: CategoryType;
+  videoUrl: string;
+  creatorHandle: string;
+  profile: MotionTelemetryProfile;
+}
 
 export type SceneRole = 'hook' | 'problem' | 'solution' | 'proof' | 'cta';
 
 export type SceneLayout =
   | 'center'
   | 'split-top'
-  | ' editorial-left'
   | 'editorial-left'
   | 'card-stack'
   | 'diagonal-hero'
@@ -388,6 +451,8 @@ export interface ColorPalette {
 export interface StyleSuggestion {
   palette: ColorPalette;
   music: MusicTrack;
+  font: EngineFontName;
+  moodLabel: string;
   recommendedTemplate: 'Q1' | 'Q2' | 'Q3' | 'P1' | 'P2' | 'P3' | 'E1' | 'E2' | 'E3';
   recommendedFont: EngineFontName;
   moodReason: string;
@@ -416,13 +481,37 @@ export interface ParsedTopicMeta {
   matchedDataPackTitle: string;
 }
 
+export interface StylePack {
+  id: string;
+  name: string;
+  category: CategoryType | 'all';
+  paletteId: string;
+  font: EngineFontName;
+  transition: SceneTransition;
+  animation: AnimationType;
+  headlineAnim: HeadlineAnim;
+  bgStyle: BackgroundStyle;
+  layout: SceneLayout;
+  trained?: boolean;
+  description?: string;
+  tags?: string[];
+  cursorMode?: CursorAnimationMode;
+  iconPackId?: string;
+  componentPackId?: string;
+  transitionPackId?: string;
+  animationPackId?: string;
+}
+
 export interface StyleRecipe {
   id: string;
   name: string;
+  packName: string;
   transitions: SceneTransition[];
   animations: AnimationType[];
   cameraMotions: CameraMotionType[];
   cursorMode: CursorAnimationMode;
+  iconPackId?: string;
+  componentPackId?: string;
 }
 
 export interface GeneratedScriptResult {
@@ -439,6 +528,10 @@ export interface GeneratedScriptResult {
 }
 
 export interface GenerateOptions {
+  customPrice?: string;
+  customProductName?: string;
+  customStoreName?: string;
+  stylePackId?: string;
   priceOverride?: string;
   productOverride?: string;
   storeOverride?: string;
@@ -576,15 +669,211 @@ export const MUSIC_TRACKS: MusicTrack[] = [
 
 export const CUSTOM_IMAGE_ASSETS: Record<string, string[]> = {
   promo: GOOGLE_VISUAL_DATA_PACKS.filter((p) => p.clusterId === 'kuliner-kopi-umkm').map((p) =>
-    synthesizeDataPackSceneImage({ topic: p.title, sceneText: p.badgeLabels[0], sceneIndex: 0, customPackOverride: p }).dataUri
+    synthesizeDataPackSceneImage({
+      topic: p.title,
+      sceneText: p.badgeLabels[0],
+      sceneIndex: 0,
+      customPackOverride: p,
+    }).dataUri
   ),
   quote: GOOGLE_VISUAL_DATA_PACKS.filter((p) => p.clusterId === 'quotes-senja-mental').map((p) =>
-    synthesizeDataPackSceneImage({ topic: p.title, sceneText: p.badgeLabels[0], sceneIndex: 1, customPackOverride: p }).dataUri
+    synthesizeDataPackSceneImage({
+      topic: p.title,
+      sceneText: p.badgeLabels[0],
+      sceneIndex: 1,
+      customPackOverride: p,
+    }).dataUri
   ),
-  edukasi: GOOGLE_VISUAL_DATA_PACKS.filter((p) => p.clusterId === 'edukasi-sains-kampus' || p.clusterId === 'tech-saas-cyber').map((p) =>
-    synthesizeDataPackSceneImage({ topic: p.title, sceneText: p.badgeLabels[0], sceneIndex: 2, customPackOverride: p }).dataUri
+  edukasi: GOOGLE_VISUAL_DATA_PACKS.filter(
+    (p) => p.clusterId === 'edukasi-sains-kampus' || p.clusterId === 'tech-saas-cyber'
+  ).map((p) =>
+    synthesizeDataPackSceneImage({
+      topic: p.title,
+      sceneText: p.badgeLabels[0],
+      sceneIndex: 2,
+      customPackOverride: p,
+    }).dataUri
   ),
 };
+
+const STYLE_PACK_REGISTRY: StylePack[] = [
+  {
+    id: 'pack-depup-cursor',
+    name: 'Depup Interactive Cursor Rig',
+    category: 'all',
+    paletteId: 'cyber-violet',
+    font: 'Space Grotesk',
+    transition: 'whip-left',
+    animation: 'typewriter',
+    headlineAnim: 'typewriter',
+    bgStyle: 'datapack-synth',
+    layout: 'hud-frame',
+    trained: true,
+    description: 'Gaya @depup.web dengan fokus kamera mengikuti kursor & seleksi teks kuning.',
+    tags: ['cursor', 'depup', 'tech'],
+    cursorMode: 'single-pro',
+  },
+  {
+    id: 'pack-voynann-swarm',
+    name: 'Voynann 5-Agent Blueprint Swarm',
+    category: 'edukasi',
+    paletteId: 'edu-electric',
+    font: 'Space Grotesk',
+    transition: 'blueprint-wire',
+    animation: 'pop',
+    headlineAnim: 'word-pop',
+    bgStyle: 'grid-cyber',
+    layout: 'bento-grid',
+    trained: true,
+    description: 'Gaya @voynann dengan 5 kursor agen AI yang merakit rangka wireframe secara kolaboratif.',
+    tags: ['voynann', 'swarm', 'blueprint'],
+    cursorMode: 'multi-agent-swarm',
+  },
+  {
+    id: 'pack-umkm-flash',
+    name: 'UMKM Kopi & Kuliner Burst',
+    category: 'promo',
+    paletteId: 'promo-fire',
+    font: 'Anton',
+    transition: 'zoom-punch',
+    animation: 'bounce',
+    headlineAnim: 'elastic-bounce',
+    bgStyle: 'sunburst',
+    layout: 'diagonal-hero',
+    trained: false,
+    description: 'Kontras tinggi merah-emas dengan stiker harga membal dari Google Data Pack.',
+    tags: ['promo', 'kuliner', 'kopi'],
+    cursorMode: 'tutorial-spotlight',
+  },
+  {
+    id: 'pack-senja-editorial',
+    name: 'Midnight Senja Polaroid',
+    category: 'quote',
+    paletteId: 'midnight-galau',
+    font: 'Playfair Display',
+    transition: 'iris-wipe',
+    animation: 'fade',
+    headlineAnim: 'blur-reveal',
+    bgStyle: 'aurora',
+    layout: 'editorial-left',
+    trained: false,
+    description: 'Estetika deep talk malam dengan transisi fokus bokeh sinematik.',
+    tags: ['quote', 'senja', 'healing'],
+    cursorMode: 'off',
+  },
+];
+
+const TRAINED_VIDEO_PRESETS: TrainedVideoPreset[] = [];
+const KEYWORD_RULES_REGISTRY: Array<{ keywords: string[]; category: CategoryType }> = [];
+
+export function normalizeStylePack(
+  raw: Record<string, any> | null | undefined,
+  fallbackId = `style-${Date.now()}`,
+  fallbackName = 'Custom Style Pack'
+): StylePack {
+  const src = raw || {};
+  return {
+    id: String(src.id || fallbackId),
+    name: String(src.name || fallbackName),
+    category: (src.category as CategoryType | 'all') || 'all',
+    paletteId: String(src.paletteId || COLOR_PALETTES[0].id),
+    font: (src.font as EngineFontName) || 'Space Grotesk',
+    transition: (src.transition as SceneTransition) || 'whip-left',
+    animation: (src.animation as AnimationType) || 'pop',
+    headlineAnim: (src.headlineAnim as HeadlineAnim) || 'word-pop',
+    bgStyle: (src.bgStyle as BackgroundStyle) || 'datapack-synth',
+    layout: (src.layout as SceneLayout) || 'center',
+    trained: Boolean(src.trained ?? true),
+    description: String(src.description || 'Trained style pack'),
+    tags: Array.isArray(src.tags) ? src.tags.map(String) : ['trained'],
+    cursorMode: (src.cursorMode as CursorAnimationMode) || 'single-pro',
+    iconPackId: src.iconPackId ? String(src.iconPackId) : undefined,
+    componentPackId: src.componentPackId ? String(src.componentPackId) : undefined,
+    transitionPackId: src.transitionPackId ? String(src.transitionPackId) : undefined,
+    animationPackId: src.animationPackId ? String(src.animationPackId) : undefined,
+  };
+}
+
+export function getStylePacks(category?: CategoryType | 'all'): StylePack[] {
+  if (!category || category === 'all') return [...STYLE_PACK_REGISTRY];
+  return STYLE_PACK_REGISTRY.filter((p) => p.category === 'all' || p.category === category);
+}
+
+export function addStylePackToEngine(pack: Partial<StylePack> & Record<string, any>): StylePack {
+  const normalized = normalizeStylePack(pack, pack.id, pack.name);
+  const existingIdx = STYLE_PACK_REGISTRY.findIndex((p) => p.id === normalized.id);
+  if (existingIdx >= 0) {
+    STYLE_PACK_REGISTRY[existingIdx] = normalized;
+  } else {
+    STYLE_PACK_REGISTRY.push(normalized);
+  }
+  return normalized;
+}
+
+export function removeStylePackFromEngine(id: string): void {
+  const cleanId = id.startsWith('db-') ? id : `db-${id}`;
+  const idx = STYLE_PACK_REGISTRY.findIndex((p) => p.id === id || p.id === cleanId);
+  if (idx >= 0) STYLE_PACK_REGISTRY.splice(idx, 1);
+}
+
+export function addTrainedVideoPresetToEngine(
+  presetOrText: Partial<TrainedVideoPreset> | string,
+  category: CategoryType = 'promo'
+): void {
+  if (typeof presetOrText === 'string') {
+    try {
+      const parsed = JSON.parse(presetOrText);
+      TRAINED_VIDEO_PRESETS.push({
+        id: String(parsed.id || `preset-${Date.now()}`),
+        title: String(parsed.title || 'Trained Creator Video'),
+        description: String(parsed.description || presetOrText),
+        category: (parsed.category as CategoryType) || category,
+        videoUrl: String(parsed.videoUrl || ''),
+        creatorHandle: String(parsed.creatorHandle || '@creator'),
+        profile: parsed.profile || {
+          fps: 60,
+          springStiffness: 240,
+          springDamping: 18,
+          motionBlurSamples: 4,
+          cursorActive: true,
+        },
+      });
+    } catch {
+      TRAINED_VIDEO_PRESETS.push({
+        id: `preset-${Date.now()}`,
+        title: presetOrText.slice(0, 40),
+        description: presetOrText,
+        category,
+        videoUrl: '',
+        creatorHandle: '@creator',
+        profile: {
+          fps: 60,
+          springStiffness: 240,
+          springDamping: 18,
+          motionBlurSamples: 4,
+          cursorActive: true,
+        },
+      });
+    }
+    return;
+  }
+
+  TRAINED_VIDEO_PRESETS.push({
+    id: String(presetOrText.id || `preset-${Date.now()}`),
+    title: String(presetOrText.title || 'Trained Creator Video'),
+    description: String(presetOrText.description || ''),
+    category: presetOrText.category || category,
+    videoUrl: String(presetOrText.videoUrl || ''),
+    creatorHandle: String(presetOrText.creatorHandle || '@creator'),
+    profile: presetOrText.profile || {
+      fps: 60,
+      springStiffness: 240,
+      springDamping: 18,
+      motionBlurSamples: 4,
+      cursorActive: true,
+    },
+  });
+}
 
 export function priceToNumber(raw: string, unit?: string): number {
   const cleaned = raw.replace(',', '.');
@@ -733,9 +1022,81 @@ const SCENE_VARIATIONS: Record<CategoryType, SceneTemplateEntry[]> = {
   ],
 };
 
-/**
- * Mengacak array dengan jaminan elemen berurutan tidak pernah kembar (Non-Repeating Shuffle)
- */
+function resolveCategory(raw?: string): CategoryType {
+  if (raw === 'quote' || raw === 'promo' || raw === 'edukasi') return raw;
+  return 'promo';
+}
+
+export function addCustomHookToEngine(first: string, second?: CategoryType | string): void {
+  const isFirstCat = first === 'quote' || first === 'promo' || first === 'edukasi';
+  const cat = isFirstCat ? resolveCategory(first) : resolveCategory(second);
+  const text = isFirstCat ? String(second || '') : String(first || '');
+  if (text.trim()) HOOK_BANK[cat].push(text.trim());
+}
+
+export function addCustomCtaToEngine(first: string, second?: CategoryType | string): void {
+  const isFirstCat = first === 'quote' || first === 'promo' || first === 'edukasi';
+  const cat = isFirstCat ? resolveCategory(first) : resolveCategory(second);
+  const text = isFirstCat ? String(second || '') : String(first || '');
+  if (text.trim()) CTA_BANK[cat].push(text.trim());
+}
+
+export function addCustomSceneToEngine(
+  first: string,
+  second?: CategoryType | 'scene2' | 'scene3' | string,
+  third?: { text: string; subtext?: string; emoji?: string } | string
+): void {
+  const isFirstCat = first === 'quote' || first === 'promo' || first === 'edukasi';
+  const cat = isFirstCat ? resolveCategory(first) : resolveCategory(String(second || 'promo'));
+  const text =
+    typeof third === 'object' && third !== null
+      ? third.text
+      : isFirstCat
+      ? String(third || second || '')
+      : first;
+  if (!text.trim()) return;
+  SCENE_VARIATIONS[cat].push({
+    scene2: text.trim(),
+    scene2Sub: typeof third === 'object' && third?.subtext ? third.subtext : 'Dirancang otomatis oleh Smart Engine.',
+    scene3: text.trim(),
+    scene3Sub: 'Teruji memberikan hasil optimal.',
+    emoji2: typeof third === 'object' && third?.emoji ? third.emoji : '✨',
+    emoji3: '🚀',
+  });
+}
+
+export function addCustomImageAssetToEngine(
+  asset: { id?: string; title?: string; category?: CategoryType | string; url: string } | string,
+  category: CategoryType = 'promo'
+): void {
+  if (typeof asset === 'string') {
+    if (!CUSTOM_IMAGE_ASSETS[category]) CUSTOM_IMAGE_ASSETS[category] = [];
+    CUSTOM_IMAGE_ASSETS[category].push(asset);
+    return;
+  }
+  const cat = resolveCategory(String(asset.category || category));
+  if (!CUSTOM_IMAGE_ASSETS[cat]) CUSTOM_IMAGE_ASSETS[cat] = [];
+  if (asset.url) CUSTOM_IMAGE_ASSETS[cat].push(asset.url);
+}
+
+export function addKeywordRuleToEngine(
+  keywords: string[] | string,
+  second?: string[] | CategoryType | string
+): void {
+  const kwList = Array.isArray(keywords)
+    ? keywords
+    : String(keywords || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+  const cat = Array.isArray(second)
+    ? resolveCategory(second[0])
+    : resolveCategory(String(second || 'promo'));
+  if (kwList.length > 0) {
+    KEYWORD_RULES_REGISTRY.push({ keywords: kwList, category: cat });
+  }
+}
+
 export function buildNonRepeatingSequence<T>(pool: T[], count: number, seed: number = Date.now()): T[] {
   const copy = [...pool];
   let s = seed >>> 0 || 123456789;
@@ -764,7 +1125,8 @@ export function buildNonRepeatingSequence<T>(pool: T[], count: number, seed: num
 export function parseTopic(rawTopic: string, opts?: GenerateOptions): ParsedTopicMeta {
   const raw = (rawTopic || 'Promo Kopi Susu Gula Aren 18rb').trim();
   const prices = findPrices(raw);
-  const priceText = opts?.priceOverride?.trim() || (prices[0] ? prices[0].formatted : 'Rp18.000');
+  const overridePrice = opts?.customPrice?.trim() || opts?.priceOverride?.trim();
+  const priceText = overridePrice || (prices[0] ? prices[0].formatted : 'Rp18.000');
   const numericPrice = prices[0] ? prices[0].numeric : 18000;
   const originalPriceNumeric = Math.round((numericPrice * 1.45) / 1000) * 1000;
   const originalPriceText = `Rp${(originalPriceNumeric / 1000).toFixed(0)}.000`;
@@ -775,8 +1137,10 @@ export function parseTopic(rawTopic: string, opts?: GenerateOptions): ParsedTopi
     .replace(/\s+/g, ' ')
     .trim();
 
-  const productName = opts?.productOverride?.trim() || (cleanedWords.length >= 2 ? cleanedWords : raw);
-  const storeName = opts?.storeOverride?.trim() || 'Studio Official';
+  const overrideProduct = opts?.customProductName?.trim() || opts?.productOverride?.trim();
+  const productName = overrideProduct || (cleanedWords.length >= 2 ? cleanedWords : raw);
+  const storeName =
+    opts?.customStoreName?.trim() || opts?.storeOverride?.trim() || 'Studio Official';
 
   const lower = raw.toLowerCase();
   let detectedMood: TopicMood = 'neutral';
@@ -784,6 +1148,14 @@ export function parseTopic(rawTopic: string, opts?: GenerateOptions): ParsedTopi
   else if (/promo|diskon|murah|hemat|flash|kopi|ayam|pedas|kuliner/.test(lower)) detectedMood = 'promo';
   else if (/coding|nextjs|react|cyber|ai|web|server|deploy|aplikasi/.test(lower)) detectedMood = 'tech';
   else if (/cara|tips|belajar|kuliah|fakta|skripsi|kampus/.test(lower)) detectedMood = 'edukasi';
+
+  for (const rule of KEYWORD_RULES_REGISTRY) {
+    if (rule.keywords.some((k) => lower.includes(k.toLowerCase()))) {
+      if (rule.category === 'quote') detectedMood = 'galau';
+      else if (rule.category === 'promo') detectedMood = 'promo';
+      else if (rule.category === 'edukasi') detectedMood = 'edukasi';
+    }
+  }
 
   const matchedPack = matchBestDataPack(raw);
 
@@ -808,6 +1180,7 @@ export function suggestStyle(topic: string, category?: CategoryType): StyleSugge
   let music = MUSIC_TRACKS[0];
   let recommendedTemplate: StyleSuggestion['recommendedTemplate'] = 'P1';
   let recommendedFont: EngineFontName = 'Space Grotesk';
+  let moodLabel = 'Cyber Studio Energetic';
   let moodReason = `Disesuaikan dengan Data Pack "${meta.matchedDataPackTitle}"`;
 
   if (meta.detectedMood === 'galau' || category === 'quote') {
@@ -815,30 +1188,36 @@ export function suggestStyle(topic: string, category?: CategoryType): StyleSugge
     music = MUSIC_TRACKS[1];
     recommendedTemplate = 'Q2';
     recommendedFont = 'Playfair Display';
+    moodLabel = 'Midnight Deep Talk & Senja';
     moodReason = 'Nuansa emosional & sinematik malam dengan instrumen lo-fi slow.';
   } else if (meta.detectedMood === 'promo' || category === 'promo') {
     palette = /kopi|aren|cafe|latte/i.test(topic) ? COLOR_PALETTES[2] : COLOR_PALETTES[1];
     music = MUSIC_TRACKS[3];
     recommendedTemplate = 'P1';
     recommendedFont = 'Anton';
+    moodLabel = 'Flash Promo High Conversion';
     moodReason = 'Kontras tinggi pemicu konversi UMKM dengan beat cepat.';
   } else if (meta.detectedMood === 'tech') {
     palette = COLOR_PALETTES[0];
     music = MUSIC_TRACKS[4];
     recommendedTemplate = 'E2';
     recommendedFont = 'Space Grotesk';
+    moodLabel = 'Cyber Blueprint 60fps';
     moodReason = 'Gaya Cyber Blueprint & AST Terminal modern 60fps.';
   } else {
     palette = COLOR_PALETTES[3];
     music = MUSIC_TRACKS[2];
     recommendedTemplate = 'E1';
     recommendedFont = 'Montserrat';
+    moodLabel = 'Clean Educational Flow';
     moodReason = 'Tipografi bersih untuk retensi materi edukasi.';
   }
 
   return {
     palette,
     music,
+    font: recommendedFont,
+    moodLabel,
     recommendedTemplate,
     recommendedFont,
     moodReason,
@@ -853,11 +1232,26 @@ function interpolateTemplate(tpl: string, meta: ParsedTopicMeta): string {
     .replace(/\{toko\}/gi, meta.storeName);
 }
 
-/**
- * Fungsi Utama `generateScript`:
- * - Membangun 4 Scene dengan Transisi, Animasi, Kamera, dan Layout yang DIJAMIN BERBEDA antar scene!
- * - Otomatis merakit 4 Gambar Visual unik dari Data Pack Google/Web (`synthesizeAllSceneImagesFromDataPack`).
- */
+export function generateCaptionAndHashtags(
+  topic: string,
+  category: CategoryType,
+  scenesOrMeta?: SceneItem[] | ParsedTopicMeta,
+  maybeMeta?: ParsedTopicMeta
+): { caption: string; hashtags: string[] } {
+  const meta =
+    maybeMeta ||
+    (scenesOrMeta && !Array.isArray(scenesOrMeta) ? scenesOrMeta : parseTopic(topic));
+  const hashtags = [
+    '#fyp',
+    '#motionid',
+    `#${category}`,
+    ...meta.keywords.map((k) => `#${k.replace(/\s+/g, '')}`),
+    '#tiktokindonesia',
+  ].slice(0, 7);
+  const caption = `${meta.productName} (${meta.priceText}) — ${meta.matchedDataPackTitle} ${hashtags.join(' ')}`;
+  return { caption, hashtags };
+}
+
 export function generateScript(
   topic: string,
   category: CategoryType = 'promo',
@@ -875,7 +1269,6 @@ export function generateScript(
   const chosenCta = interpolateTemplate(ctas[(seed + 3) % ctas.length], meta);
   const chosenVar = variations[(seed + 5) % variations.length];
 
-  // Jaminan Anti-Monoton: Setiap scene mendapat Transisi, Animasi, Kamera, Layout, dan HeadlineAnim yang berbeda!
   const allTransitions: SceneTransition[] = [
     'whip-left',
     'iris-wipe',
@@ -928,42 +1321,48 @@ export function generateScript(
   const pickedHeadlineAnims = buildNonRepeatingSequence(allHeadlineAnims, 4, seed + 71);
   const pickedBgStyles = buildNonRepeatingSequence(allBgStyles, 4, seed + 89);
 
-  const rawSceneTexts = [
+  const rawSceneTexts: Array<{
+    role: SceneRole;
+    text: string;
+    subtext: string;
+    emoji: string;
+    stepBadge: string;
+    widgetType: WidgetBlueprintType;
+  }> = [
     {
-      role: 'hook' as SceneRole,
+      role: 'hook',
       text: chosenHook,
       subtext: `Data Pack: ${meta.matchedDataPackTitle}`,
       emoji: category === 'promo' ? '🔥' : category === 'quote' ? '🌙' : '💡',
       stepBadge: '01 // HOOK UTAMA',
-      widgetType: 'step-paste-card' as WidgetBlueprintType,
+      widgetType: category === 'quote' ? 'quote_card' : 'step_number_card',
     },
     {
-      role: 'solution' as SceneRole,
+      role: 'solution',
       text: interpolateTemplate(chosenVar.scene2, meta),
       subtext: interpolateTemplate(chosenVar.scene2Sub, meta),
       emoji: chosenVar.emoji2,
       stepBadge: '02 // EKSPLORASI FITUR',
-      widgetType: 'step-check-card' as WidgetBlueprintType,
+      widgetType: 'checklist_card',
     },
     {
-      role: 'proof' as SceneRole,
+      role: 'proof',
       text: interpolateTemplate(chosenVar.scene3, meta),
       subtext: interpolateTemplate(chosenVar.scene3Sub, meta),
       emoji: chosenVar.emoji3,
       stepBadge: '03 // BUKTI & NILAI',
-      widgetType: category === 'promo' ? ('price-slash-sticker' as WidgetBlueprintType) : ('metric-flip-counter' as WidgetBlueprintType),
+      widgetType: category === 'promo' ? 'price_tag_card' : 'step_number_card',
     },
     {
-      role: 'cta' as SceneRole,
+      role: 'cta',
       text: chosenCta,
       subtext: `${meta.storeName} · ${meta.priceText}`,
       emoji: '🚀',
       stepBadge: '04 // DEPLOY & ACTION',
-      widgetType: 'step-deploy-card' as WidgetBlueprintType,
+      widgetType: 'cta_button_card',
     },
   ];
 
-  // Rakit 4 gambar kustom dari Google/Web Data Pack secara otomatis!
   const synthesizedPackImages = synthesizeAllSceneImagesFromDataPack({
     topic: meta.rawTopic,
     category,
@@ -1004,15 +1403,7 @@ export function generateScript(
     };
   });
 
-  const hashtags = [
-    '#fyp',
-    '#motionid',
-    `#${category}`,
-    ...meta.keywords.map((k) => `#${k.replace(/\s+/g, '')}`),
-    '#tiktokindonesia',
-  ].slice(0, 7);
-
-  const caption = `${chosenHook} ${interpolateTemplate(chosenVar.scene2, meta)} ${chosenCta} ${hashtags.join(' ')}`;
+  const { caption, hashtags } = generateCaptionAndHashtags(topic, category, scenes, meta);
 
   return {
     hook: chosenHook,
@@ -1026,6 +1417,7 @@ export function generateScript(
     recipe: {
       id: `recipe-${seed}`,
       name: `Auto Non-Repeating Rig (${meta.matchedDataPackTitle})`,
+      packName: meta.matchedDataPackTitle,
       transitions: pickedTransitions,
       animations: pickedAnimations,
       cameraMotions: pickedCameras,
@@ -1033,6 +1425,42 @@ export function generateScript(
     },
     synthesizedPackImages,
   };
+}
+
+export function generateDynamicMotionScenes(
+  prompt: string,
+  presetId?: string
+): GeneratedMotionScene[] {
+  const res = generateScript(prompt, 'promo', { stylePackId: presetId });
+  return res.scenes.map((sc) => ({
+    ...sc,
+    telemetry: {
+      fps: 60,
+      springStiffness: 240,
+      springDamping: 18,
+      motionBlurSamples: 4,
+      cursorActive: true,
+    },
+  }));
+}
+
+export function randomizeHookAndStyle(
+  currentTopic: string,
+  category: CategoryType = 'promo',
+  currentPaletteId = 'cyber-violet',
+  options?: GenerateOptions
+): {
+  newScript: GeneratedScriptResult;
+  randomPalette: ColorPalette;
+  randomMusic: MusicTrack;
+} {
+  const seed = Math.floor(Math.random() * 999_999) + Date.now();
+  const newScript = generateScript(currentTopic, category, { ...options, seed });
+  const candidates = COLOR_PALETTES.filter((p) => p.id !== currentPaletteId);
+  const randomPalette =
+    candidates[seed % candidates.length] || COLOR_PALETTES[seed % COLOR_PALETTES.length];
+  const randomMusic = MUSIC_TRACKS[seed % MUSIC_TRACKS.length];
+  return { newScript, randomPalette, randomMusic };
 }
 
 export {

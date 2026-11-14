@@ -168,8 +168,8 @@ export default function MotionStudioEngine({
       badgeText: sc.stepBadge || `0${idx + 1} // SCENE`,
       priceTag: generated.extractedMeta.priceText,
       durationSec: sc.duration || 3,
-      transition: sc.transition || NON_REPEATING_TRANSITION_PACKS[idx % NON_REPEATING_TRANSITION_PACKS.length].id,
-      animation: sc.animation || NON_REPEATING_ANIMATION_PACKS[idx % NON_REPEATING_ANIMATION_PACKS.length].id,
+      transition: sc.transition || (NON_REPEATING_TRANSITION_PACKS[idx % NON_REPEATING_TRANSITION_PACKS.length].transitionId || 'whip-left'),
+      animation: sc.animation || (NON_REPEATING_ANIMATION_PACKS[idx % NON_REPEATING_ANIMATION_PACKS.length].animationId || 'pop'),
       cameraMotion: sc.cameraMotion || 'zoom-in',
       widgetType: (sc.widgetType as WidgetRigType) || 'step-paste-card',
       imageUrl: synthImgs[idx]?.dataUri || sc.imageUrl || '',
@@ -451,8 +451,8 @@ export default function MotionStudioEngine({
 
   const handleShuffleNonRepeatingMotions = () => {
     const seed = Date.now();
-    const tPool = NON_REPEATING_TRANSITION_PACKS.map((t) => t.id);
-    const aPool = NON_REPEATING_ANIMATION_PACKS.map((a) => a.id);
+    const tPool: SceneTransition[] = NON_REPEATING_TRANSITION_PACKS.map((t) => t.transitionId || 'whip-left');
+    const aPool: AnimationType[] = NON_REPEATING_ANIMATION_PACKS.map((a) => a.animationId || 'pop');
     const cPool: CameraMotionType[] = [
       'zoom-in',
       'dutch-tilt',
@@ -716,7 +716,7 @@ export default function MotionStudioEngine({
                       onClick={() => {
                         setScenes((prev) =>
                           prev.map((s, idx) =>
-                            idx === activeSceneIdx ? { ...s, transition: tr.id } : s
+                            idx === activeSceneIdx ? { ...s, transition: (tr.transitionId || 'whip-left') } : s
                           )
                         );
                         setSceneProgress(0);
@@ -745,7 +745,7 @@ export default function MotionStudioEngine({
                       onClick={() => {
                         setScenes((prev) =>
                           prev.map((s, idx) =>
-                            idx === activeSceneIdx ? { ...s, animation: an.id } : s
+                            idx === activeSceneIdx ? { ...s, animation: (an.animationId || 'pop') } : s
                           )
                         );
                         setSceneProgress(0);
