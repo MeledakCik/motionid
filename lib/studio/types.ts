@@ -96,6 +96,8 @@ export interface LayerBase {
   /** animasi berulang (emphasis) setelah animasi masuk selesai */
   animLoop?: string | null;
   shadow?: { color: string; blur: number; x: number; y: number } | null;
+  /** teks/isi contoh yang belum diganti user */
+  placeholder?: boolean;
 }
 
 export interface TextLayer extends LayerBase {
@@ -195,6 +197,8 @@ export interface Theme {
 
 export interface PlanItem {
   role: SceneRole;
+  /** teks contoh (bukan dari user) — wajib diganti sebelum dipublikasikan */
+  placeholder?: boolean;
   title: string;
   body?: string;
   value?: string;

@@ -13,10 +13,65 @@ import { getTemplate, getTheme } from '@/lib/studio/packs/templates';
 import { canvasFamily } from '@/lib/studio/fonts';
 import { getDeviceProfile } from '@/lib/studio/device';
 
+/* Ticker bersama untuk thumbnail di HP (tanpa hover): hanya yang terlihat yang beranimasi */
+type TickFn = (now: number) => void;
+const visibleTicks = new Set<TickFn>();
+let tickerRaf = 0;
+let lastTick = 0;
+function startTicker() {
+  if (tickerRaf) return;
+  const gap = getDeviceProfile().tier === 'low' ? 1000 / 12 : 1000 / 24;
+  const loop = (now: number) => {
+    if (!visibleTicks.size) {
+      tickerRaf = 0;
+      return;
+    }
+    if (now - lastTick >= gap) {
+      lastTick = now;
+      visibleTicks.forEach((f) => f(now));
+    }
+    tickerRaf = requestAnimationFrame(loop);
+  };
+  tickerRaf = requestAnimationFrame(loop);
+}
+const isTouch = () => typeof window !== 'undefined' && !!window.matchMedia?.('(hover: none)').matches;
+
 function useHoverLoop(ref: React.RefObject<HTMLCanvasElement>, draw: (p: number, t: number) => void, period = 1.4, autoplay = false) {
   useEffect(() => {
     const c = ref.current;
     if (!c) return;
+    draw(0.62, 2);
+    // HP: putar otomatis selama thumbnail terlihat di layar
+    if (isTouch() || autoplay) {
+      let start = 0;
+      const fn: TickFn = (now) => {
+        if (!start) start = now;
+        const t = (now - start) / 1000;
+        draw((t % period) / period, t);
+      };
+      if (typeof IntersectionObserver === 'undefined') {
+        visibleTicks.add(fn);
+        startTicker();
+        return () => {
+          visibleTicks.delete(fn);
+        };
+      }
+      const io = new IntersectionObserver(
+        (es) => {
+          const vis = es.some((e) => e.isIntersecting);
+          if (vis) {
+            visibleTicks.add(fn);
+            startTicker();
+          } else visibleTicks.delete(fn);
+        },
+        { threshold: 0.3 }
+      );
+      io.observe(c);
+      return () => {
+        io.disconnect();
+        visibleTicks.delete(fn);
+      };
+    }
     let raf = 0;
     let start = 0;
     const loop = (now: number) => {
@@ -34,8 +89,6 @@ function useHoverLoop(ref: React.RefObject<HTMLCanvasElement>, draw: (p: number,
       cancelAnimationFrame(raf);
       draw(0.62, 2);
     };
-    draw(0.62, 2);
-    if (autoplay && getDeviceProfile().tier !== 'low') on();
     const host = c.parentElement || c;
     host.addEventListener('pointerenter', on);
     host.addEventListener('pointerleave', off);

@@ -4,20 +4,67 @@ import { analyzePrompt } from './prompt';
 import { buildDoc } from './builder';
 
 const LOCAL_KEY = (id: string) => `motionku:v6:${id}`;
+const mem = new Map<string, ProjectDoc>();
 
 function isUuid(id: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 }
 
-function saveLocal(doc: ProjectDoc) {
+/* IndexedDB: kuota jauh lebih besar dari localStorage, aman untuk proyek berisi foto */
+function idb(): Promise<IDBDatabase | null> {
+  return new Promise((res) => {
+    try {
+      if (typeof indexedDB === 'undefined') return res(null);
+      const r = indexedDB.open('motionku', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('docs');
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => res(null);
+    } catch {
+      res(null);
+    }
+  });
+}
+
+export async function saveLocal(doc: ProjectDoc): Promise<boolean> {
+  mem.set(doc.id, doc);
+  const db = await idb();
+  if (db) {
+    const ok = await new Promise<boolean>((res) => {
+      try {
+        const tx = db.transaction('docs', 'readwrite');
+        tx.objectStore('docs').put(doc, doc.id);
+        tx.oncomplete = () => res(true);
+        tx.onerror = () => res(false);
+      } catch {
+        res(false);
+      }
+    });
+    if (ok) return true;
+  }
   try {
     localStorage.setItem(LOCAL_KEY(doc.id), JSON.stringify(doc));
+    return true;
   } catch {
-    // penyimpanan penuh (foto besar) — abaikan, Supabase tetap dipakai
+    return false;
   }
 }
 
-export function loadLocal(id: string): ProjectDoc | null {
+export async function loadLocal(id: string): Promise<ProjectDoc | null> {
+  const hit = mem.get(id);
+  if (hit) return hit;
+  const db = await idb();
+  if (db) {
+    const d = await new Promise<ProjectDoc | null>((res) => {
+      try {
+        const r = db.transaction('docs').objectStore('docs').get(id);
+        r.onsuccess = () => res((r.result as ProjectDoc) || null);
+        r.onerror = () => res(null);
+      } catch {
+        res(null);
+      }
+    });
+    if (d) return d;
+  }
   try {
     const raw = localStorage.getItem(LOCAL_KEY(id));
     return raw ? (JSON.parse(raw) as ProjectDoc) : null;
@@ -28,7 +75,7 @@ export function loadLocal(id: string): ProjectDoc | null {
 
 /** Simpan proyek. Mengembalikan id final (uuid Supabase bila berhasil). */
 export async function saveProject(doc: ProjectDoc, thumb?: string): Promise<{ id: string; remote: boolean; error?: string }> {
-  saveLocal(doc);
+  await saveLocal(doc);
   try {
     const supabase = createClient();
     const {
@@ -52,7 +99,7 @@ export async function saveProject(doc: ProjectDoc, thumb?: string): Promise<{ id
     const { data, error } = await supabase.from('projects').insert({ ...row, user_id: user.id }).select('id').single();
     if (error || !data) return { id: doc.id, remote: false, error: error?.message };
     const finalDoc = { ...doc, id: data.id as string };
-    saveLocal(finalDoc);
+    await saveLocal(finalDoc);
     await supabase.from('projects').update({ script_json: { version: 6, doc: finalDoc } }).eq('id', data.id);
     return { id: data.id as string, remote: true };
   } catch (e) {
@@ -62,7 +109,7 @@ export async function saveProject(doc: ProjectDoc, thumb?: string): Promise<{ id
 
 /** Muat proyek dari Supabase / lokal; proyek format lama dikonversi otomatis. */
 export async function loadProject(id: string): Promise<ProjectDoc | null> {
-  const local = loadLocal(id);
+  const local = await loadLocal(id);
   if (!isUuid(id)) return local;
   try {
     const supabase = createClient();

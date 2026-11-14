@@ -9,9 +9,43 @@ import { sceneStarts } from '@/lib/studio/renderer';
 import type { PlaybackClock } from '@/lib/studio/clock';
 import { ChipRow, cx, LazyVisible, SearchBox, Section, Segmented, Slider } from './ui';
 import { AnimationThumb, EffectThumb, TransitionThumb } from './Thumbs';
-import { allEffects, EFFECT_GROUPS, getEffect } from '@/lib/studio/packs/effects';
+import { allEffects, EFFECT_GROUPS, effectId, effectKinds, getEffect, INTENSITY_LEVELS, splitEffectId } from '@/lib/studio/packs/effects';
 
 const PAGE = 30;
+
+const KIND_LABEL: Record<string, string> = {
+  cut: 'Potong',
+  fade: 'Pudar',
+  blur: 'Larut Blur',
+  slide: 'Tutup Geser',
+  push: 'Dorong',
+  card: 'Tumpuk Kartu',
+  whip: 'Whip Pan',
+  wipe: 'Sapu',
+  colorwipe: 'Sapu Warna',
+  iris: 'Iris Lingkaran',
+  clock: 'Jarum Jam',
+  shape: 'Bentuk',
+  burst: 'Sinar Burst',
+  ink: 'Tinta',
+  zoom: 'Zoom',
+  dolly: 'Dolly Kamera',
+  shake: 'Guncang',
+  blinds: 'Kerai',
+  grid: 'Ubin',
+  stripes: 'Bilah',
+  slice: 'Tebas',
+  split: 'Pintu Belah',
+  glitch: 'Glitch',
+  flash: 'Kilatan',
+  pixelate: 'Piksel',
+  spin: 'Putar',
+  flip: 'Balik 3D',
+  cube: 'Kubus 3D',
+  shatter: 'Kaca Pecah',
+  sand: 'Jadi Pasir',
+  custom: 'Custom',
+};
 
 export function TransitionPanel({ clock }: { clock: PlaybackClock }) {
   const doc = useStudio((s) => s.doc)!;
@@ -20,43 +54,57 @@ export function TransitionPanel({ clock }: { clock: PlaybackClock }) {
   const commit = useStudio((s) => s.commit);
   const [group, setGroup] = useState('all');
   const [q, setQ] = useState('');
-  const [limit, setLimit] = useState(PAGE);
   const target = Math.max(1, sceneIdx);
   const scene = doc.scenes[target];
+  const kinds = useMemo(() => {
+    const m = new Map<string, ReturnType<typeof allTransitions>>();
+    allTransitions().forEach((t) => {
+      const key = t.author === 'admin' ? `custom:${t.id}` : t.kind;
+      if (!m.has(key)) m.set(key, []);
+      m.get(key)!.push(t);
+    });
+    return [...m.entries()].map(([key, specs]) => ({ key, label: key.startsWith('custom:') ? specs[0].name : KIND_LABEL[specs[0].kind] || specs[0].kind, group: specs[0].group, specs }));
+  }, []);
   const list = useMemo(() => {
     const qq = q.trim().toLowerCase();
-    return allTransitions().filter((t) => (group === 'all' || t.group === group) && (!qq || t.name.toLowerCase().includes(qq) || t.tags.some((g) => g.includes(qq))));
-  }, [group, q]);
+    return kinds.filter((k) => (group === 'all' || k.group === group) && (!qq || k.label.toLowerCase().includes(qq) || k.specs.some((t) => t.name.toLowerCase().includes(qq) || t.tags.some((g) => g.includes(qq)))));
+  }, [group, q, kinds]);
 
   if (doc.scenes.length < 2) return <p className="p-5 text-center text-sm text-mk-dim">Tambah minimal 2 scene untuk memakai transisi.</p>;
 
   const preview = () => {
-    const st = sceneStarts(doc)[target];
-    clock.seek(Math.max(0, st - 0.6));
+    clock.seek(Math.max(0, sceneStarts(doc)[target] - 0.6));
     clock.play();
   };
   const apply = (id: string) => {
-    const spec = getTransition(id);
-    updateScene(target, { transition: { id, duration: spec.duration } });
+    updateScene(target, { transition: { id, duration: getTransition(id).duration } });
     setTimeout(preview, 30);
   };
   const cur = getTransition(scene.transition.id);
+  const curKind = kinds.find((k) => k.specs.some((t) => t.id === cur.id));
   return (
     <div>
-      <Section title={`Transisi ke scene ${target + 1}`} right={<span className="text-[10px] text-mk-dim">{allTransitions().length} transisi</span>}>
-        <div className="flex items-center justify-between rounded-xl bg-mk-ink px-3 py-2 text-xs">
-          <span className="font-bold">{cur.name}</span>
-          <button type="button" className="text-mk-coral" onClick={preview}>
-            ▶ Lihat
-          </button>
+      <Section title={`Transisi masuk ke scene ${target + 1}`}>
+        <div className="rounded-xl border border-mk-coral/40 bg-mk-ink p-3">
+          <div className="flex items-center justify-between text-sm font-extrabold">
+            <span>{curKind?.label || cur.name}</span>
+            <button type="button" className="text-xs font-bold text-mk-coral" onClick={preview}>
+              ▶ Lihat
+            </button>
+          </div>
+          {curKind && curKind.specs.length > 1 && (
+            <div className="mk-noscroll -mx-1 mt-2 flex gap-1.5 overflow-x-auto px-1">
+              {curKind.specs.map((t) => (
+                <button key={t.id} type="button" onClick={() => apply(t.id)} className={cx('mk-chip shrink-0 py-1', t.id === cur.id && 'mk-chip-on')}>
+                  {t.name.replace(new RegExp(`^${curKind.label}\\s*`, 'i'), '') || t.name}
+                </button>
+              ))}
+            </div>
+          )}
+          <Slider label="Durasi" value={scene.transition.duration} min={0.15} max={1.6} step={0.05} onChange={(v) => updateScene(target, { transition: { ...scene.transition, duration: v } })} format={(v) => `${v.toFixed(2)} dtk`} />
         </div>
-        <Slider label="Durasi" value={scene.transition.duration} min={0.15} max={1.6} step={0.05} onChange={(v) => updateScene(target, { transition: { ...scene.transition, duration: v } })} format={(v) => `${v.toFixed(2)} dtk`} />
         <div className="grid grid-cols-2 gap-1.5">
-          <button
-            type="button"
-            className="mk-btn-ghost text-[11px]"
-            onClick={() => commit((d) => ({ ...d, scenes: d.scenes.map((s, i) => (i > 0 ? { ...s, transition: { ...scene.transition } } : s)) }))}
-          >
+          <button type="button" className="mk-btn-ghost text-[11px]" onClick={() => commit((d) => ({ ...d, scenes: d.scenes.map((s, i) => (i > 0 ? { ...s, transition: { ...scene.transition } } : s)) }))}>
             Pakai di semua scene
           </button>
           <button
@@ -70,41 +118,50 @@ export function TransitionPanel({ clock }: { clock: PlaybackClock }) {
                 scenes: d.scenes.map((s, i) => {
                   if (!i) return s;
                   let t = pool[Math.floor(Math.random() * pool.length)];
-                  if (t.id === prev) t = pool[(pool.indexOf(t) + 7) % pool.length];
-                  prev = t.id;
+                  if (t.kind === prev) t = pool[(pool.indexOf(t) + 37) % pool.length];
+                  prev = t.kind;
                   return { ...s, transition: { id: t.id, duration: t.duration } };
                 }),
               }));
             }}
           >
-            <Shuffle className="h-3.5 w-3.5" /> Acak (beda semua)
+            <Shuffle className="h-3.5 w-3.5" /> Acak semua
           </button>
         </div>
-        <SearchBox value={q} onChange={(v) => (setQ(v), setLimit(PAGE))} placeholder="Cari transisi… (zoom, glitch, sapu)" />
-        <ChipRow value={group} onChange={(v) => (setGroup(v), setLimit(PAGE))} options={[{ id: 'all', label: 'Semua' }, ...TRANSITION_GROUPS]} />
+        <SearchBox value={q} onChange={setQ} placeholder="Cari transisi… (zoom, kaca, sapu)" />
+        <ChipRow value={group} onChange={setGroup} options={[{ id: 'all', label: 'Semua' }, ...TRANSITION_GROUPS.filter((g) => g.id !== 'custom')]} />
+        <p className="text-[10px] text-mk-dim">{kinds.length} jenis · {allTransitions().length} variasi arah & gaya</p>
       </Section>
       <div className="grid grid-cols-3 gap-2 p-3 lg:grid-cols-2">
-        {list.slice(0, limit).map((t) => (
-          <button key={t.id} type="button" onClick={() => apply(t.id)} className={cx('overflow-hidden rounded-xl border text-left transition', scene.transition.id === t.id ? 'border-mk-coral ring-2 ring-mk-coral/30' : 'border-mk-line bg-mk-panel-2 hover:border-mk-line-2')}>
-            <LazyVisible minH={60} className="aspect-[16/10] bg-mk-ink">
-              <TransitionThumb spec={t} primary={doc.theme.palette.primary} secondary={doc.theme.palette.secondary} />
-            </LazyVisible>
-            <div className="truncate px-1.5 py-1 text-[10px] font-semibold text-mk-muted">{t.name}</div>
-          </button>
-        ))}
-      </div>
-      <div className="px-3 pb-4">
-        {limit < list.length && (
-          <button type="button" onClick={() => setLimit((l) => l + PAGE)} className="mk-btn-ghost w-full text-xs">
-            Tampilkan lagi ({list.length - limit})
-          </button>
-        )}
+        {list.map((k) => {
+          const on = curKind?.key === k.key;
+          return (
+            <button key={k.key} type="button" onClick={() => apply(k.specs[0].id)} className={cx('overflow-hidden rounded-xl border text-left transition', on ? 'border-mk-coral ring-2 ring-mk-coral/30' : 'border-mk-line bg-mk-panel-2 hover:border-mk-line-2')}>
+              <LazyVisible minH={60} className="aspect-[16/10] bg-mk-ink">
+                <TransitionThumb spec={k.specs[0]} primary={doc.theme.palette.primary} secondary={doc.theme.palette.secondary} />
+              </LazyVisible>
+              <div className="flex items-center justify-between gap-1 px-1.5 py-1">
+                <span className="truncate text-[11px] font-bold text-mk-cream">{k.label}</span>
+                {k.specs.length > 1 && <span className="shrink-0 text-[9px] text-mk-dim">{k.specs.length}</span>}
+              </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
 }
 
+const CURATED_IN = [
+  'fade', 'geser-atas-pendek-halus', 'geser-kanan-jauh-membal', 'pop-kecil-membal', 'pop-besar-tegas', 'blur-fokus-zoom-halus',
+  'wipe-left-halus', 'teks-word-naik-normal', 'teks-word-pop-normal', 'teks-ketik-normal', 'teks-sorot-normal', 'teks-decode-normal',
+  'fisika-jatuh-pantul-kuat', 'fisika-elastis-kuat', 'putar-kiri-90-membal', 'flip-kartu-membal', 'gaya-tada-normal', 'gaya-glitch-masuk-cepat',
+];
+const CURATED_LOOP = ['loop-denyut-sedang', 'loop-melayang-sedang', 'loop-goyang-sedang', 'loop-getar-sedang', 'loop-lompat-sedang', 'loop-detak-sedang', 'loop-kedip-sedang', 'loop-putar-sedang'];
+
 export function AnimationPanel({ clock }: { clock: PlaybackClock }) {
+  const mode = useStudio((s) => s.mode);
+  const [showAll, setShowAll] = useState(false);
   const doc = useStudio((s) => s.doc)!;
   const sceneIdx = useStudio((s) => s.sceneIdx);
   const layer = useStudio(currentLayer);
@@ -117,8 +174,12 @@ export function AnimationPanel({ clock }: { clock: PlaybackClock }) {
   const kind = slot === 'loop' ? 'loop' : 'in';
   const list = useMemo(() => {
     const qq = q.trim().toLowerCase();
-    return allAnimations(kind).filter((a) => (group === 'all' || a.group === group || kind === 'loop') && (!qq || a.name.toLowerCase().includes(qq) || a.tags.some((g) => g.includes(qq))));
-  }, [group, q, kind]);
+    const base = allAnimations(kind).filter((a) => (group === 'all' || a.group === group || kind === 'loop') && (!qq || a.name.toLowerCase().includes(qq) || a.tags.some((g) => g.includes(qq))));
+    if (mode === 'pro' || showAll || qq || group !== 'all') return base;
+    const cur = kind === 'loop' ? CURATED_LOOP : CURATED_IN;
+    return cur.map((id) => base.find((a) => a.id === id)).filter((a): a is NonNullable<typeof a> => !!a).concat(base.filter((a) => a.author === 'admin'));
+  }, [group, q, kind, mode, showAll]);
+  const curated = mode !== 'pro' && !showAll && !q.trim() && group === 'all';
 
   if (!layer)
     return (
@@ -176,7 +237,8 @@ export function AnimationPanel({ clock }: { clock: PlaybackClock }) {
           </button>
         )}
         <SearchBox value={q} onChange={(v) => (setQ(v), setLimit(PAGE))} placeholder="Cari animasi… (pop, ketik, pantul)" />
-        {kind === 'in' && <ChipRow value={group} onChange={(v) => (setGroup(v), setLimit(PAGE))} options={[{ id: 'all', label: 'Semua' }, ...ANIM_GROUPS.filter((g) => g.id !== 'loop')]} />}
+        {kind === 'in' && (mode === 'pro' || showAll) && <ChipRow value={group} onChange={(v) => (setGroup(v), setLimit(PAGE))} options={[{ id: 'all', label: 'Semua' }, ...ANIM_GROUPS.filter((g) => g.id !== 'loop')]} />}
+        {curated && <p className="text-[10px] text-mk-dim">Menampilkan animasi paling sering dipakai.</p>}
       </Section>
       <div className="grid grid-cols-3 gap-2 p-3 lg:grid-cols-2">
         {list.slice(0, limit).map((a) => (
@@ -189,10 +251,16 @@ export function AnimationPanel({ clock }: { clock: PlaybackClock }) {
         ))}
       </div>
       <div className="px-3 pb-4">
-        {limit < list.length && (
-          <button type="button" onClick={() => setLimit((l) => l + PAGE)} className="mk-btn-ghost w-full text-xs">
-            Tampilkan lagi ({list.length - limit})
+        {curated ? (
+          <button type="button" onClick={() => setShowAll(true)} className="mk-btn-ghost w-full text-xs">
+            Lihat semua {allAnimations(kind).length} animasi
           </button>
+        ) : (
+          limit < list.length && (
+            <button type="button" onClick={() => setLimit((l) => l + PAGE)} className="mk-btn-ghost w-full text-xs">
+              Tampilkan lagi ({list.length - limit})
+            </button>
+          )
         )}
       </div>
     </div>
@@ -202,95 +270,129 @@ export function AnimationPanel({ clock }: { clock: PlaybackClock }) {
 export function EffectsPanel({ clock }: { clock: PlaybackClock }) {
   const doc = useStudio((s) => s.doc)!;
   const sceneIdx = useStudio((s) => s.sceneIdx);
+  const mode = useStudio((s) => s.mode);
   const updateScene = useStudio((s) => s.updateScene);
   const commit = useStudio((s) => s.commit);
   const [group, setGroup] = useState('all');
   const [q, setQ] = useState('');
-  const [limit, setLimit] = useState(PAGE);
   const scene = doc.scenes[sceneIdx];
   const active = scene.effects || [];
+  const kinds = useMemo(() => effectKinds(), []);
+  const custom = useMemo(() => allEffects().filter((e) => e.author === 'admin'), []);
   const list = useMemo(() => {
     const qq = q.trim().toLowerCase();
-    return allEffects().filter((e) => (group === 'all' || e.group === group) && (!qq || e.name.toLowerCase().includes(qq) || e.tags.some((g) => g.includes(qq))));
-  }, [group, q]);
+    return kinds.filter((k) => (group === 'all' || k.group === group) && (!qq || k.label.toLowerCase().includes(qq) || k.tags.some((t) => t.includes(qq)) || k.styles.some((s) => s.label.toLowerCase().includes(qq))));
+  }, [group, q, kinds]);
 
   const play = () => {
-    const st = sceneStarts(doc)[sceneIdx];
-    clock.seek(st);
+    clock.seek(sceneStarts(doc)[sceneIdx]);
     clock.play();
   };
-  const toggle = (id: string) => {
-    const on = active.some((a) => a.id === id);
-    const kind = getEffect(id)?.kind;
-    // satu efek per jenis: ganti varian jenis yang sama
-    const next = on ? active.filter((a) => a.id !== id) : [...active.filter((a) => getEffect(a.id)?.kind !== kind), { id, amount: 1 }].slice(-4);
-    updateScene(sceneIdx, { effects: next });
-    if (!on) setTimeout(play, 30);
+  const setEffects = (next: Array<{ id: string; amount?: number }>, preview = true) => {
+    updateScene(sceneIdx, { effects: next.slice(-4) });
+    if (preview) setTimeout(play, 30);
   };
+  const kindOf = (id: string) => getEffect(id)?.kind;
+  const toggleKind = (kind: string, style: string) => {
+    const has = active.find((a) => kindOf(a.id) === kind);
+    if (has) setEffects(active.filter((a) => a !== has), false);
+    else setEffects([...active, { id: effectId(kind, style), amount: 1 }]);
+  };
+  const replace = (oldId: string, newId: string) => setEffects(active.map((a) => (a.id === oldId ? { ...a, id: newId } : a)));
 
   return (
     <div>
-      <Section title={`Efek scene ${sceneIdx + 1}`} right={<span className="text-[10px] text-mk-dim">{allEffects().length} efek</span>}>
+      <Section title={`Efek di scene ${sceneIdx + 1}`}>
         {active.length === 0 ? (
-          <p className="text-[11px] text-mk-dim">Belum ada efek. Pilih di bawah — maksimal 4 efek per scene.</p>
+          <p className="text-xs text-mk-dim">Belum ada efek. Ketuk salah satu di bawah — videonya langsung diputar supaya kelihatan hasilnya.</p>
         ) : (
           <div className="space-y-2">
             {active.map((a) => {
               const e = getEffect(a.id);
               if (!e) return null;
+              const parts = splitEffectId(a.id);
+              const k = kinds.find((x) => x.kind === e.kind);
               return (
-                <div key={a.id} className="rounded-xl bg-mk-ink p-2.5">
-                  <div className="flex items-center justify-between text-xs font-bold">
-                    <span className="truncate">{e.name}</span>
-                    <button type="button" className="text-mk-dim hover:text-red-300" onClick={() => toggle(a.id)}>
+                <div key={a.id} className="rounded-xl border border-mk-coral/40 bg-mk-ink p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-extrabold">{k?.label || e.name}</span>
+                    <button type="button" className="text-xs font-bold text-mk-dim hover:text-red-300" onClick={() => setEffects(active.filter((x) => x !== a), false)}>
                       Hapus
                     </button>
                   </div>
-                  <Slider
-                    label="Kekuatan"
-                    value={a.amount ?? 1}
-                    min={0.2}
-                    max={2}
-                    step={0.05}
-                    onChange={(v) => useStudio.getState().live((d) => ({ ...d, scenes: d.scenes.map((s, i) => (i === sceneIdx ? { ...s, effects: (s.effects || []).map((x) => (x.id === a.id ? { ...x, amount: v } : x)) } : s)) }))}
-                    onCommit={useStudio.getState().endDrag}
-                    format={(v) => `${Math.round(v * 100)}%`}
-                  />
+                  {parts && k && (
+                    <>
+                      <div className="mk-noscroll -mx-1 mt-2 flex gap-1.5 overflow-x-auto px-1">
+                        {k.styles.map((st) => (
+                          <button key={st.id} type="button" onClick={() => replace(a.id, effectId(parts.kind, st.id, parts.lvl))} className={cx('mk-chip shrink-0 py-1', parts.style === st.id && 'mk-chip-on')}>
+                            {st.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="mt-2">
+                        <Segmented size="sm" value={parts.lvl} onChange={(lv) => replace(a.id, effectId(parts.kind, parts.style, lv))} options={INTENSITY_LEVELS.map((l) => ({ value: l.id, label: l.label }))} />
+                      </div>
+                    </>
+                  )}
+                  {mode === 'pro' && (
+                    <Slider
+                      label="Kekuatan halus"
+                      value={a.amount ?? 1}
+                      min={0.2}
+                      max={2}
+                      step={0.05}
+                      onChange={(v) => useStudio.getState().live((d) => ({ ...d, scenes: d.scenes.map((s, i) => (i === sceneIdx ? { ...s, effects: (s.effects || []).map((x) => (x.id === a.id ? { ...x, amount: v } : x)) } : s)) }))}
+                      onCommit={useStudio.getState().endDrag}
+                      format={(v) => `${Math.round(v * 100)}%`}
+                    />
+                  )}
                 </div>
               );
             })}
+            <div className="grid grid-cols-2 gap-1.5">
+              <button type="button" className="mk-btn-ghost text-[11px]" onClick={() => commit((d) => ({ ...d, scenes: d.scenes.map((s) => ({ ...s, effects: active.map((x) => ({ ...x })) })) }))}>
+                Pakai di semua scene
+              </button>
+              <button type="button" className="mk-btn-ghost text-[11px]" onClick={play}>
+                ▶ Lihat hasil
+              </button>
+            </div>
           </div>
         )}
-        <div className="grid grid-cols-2 gap-1.5">
-          <button type="button" className="mk-btn-ghost text-[11px]" onClick={() => commit((d) => ({ ...d, scenes: d.scenes.map((s) => ({ ...s, effects: active.map((x) => ({ ...x })) })) }))}>
-            Pakai di semua scene
-          </button>
-          <button type="button" className="mk-btn-ghost text-[11px]" onClick={() => updateScene(sceneIdx, { effects: [] })} disabled={!active.length}>
-            Hapus semua efek
-          </button>
-        </div>
-        <SearchBox value={q} onChange={(v) => (setQ(v), setLimit(PAGE))} placeholder="Cari efek… (hujan, kaca pecah, pasir, confetti)" />
-        <ChipRow value={group} onChange={(v) => (setGroup(v), setLimit(PAGE))} options={[{ id: 'all', label: 'Semua' }, ...EFFECT_GROUPS]} />
+        <SearchBox value={q} onChange={setQ} placeholder="Cari efek… (hujan, kaca pecah, pasir)" />
+        <ChipRow value={group} onChange={setGroup} options={[{ id: 'all', label: 'Semua' }, ...EFFECT_GROUPS.filter((g) => g.id !== 'custom')]} />
+        <p className="text-[10px] text-mk-dim">{kinds.length} jenis efek · tiap jenis punya beberapa gaya & 3 tingkat kekuatan ({allEffects().length} kombinasi)</p>
       </Section>
       <div className="grid grid-cols-3 gap-2 p-3 lg:grid-cols-2">
-        {list.slice(0, limit).map((e) => {
-          const on = active.some((a) => a.id === e.id);
+        {list.map((k) => {
+          const on = active.some((a) => kindOf(a.id) === k.kind);
+          const spec = getEffect(effectId(k.kind, k.styles[0].id));
+          if (!spec) return null;
           return (
-            <button key={e.id} type="button" onClick={() => toggle(e.id)} className={cx('overflow-hidden rounded-xl border text-left transition', on ? 'border-mk-coral ring-2 ring-mk-coral/30' : 'border-mk-line bg-mk-panel-2 hover:border-mk-line-2')}>
+            <button key={k.kind} type="button" onClick={() => toggleKind(k.kind, k.styles[0].id)} className={cx('relative overflow-hidden rounded-xl border text-left transition', on ? 'border-mk-coral ring-2 ring-mk-coral/30' : 'border-mk-line bg-mk-panel-2 hover:border-mk-line-2')}>
               <LazyVisible minH={60} className="aspect-[16/10] bg-mk-ink">
-                <EffectThumb spec={e} primary={doc.theme.palette.primary} secondary={doc.theme.palette.secondary} />
+                <EffectThumb spec={spec} primary={doc.theme.palette.primary} secondary={doc.theme.palette.secondary} />
               </LazyVisible>
-              <div className="truncate px-1.5 py-1 text-[10px] font-semibold text-mk-muted">{e.name}</div>
+              <div className="flex items-center justify-between gap-1 px-1.5 py-1">
+                <span className="truncate text-[11px] font-bold text-mk-cream">{k.label}</span>
+                <span className="shrink-0 text-[9px] text-mk-dim">{k.styles.length} gaya</span>
+              </div>
+              {on && <span className="absolute right-1 top-1 rounded-full bg-mk-coral px-1.5 text-[9px] font-extrabold text-mk-ink">AKTIF</span>}
             </button>
           );
         })}
-      </div>
-      <div className="px-3 pb-4">
-        {limit < list.length && (
-          <button type="button" onClick={() => setLimit((l) => l + PAGE)} className="mk-btn-ghost w-full text-xs">
-            Tampilkan lagi ({list.length - limit})
-          </button>
-        )}
+        {group === 'all' &&
+          custom.map((e) => {
+            const on = active.some((a) => a.id === e.id);
+            return (
+              <button key={e.id} type="button" onClick={() => setEffects(on ? active.filter((a) => a.id !== e.id) : [...active, { id: e.id, amount: 1 }], !on)} className={cx('overflow-hidden rounded-xl border text-left', on ? 'border-mk-coral ring-2 ring-mk-coral/30' : 'border-mk-line bg-mk-panel-2')}>
+                <LazyVisible minH={60} className="aspect-[16/10] bg-mk-ink">
+                  <EffectThumb spec={e} primary={doc.theme.palette.primary} secondary={doc.theme.palette.secondary} />
+                </LazyVisible>
+                <div className="truncate px-1.5 py-1 text-[11px] font-bold">{e.name}</div>
+              </button>
+            );
+          })}
       </div>
     </div>
   );

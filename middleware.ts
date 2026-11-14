@@ -5,7 +5,7 @@ const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'kakangkasyaf@gmail.c
 
 /**
  * Middleware Proteksi Route MotionKu
- * - Melindungi halaman /dashboard, /create, /editor, dan /admin.
+ * - Melindungi halaman /dashboard dan /admin. /create & /editor bisa dicoba tamu.
  * - Jika belum login, otomatis redirect ke /login.
  * - Khusus halaman /admin, hanya mengizinkan email admin (kakangkasyaf@gmail.com).
  */
@@ -50,11 +50,8 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
-  const isProtectedRoute =
-    pathname.startsWith('/dashboard') ||
-    pathname.startsWith('/create') ||
-    pathname.startsWith('/editor') ||
-    pathname.startsWith('/admin');
+  // /create & /editor terbuka untuk tamu (coba dulu tanpa login); simpan cloud & export minta login
+  const isProtectedRoute = pathname.startsWith('/dashboard') || pathname.startsWith('/admin');
 
   if (isProtectedRoute && !user) {
     const loginUrl = request.nextUrl.clone();
@@ -75,8 +72,10 @@ export async function middleware(request: NextRequest) {
   }
 
   if (pathname === '/login' && user) {
+    const n = request.nextUrl.searchParams.get('next') || '/dashboard';
     const dashUrl = request.nextUrl.clone();
-    dashUrl.pathname = '/dashboard';
+    dashUrl.pathname = n.startsWith('/') && !n.startsWith('//') ? n.split('?')[0] : '/dashboard';
+    dashUrl.search = '';
     return NextResponse.redirect(dashUrl);
   }
 

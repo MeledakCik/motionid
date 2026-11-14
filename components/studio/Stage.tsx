@@ -376,6 +376,21 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
         {guides.x !== null && <div className="pointer-events-none absolute top-0 h-full w-px bg-mk-coral" style={{ left: guides.x * scale }} />}
         {guides.y !== null && <div className="pointer-events-none absolute left-0 h-px w-full bg-mk-coral" style={{ top: guides.y * scale }} />}
 
+        {/* penanda teks contoh yang harus diganti */}
+        {!playing &&
+          !editingText &&
+          scene?.layers
+            .filter((l) => l.placeholder && !l.hidden && l.id !== selected?.id)
+            .map((l) => (
+              <div
+                key={`ph-${l.id}`}
+                className="pointer-events-none absolute rounded border-2 border-dashed border-mk-amber/80"
+                style={{ left: l.x * scale, top: l.y * scale, width: l.w * scale, height: l.h * scale, transform: `rotate(${l.rotation}deg)` }}
+              >
+                <span className="absolute -top-2.5 left-1 rounded bg-mk-amber px-1 text-[9px] font-extrabold text-mk-ink">CONTOH</span>
+              </div>
+            ))}
+
         {/* kotak seleksi gaya Figma */}
         {selected && !playing && !editingText && (
           <div

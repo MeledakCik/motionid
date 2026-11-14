@@ -17,7 +17,7 @@ interface StudioState {
   layerId: string | null;
   tool: Tool | null;
   mode: 'mudah' | 'pro';
-  saveStatus: 'saved' | 'saving' | 'unsaved' | 'error';
+  saveStatus: 'saved' | 'saving' | 'unsaved' | 'error' | 'local';
   dragBase: ProjectDoc | null;
 
   load: (doc: ProjectDoc) => void;
@@ -117,7 +117,10 @@ export const useStudio = create<StudioState>((set, get) => ({
 
   updateLayer: (id, patch, liveOnly) => {
     const { sceneIdx } = get();
-    const fn = (d: ProjectDoc) => mapScene(d, sceneIdx, (s) => ({ ...s, layers: s.layers.map((l) => (l.id === id ? ({ ...l, ...patch } as Layer) : l)) }));
+    // mengubah isi (teks / props / foto) = user sudah mengganti teks contoh
+    const content = 'text' in patch || 'props' in patch || 'src' in patch;
+    const fn = (d: ProjectDoc) =>
+      mapScene(d, sceneIdx, (s) => ({ ...s, layers: s.layers.map((l) => (l.id === id ? ({ ...l, ...patch, ...(content && l.placeholder ? { placeholder: false } : {}) } as Layer) : l)) }));
     if (liveOnly) get().live(fn);
     else get().commit(fn);
   },
@@ -228,4 +231,12 @@ export function currentScene(s: Pick<StudioState, 'doc' | 'sceneIdx'>): Scene | 
 export function currentLayer(s: Pick<StudioState, 'doc' | 'sceneIdx' | 'layerId'>): Layer | null {
   const sc = currentScene(s);
   return (s.layerId && sc?.layers.find((l) => l.id === s.layerId)) || null;
+}
+
+/** Daftar layer berisi teks contoh yang belum diganti. */
+export function placeholderList(doc: ProjectDoc | null): Array<{ sceneIdx: number; layerId: string; name: string }> {
+  if (!doc) return [];
+  const out: Array<{ sceneIdx: number; layerId: string; name: string }> = [];
+  doc.scenes.forEach((s, i) => s.layers.forEach((l) => l.placeholder && !l.hidden && out.push({ sceneIdx: i, layerId: l.id, name: l.kind === 'text' ? l.text : l.name })));
+  return out;
 }

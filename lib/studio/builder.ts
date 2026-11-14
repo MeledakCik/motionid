@@ -373,8 +373,8 @@ function buildRole(item: PlanItem, c: Ctx): Layer[] {
         const s = 280 * k;
         out.push(makeComponent(c, componentIdFor('discount', st === 'kaca' ? 'gradien' : st), W - s - c.m * 0.6, Y(0.3), s, s, { value: item.value, label: item.value === 'B1G1' || item.value === 'BARU' ? '!' : 'OFF' }, { animIn: anim('fisika-elastis-kuat', 0.9), animLoop: 'loop-denyut-sedang' }));
       }
-      if (plan.intent === 'flash-sale') out.push(makeComponent(c, componentIdFor('countdown', st), c.x0, Y(0.78), c.cw, 250 * k, { label: 'Berakhir dalam', value: '02:59:59' }, { animIn: anim('geser-atas-pendek-tegas', 1.1) }));
-      else out.push(makeComponent(c, componentIdFor('sticker', st === 'kaca' ? 'retro' : st), c.x0, Y(0.84), 480 * k, 140 * k, { text: 'Stok terbatas' }, { animIn: anim('gaya-tada-normal', 1.2), rotation: -4 }));
+      const stick = /hari ini/i.test(plan.prompt) ? 'Hari ini saja' : plan.intent === 'flash-sale' ? 'Flash sale' : plan.discount && plan.discount.endsWith('%') ? `Hemat ${plan.discount}` : '';
+      if (stick) out.push(makeComponent(c, componentIdFor('sticker', st === 'kaca' ? 'retro' : st), c.x0, Y(0.84), 480 * k, 140 * k, { text: stick }, { animIn: anim('gaya-tada-normal', 1.2), rotation: -4 }));
       break;
     }
     case 'bukti': {
@@ -382,18 +382,15 @@ function buildRole(item: PlanItem, c: Ctx): Layer[] {
       const pw = c.cw;
       if (item.value && /^\d(\.\d)?$/.test(item.value)) {
         out.push(headline(c, item.title, Y(0.14), area * 0.24, 0.15));
-        out.push(makeComponent(c, componentIdFor('rating', st), c.x0, Y(0.44), pw, 240 * k, { value: item.value, label: item.body || '' }, { animIn: anim(pick(L.elemAnim, c.idx), 0.5) }));
-        out.push(makeComponent(c, componentIdFor('comment', st === 'neon' ? 'gelap' : st), c.x0, Y(0.7), pw, 230 * k, { name: 'Ulasan pelanggan', text: `Mantap! ${plan.product || 'Produknya'} recommended banget` }, { animIn: anim('geser-atas-pendek-membal', 1.1) }));
+        out.push(makeComponent(c, componentIdFor('rating', st), c.x0, Y(0.46), pw, 240 * k, { value: item.value, label: item.body || '' }, { animIn: anim(pick(L.elemAnim, c.idx), 0.5) }));
       } else if (item.value && /^\d+$/.test(item.value) && Number(item.value) > 100) {
         out.push(headline(c, item.title, Y(0.14), area * 0.24, 0.15));
         out.push(makeComponent(c, componentIdFor('counter', st), c.x0, Y(0.46), pw, 320 * k, { value: item.value, suffix: '+', label: item.body || '' }, { animIn: anim(pick(L.elemAnim, c.idx), 0.5) }));
       } else if (item.value && /^\d+$/.test(item.value)) {
         out.push(headline(c, item.title, Y(0.14), area * 0.24, 0.15));
         out.push(makeComponent(c, componentIdFor('progress', st), c.x0, Y(0.48), pw, 180 * k, { label: item.body || 'Terjual', value: item.value }, { animIn: anim(pick(L.elemAnim, c.idx), 0.5) }));
-        out.push(makeComponent(c, componentIdFor('notif', st === 'neon' ? 'gelap' : st), c.x0, Y(0.7), pw, 220 * k, { app: 'shopping-bag', title: 'Pesanan baru!', text: 'Seseorang baru saja membeli' }, { animIn: anim('geser-bawah-pendek-membal', 1) }));
       } else if (plan.intent === 'testimoni' || L.id === 'chat') {
         out.push(makeComponent(c, componentIdFor('chat', st === 'brutal' ? 'minimal' : st), c.x0, Y(0.18), pw * 0.9, 240 * k, { name: item.title, text: item.body || '' }, { animIn: anim('geser-atas-pendek-membal', 0.1) }));
-        out.push(makeComponent(c, componentIdFor('chat', 'gradien'), c.x0 + pw * 0.1, Y(0.5), pw * 0.9, 220 * k, { name: plan.store || 'Admin', text: 'Terima kasih kak!' }, { animIn: anim('geser-atas-pendek-membal', 1.2) }));
       } else {
         out.push(headline(c, item.title, Y(0.22), area * 0.3, 0.15));
         if (item.body) out.push(bodyText(c, item.body, Y(0.56), area * 0.12, 0.6));
@@ -497,7 +494,10 @@ export function buildScenes(plan: ContentPlan, templateId: string, aspect: Aspec
     const wantsPhoto = photoIds.length > 0 && (item.role === 'hook' || item.role === 'produk' || L.photo === 'bg' || photoIds.length > photoCursor);
     const photo = wantsPhoto ? photoIds[photoCursor++ % photoIds.length] : undefined;
     const c: Ctx = { ...base, idx, photo };
-    const layers = [...decorLayers(c), ...buildRole(item, c)];
+    const roleLayers = buildRole(item, c);
+    // tandai isi contoh supaya user diingatkan menggantinya (kecuali label kecil & ikon)
+    if (item.placeholder) roleLayers.forEach((l) => (l.kind === 'text' || l.kind === 'component') && l.name !== 'Label' && l.name !== 'Tanda kutip' && (l.placeholder = true));
+    const layers = [...decorLayers(c), ...roleLayers];
     const tr = pickTransition(L, idx + seed, prevTr);
     prevTr = tr.id;
     return {
@@ -558,7 +558,8 @@ function syncItemFromScene(item: PlanItem, scene?: Scene): PlanItem {
   if (!scene) return item;
   const title = scene.layers.find((l) => l.kind === 'text' && (l.name === 'Judul' || l.name === 'Kutipan')) as TextLayer | undefined;
   const body = scene.layers.find((l) => l.kind === 'text' && l.name === 'Keterangan') as TextLayer | undefined;
-  return { ...item, title: title ? title.text : item.title, body: body ? body.text : item.body };
+  const edited = !scene.layers.some((l) => l.placeholder);
+  return { ...item, title: title ? title.text : item.title, body: body ? body.text : item.body, placeholder: item.placeholder && !edited };
 }
 
 /** Ganti rasio: bangun ulang posisi dari plan dengan template yang sama. */

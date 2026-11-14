@@ -9,6 +9,16 @@ import { Logo } from '@/components/studio/ui';
  * Halaman Login (/login)
  * Menggunakan Supabase Auth — Google Login Only (One-click OAuth)
  */
+function nextPath(): string {
+  try {
+    const q = new URLSearchParams(window.location.search);
+    const n = q.get('next') || q.get('redirectedFrom') || '/dashboard';
+    return n.startsWith('/') && !n.startsWith('//') ? n : '/dashboard';
+  } catch {
+    return '/dashboard';
+  }
+}
+
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -32,7 +42,7 @@ export default function LoginPage() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${siteUrl}/auth/callback?next=/dashboard`,
+          redirectTo: `${siteUrl}/auth/callback?next=${encodeURIComponent(nextPath())}`,
         },
       });
 

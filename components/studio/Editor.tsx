@@ -28,7 +28,8 @@ import {
   X,
 } from 'lucide-react';
 import type { Aspect, IconLayer, ProjectDoc } from '@/lib/studio/types';
-import { currentLayer, Tool, useStudio } from '@/store/useStudio';
+import { currentLayer, placeholderList, Tool, useStudio } from '@/store/useStudio';
+import { loginHref, useUser } from '@/lib/studio/useUser';
 import { PlaybackClock } from '@/lib/studio/clock';
 import { saveProject } from '@/lib/studio/persist';
 import { changeAspect } from '@/lib/studio/builder';
@@ -99,6 +100,10 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
   const [exporting, setExporting] = useState(false);
   const [coach, setCoach] = useState(0);
   const [, setPacks] = useState(0);
+  const auth = useUser();
+  const guest = !auth.loading && !auth.user;
+  const placeholders = useStudio((s) => placeholderList(s.doc));
+  const [phCursor, setPhCursor] = useState(0);
   const loadedRef = useRef(false);
 
   useEffect(() => {
@@ -115,6 +120,11 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
     loadTraining().then((n) => n && setPacks(n));
     return () => clock.dispose();
   }, [initialDoc, clock]);
+
+  // proyek tamu yang baru login → langsung simpan ke cloud
+  useEffect(() => {
+    if (auth.user && initialDoc && !/^[0-9a-f]{8}-/i.test(useStudio.getState().doc?.id || initialDoc.id)) useStudio.getState().setSaveStatus('unsaved');
+  }, [auth.user, initialDoc]);
 
   // panel default desktop
   useEffect(() => {
@@ -133,7 +143,7 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
         useStudio.setState({ doc: { ...cur.doc, id: r.id } });
         if (!admin) window.history.replaceState(null, '', `/editor/${r.id}`);
       }
-      cur.setSaveStatus(r.error ? 'error' : cur.saveStatus === 'saving' ? 'saved' : cur.saveStatus);
+      cur.setSaveStatus(r.error ? 'error' : cur.saveStatus !== 'saving' ? cur.saveStatus : r.remote ? 'saved' : 'local');
     }, 1600);
     return () => window.clearTimeout(id);
   }, [saveStatus, doc, admin]);
@@ -157,6 +167,17 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
     },
     [st, clock]
   );
+
+  function jumpPlaceholder() {
+    const list = placeholderList(useStudio.getState().doc);
+    if (!list.length) return;
+    const p = list[phCursor % list.length];
+    setPhCursor((c) => c + 1);
+    clock.pause();
+    useStudio.setState({ sceneIdx: p.sceneIdx, layerId: p.layerId });
+    if (!desktop) openTool('properti');
+    setTimeout(() => document.getElementById('mk-text-editor')?.focus(), 350);
+  }
 
   if (!doc) {
     return (
@@ -209,6 +230,10 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
       <span className="flex items-center gap-1 text-[11px] text-mk-amber" title="Tersimpan di perangkat ini saja">
         <CloudOff className="h-3.5 w-3.5" /> Lokal
       </span>
+    ) : saveStatus === 'local' ? (
+      <span className="flex items-center gap-1 text-[11px] text-mk-amber" title="Tersimpan di perangkat ini. Masuk untuk simpan ke cloud.">
+        <CloudOff className="h-3.5 w-3.5" /> Di HP ini
+      </span>
     ) : saveStatus === 'saved' ? (
       <span className="flex items-center gap-1 text-[11px] text-mk-dim">
         <Cloud className="h-3.5 w-3.5" /> Tersimpan
@@ -221,7 +246,7 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
     <div className="flex h-[100dvh] flex-col overflow-hidden bg-mk-night text-mk-cream">
       {/* ------------------------- top bar ------------------------- */}
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-mk-line bg-mk-panel px-2 sm:px-3">
-        <Link href={admin ? '/admin' : '/dashboard'} className="mk-btn-icon" aria-label="Kembali">
+        <Link href={admin ? '/admin' : guest ? '/' : '/dashboard'} className="mk-btn-icon" aria-label="Kembali">
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <Logo className="hidden text-sm lg:inline-flex" />
@@ -289,6 +314,18 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
         {/* ------------------------- stage ------------------------- */}
         <main className="relative min-w-0 flex-1 bg-mk-dots">
           <Stage clock={clock} onRequestEdit={() => openTool(desktop ? null : 'properti')} />
+          <div className="pointer-events-none absolute inset-x-2 top-2 z-10 flex flex-col items-center gap-1.5">
+            {guest && (
+              <a href={loginHref()} className="pointer-events-auto rounded-full border border-mk-line bg-mk-panel/95 px-3 py-1.5 text-[11px] font-semibold text-mk-muted shadow">
+                Mode tamu · tersimpan di perangkat ini · <span className="font-bold text-mk-coral">Masuk</span>
+              </a>
+            )}
+            {placeholders.length > 0 && (
+              <button type="button" onClick={() => jumpPlaceholder()} className="pointer-events-auto rounded-full border border-mk-amber/50 bg-mk-panel/95 px-3 py-1.5 text-[12px] font-bold text-mk-amber shadow">
+                {placeholders.length} teks contoh perlu diganti · <span className="underline">Ganti</span>
+              </button>
+            )}
+          </div>
           {coach > 0 && (
             <div className="absolute inset-x-3 bottom-3 z-20 mx-auto max-w-sm animate-mk-up rounded-2xl border border-mk-coral/40 bg-mk-panel/95 p-4 shadow-2xl backdrop-blur">
               <div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-mk-coral">Panduan singkat {coach}/3</div>
@@ -363,7 +400,19 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
         </BottomSheet>
       )}
 
-      {exporting && <ExportDialog doc={doc} onClose={() => setExporting(false)} />}
+      {exporting && (
+        <ExportDialog
+          doc={doc}
+          guest={guest}
+          placeholders={placeholders.length}
+          onFixPlaceholders={() => {
+            setExporting(false);
+            jumpPlaceholder();
+          }}
+          onBeforeLogin={() => saveProject(useStudio.getState().doc!).then((r) => `/editor/${r.id}`)}
+          onClose={() => setExporting(false)}
+        />
+      )}
     </div>
   );
 }
