@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
 import React from 'react';
-import MotionStudioEngine from '@/components/studio/MotionStudioEngine';
+import TrainingStudio from '@/components/admin/TrainingStudio';
 
-export default function AdminStudioPage() {
-  return <MotionStudioEngine mode="admin" />;
+export default function AdminTrainingPage() {
+  return <TrainingStudio />;
 }

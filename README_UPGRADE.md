@@ -1,25 +1,15 @@
-# MotionID v5.0 — Smart Google Data Pack Image Synthesizer, Non-Repeating Transitions & Cursor Animation Mode
+# MotionKu Studio v6
 
-Paket ini memperbarui repositori [MeledakCik/motionid](https://github.com/MeledakCik/motionid) dengan 3 sistem utama tanpa merusak kontrak TypeScript (`npm run build` aman 100%):
+## Yang baru
+- **Pack 300+**: 360 template (30 tema × 12 layout), 360 komponen (30 jenis × 12 gaya), 630+ ikon (Lucide, ISC), 310 transisi, 342 animasi (303 masuk/keluar + 39 loop).
+- **Efek visual 370+** (`lib/studio/packs/effects.ts`): kaca pecah, pasir, hujan, salju, confetti, kembang api, petir, bara, kabut, matrix, VHS, film grain, RGB split, guncang kamera, hujan ikon paralaks, dll — per scene, bisa diatur kekuatannya. Ditambah transisi **Kaca Pecah** dan **Jadi Pasir**. Prompt otomatis memilih efek yang cocok (mis. "hujan" → efek hujan).
+- **Prompt adaptif**: 17 jenis video dideteksi otomatis; jumlah scene mengikuti isi prompt ("5 tips" → 7 scene); harga, diskon, toko, @akun, lokasi, tanggal, dan daftar menu dibaca dari kalimat.
+- **Editor ala Figma + CapCut** (`components/studio/`): pilih, geser, ubah ukuran, putar, snap; ketuk dua kali untuk mengetik; timeline scene + transisi; mode Mudah/Pro (track layer); undo/redo; autosave.
+- **Foto**: unggah foto produk/latar (dikompres otomatis), jadikan latar scene, elemen foto, atau isi mockup HP.
+- **Export mulus**: WebCodecs + mp4-muxer, render frame-per-frame dengan timestamp pasti (fallback MediaRecorder).
+- **Admin training** (`/admin`): input SVG ikon, kode komponen (JSON), kode transisi, kode animasi, plus bank hook/CTA — dengan preview langsung. Semua kode deklaratif (tanpa eval).
+- **Warna khas "Sunset Coral"** (#FF6A3D + #FFB547 di atas #120E0C) di semua halaman; responsif & hemat beban di HP menengah ke bawah.
 
-1. **Sistem Pembuat Gambar Otomatis dari Data Pack Google/Web (`lib/google-datapack-image-engine.ts` & `app/api/datapack-search/route.ts`)**:
-   - Merakit gambar visual/poster 1080×1920 secara prosedural (SVG Data-URI & HTML5 Canvas) dari 11 klaster Data Pack (Kopi/UMKM, Kuliner Pedas, Next.js/Cloud Dev, Cyber Security, Skincare, Streetwear, Kampus/Edukasi, Finance/Cuan, Quotes Senja, Gaming/Point Blank, dan Motor Touring).
-   - Setiap scene otomatis mendapatkan komposisi gambar yang berbeda (`neo-brutalist-collage`, `glass-3d-product-stage`, `blueprint-cad-schematic`, `editorial-magazine-cutout`, `cyber-hud-isometric`, `cinematic-bokeh-polaroid`).
-
-2. **Engine Variasi Transisi & Animasi Anti-Kembar (`lib/creative-packs.ts` & `lib/smart-engine.ts`)**:
-   - Fungsi `buildNonRepeatingSequence()` menjamin Scene 1, Scene 2, Scene 3, dan Scene 4 selalu memakai kombinasi Transisi (`whip-left`, `iris-wipe`, `diagonal-slice`, `zoom-punch`, `glitch-cut`, `morph-card`, `shutter-blinds`, `blueprint-wire`), Animasi RK4, dan Gerakan Kamera yang berbeda-beda (tidak pernah kembar berurutan).
-
-3. **Mode Animasi Kursor Pintar (`computeCursorChoreography` & `CursorAnimationLayer`)**:
-   - Tersedia 4 mode yang bisa diganti secara *real-time* di studio:
-     - `single-pro` (Gaya `@depup.web`: 1 kursor pintar dengan kamera auto-zoom, blok seleksi teks kuning, dan efek klik ripple).
-     - `multi-agent-swarm` (Gaya `@voynann`: 5 kursor agen AI bernama yang merakit elemen secara kolaboratif).
-     - `tutorial-spotlight` (Kursor dengan lingkaran sorotan cahaya *spotlight*).
-     - `off` (Mode sinematik bersih tanpa kursor).
-
-## Cara Pasang ke Repositori Lokal
-1. Ekstrak seluruh isi `motionid_datapack_cursor_upgrade.zip` langsung ke root folder repositori `motionid` Anda.
-2. Jalankan:
-   ```bash
-   npm run build
-   npm run dev
-   ```
+## Catatan
+- Tidak ada perubahan skema database. Proyek baru disimpan di `projects.script_json` sebagai `{ version: 6, doc }`; proyek lama dibangun ulang otomatis dari topiknya.
+- Ikon dibuat ulang dengan `node scripts/build-icon-pack.cjs`.

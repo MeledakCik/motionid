@@ -6,6 +6,7 @@ import {
   Playfair_Display,
   Space_Grotesk,
   Anton,
+  Plus_Jakarta_Sans,
 } from 'next/font/google';
 import './globals.css';
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from '@/lib/site';
@@ -44,6 +45,12 @@ const anton = Anton({
   subsets: ['latin'],
   weight: ['400'],
   variable: '--font-anton',
+});
+
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700', '800'],
+  variable: '--font-jakarta',
 });
 
 export const metadata: Metadata = {
@@ -86,7 +93,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#020617',
+  themeColor: '#120E0C',
   colorScheme: 'dark',
 };
 
@@ -98,9 +105,9 @@ export default function RootLayout({
   return (
     <html
       lang="id"
-      className={`dark ${poppins.variable} ${montserrat.variable} ${bebasNeue.variable} ${playfair.variable} ${spaceGrotesk.variable} ${anton.variable}`}
+      className={`dark ${poppins.variable} ${montserrat.variable} ${bebasNeue.variable} ${playfair.variable} ${spaceGrotesk.variable} ${anton.variable} ${jakarta.variable}`}
     >
-      <body className="min-h-screen bg-slate-950 text-slate-50 font-sans antialiased">
+      <body className="min-h-screen bg-mk-ink font-sans text-mk-cream antialiased">
         {children}
       </body>
     </html>

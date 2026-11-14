@@ -16,15 +16,15 @@ export default function OgImage() {
           flexDirection: 'column',
           justifyContent: 'center',
           padding: 80,
-          background: 'linear-gradient(135deg, #020617 0%, #1e1b4b 55%, #0e7490 100%)',
-          color: 'white',
+          background: 'radial-gradient(900px circle at 10% 0%, #5A2312 0%, #120E0C 60%)',
+          color: '#FFF3EA',
         }}
       >
-        <div style={{ fontSize: 34, color: '#67e8f9', fontWeight: 700 }}>MotionKu</div>
+        <div style={{ fontSize: 34, color: '#FF6A3D', fontWeight: 700 }}>MotionKu</div>
         <div style={{ fontSize: 84, fontWeight: 800, lineHeight: 1.05, marginTop: 24 }}>
           Ketik Topik, Jadi Video TikTok
         </div>
-        <div style={{ fontSize: 34, color: '#cbd5e1', marginTop: 32 }}>
+        <div style={{ fontSize: 34, color: '#FFD2BF', marginTop: 32 }}>
           9 template motion graphic · caption & hashtag otomatis · gratis tanpa API key
         </div>
       </div>
