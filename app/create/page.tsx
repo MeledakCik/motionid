@@ -56,6 +56,35 @@ const ASPECTS: Array<{ id: Aspect; label: string; sub: string }> = [
   { id: '16:9', label: '16:9', sub: 'YouTube' },
 ];
 
+/** Kolom teks satu paragraf yang tingginya mengikuti isi (judul panjang tidak terpotong di HP). */
+function AutoText({ value, onChange, className, placeholder, label, title }: { value: string; onChange: (v: string) => void; className?: string; placeholder?: string; label: string; title?: string }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = '0px';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      value={value}
+      placeholder={placeholder}
+      aria-label={label}
+      title={title}
+      onChange={(e) => onChange(e.target.value.replace(/\s*\n\s*/g, ' '))}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          (e.target as HTMLTextAreaElement).blur();
+        }
+      }}
+      className={cx('block w-full resize-none overflow-hidden bg-transparent leading-snug outline-none placeholder:text-mk-dim', className)}
+    />
+  );
+}
+
 export default function CreatePage() {
   const router = useRouter();
   const [prompt, setPrompt] = useState('');
@@ -91,6 +120,13 @@ export default function CreatePage() {
       // abaikan
     }
   }, []);
+
+  const startFresh = () => {
+    setIntent(null);
+    setSceneCount(null);
+    setOverrides({});
+    runAnalyze({ scroll: true, intent: null, count: null, ov: {} });
+  };
 
   const runAnalyze = (opts: { intent?: Intent | null; count?: number | null; seed?: number; scroll?: boolean; ov?: typeof overrides; text?: string } = {}) => {
     const promptText = opts.text ?? prompt;
@@ -168,7 +204,7 @@ export default function CreatePage() {
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) runAnalyze({ scroll: true, intent: null, count: null });
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) startFresh();
               }}
               rows={3}
               placeholder="Contoh: promo kopi susu gula aren 18rb di Kopi Senja, diskon 30% hari ini"
@@ -199,7 +235,7 @@ export default function CreatePage() {
                   </button>
                 ))}
               </div>
-              <button type="button" onClick={() => runAnalyze({ scroll: true, intent: null, count: null })} disabled={!prompt.trim()} className="mk-btn-primary ml-auto w-full sm:w-auto">
+              <button type="button" onClick={startFresh} disabled={!prompt.trim()} className="mk-btn-primary ml-auto w-full sm:w-auto">
                 <Sparkles className="h-4 w-4" /> Buat Video
               </button>
             </div>
@@ -261,16 +297,40 @@ export default function CreatePage() {
                     </button>
                   </div>
                 </div>
+                {(() => {
+                  const read: Array<[string, string | undefined]> = [
+                    [plan.category === 'promo' || plan.intent === 'lowongan' ? (plan.intent === 'lowongan' ? 'Posisi' : plan.intent === 'event' ? 'Acara' : 'Produk') : 'Topik', plan.product],
+                    ['Harga', plan.price ? `${plan.price}${plan.priceNote ? ` · ${plan.priceNote}` : ''}` : undefined],
+                    ['Diskon', plan.discount],
+                    ['Toko', plan.store],
+                    ['Lokasi', plan.location],
+                    ['Waktu', [plan.date, plan.time].filter(Boolean).join(' · ') || undefined],
+                    ['Kontak', plan.contact],
+                    ['Keunggulan', plan.category === 'promo' && plan.features?.length ? `${plan.features.length} poin` : undefined],
+                  ];
+                  const shown = read.filter(([, v]) => !!v);
+                  if (!shown.length) return null;
+                  return (
+                    <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
+                      <span className="mk-label mb-0 mr-1">Terbaca dari prompt</span>
+                      {shown.map(([k, v]) => (
+                        <span key={k} className="mk-chip max-w-full cursor-default truncate px-2.5 py-1 text-[11px]" title={`${k}: ${v}`}>
+                          <span className="text-mk-dim">{k}</span> <b className="truncate font-bold">{v}</b>
+                        </span>
+                      ))}
+                    </div>
+                  );
+                })()}
                 {plan.category === 'promo' && (
                   <div className="mt-3 grid gap-3 sm:grid-cols-3">
                     {(
                       [
-                        ['product', 'Nama produk', plan.product],
-                        ['price', 'Harga', plan.price],
-                        ['store', 'Nama toko', plan.store],
+                        ['product', plan.intent === 'event' ? 'Nama acara' : 'Nama produk', plan.product],
+                        ['price', plan.intent === 'event' ? 'Harga tiket' : 'Harga', plan.price],
+                        ['store', plan.intent === 'event' ? 'Penyelenggara' : plan.intent === 'launching' ? 'Nama brand' : 'Nama toko', plan.store],
                       ] as const
                     ).map(([k, label, val]) => (
-                      <label key={k} className="block">
+                      <label key={`${k}-${plan.prompt}-${val || ''}`} className="block">
                         <span className="mk-label">{label}</span>
                         <input
                           className="mk-input py-2"
@@ -307,15 +367,54 @@ export default function CreatePage() {
                 })()}
                 <ol className="mt-4 space-y-1.5">
                   {plan.items.map((it, i) => (
-                    <li key={i} className="flex items-start gap-2.5 rounded-xl bg-mk-ink px-3 py-2">
+                    <li key={`${plan.prompt}-${i}`} className="flex items-start gap-2.5 rounded-xl bg-mk-ink px-3 py-2">
                       <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-mk-coral/20 text-[11px] font-extrabold text-mk-coral">{i + 1}</span>
-                      <input
-                        className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none"
-                        value={it.title}
-                        onChange={(e) => setPlan((p) => (p ? { ...p, items: p.items.map((x, j) => (j === i ? { ...x, title: e.target.value, placeholder: false } : x)) } : p))}
-                      />
+                      <div className="min-w-0 flex-1">
+                        <AutoText
+                          className="text-sm font-semibold"
+                          value={it.title}
+                          label={`Judul scene ${i + 1}`}
+                          onChange={(v) => setPlan((p) => (p ? { ...p, items: p.items.map((x, j) => (j === i ? { ...x, title: v, placeholder: false } : x)) } : p))}
+                        />
+                        {it.value !== undefined && !/^\d+$/.test(it.value) && (it.value.includes('|') || it.role === 'poin') && (
+                          <AutoText
+                            className="mt-0.5 text-xs font-medium text-mk-cream/80"
+                            value={(it.value || '').split('|').join(' · ')}
+                            label={`Isi daftar scene ${i + 1}`}
+                            title="Pisahkan tiap poin dengan ·"
+                            onChange={(v) =>
+                              setPlan((p) =>
+                                p ? { ...p, items: p.items.map((x, j) => (j === i ? { ...x, value: v.replace(/[·]/g, '|').split('|').map((t) => t.trim()).join('|').replace(/^\|+/, '') || undefined, placeholder: false } : x)) } : p
+                              )
+                            }
+                          />
+                        )}
+                        {(it.body !== undefined || it.role !== 'cta') && (
+                          <AutoText
+                            className="mt-0.5 text-xs text-mk-muted"
+                            value={it.body || ''}
+                            placeholder="Keterangan (opsional)"
+                            label={`Keterangan scene ${i + 1}`}
+                            onChange={(v) => setPlan((p) => (p ? { ...p, items: p.items.map((x, j) => (j === i ? { ...x, body: v || undefined, placeholder: false } : x)) } : p))}
+                          />
+                        )}
+                      </div>
                       {it.placeholder && <span className="shrink-0 rounded bg-mk-amber/15 px-1.5 py-0.5 text-[11px] font-bold text-mk-amber">contoh · ganti</span>}
                       <span className="shrink-0 rounded bg-mk-panel-3 px-1.5 py-0.5 text-[11px] font-bold text-mk-dim">{ROLE_LABEL[it.role] || it.role}</span>
+                      {plan.items.length > 2 && it.role !== 'cta' && i > 0 && (
+                        <button
+                          type="button"
+                          className="mk-squish -mr-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-mk-dim hover:bg-mk-panel-3 hover:text-mk-cream"
+                          aria-label={`Hapus scene ${i + 1}`}
+                          title="Hapus scene ini"
+                          onClick={() => {
+                            setPlan((p) => (p ? { ...p, items: p.items.filter((_, j) => j !== i) } : p));
+                            setSceneCount(plan.items.length - 1);
+                          }}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </li>
                   ))}
                 </ol>

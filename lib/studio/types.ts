@@ -220,6 +220,14 @@ export interface ContentPlan {
   handle?: string;
   location?: string;
   date?: string;
+  /** jam acara/buka yang terbaca ("19.00", "Ba'da Isya") */
+  time?: string;
+  /** kontak utama yang terbaca (WA, telepon, email, link, @akun) */
+  contact?: string;
+  /** catatan harga ("Bisa nego") */
+  priceNote?: string;
+  /** keunggulan/fitur yang terbaca dari prompt */
+  features?: string[];
   keywords: string[];
   items: PlanItem[];
   caption: string;
