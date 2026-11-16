@@ -5,6 +5,7 @@ import { AlertTriangle, CheckCircle2, Download, Loader2, LogIn, MessageCircle, S
 import type { ProjectDoc } from '@/lib/studio/types';
 import { docDuration } from '@/lib/studio/types';
 import { exportVideo, ExportResult, supportsSmoothExport } from '@/lib/studio/exporter';
+import { hasAnyAudio, hasNarrationAudio, narrationOf } from '@/lib/studio/narration';
 import { getDeviceProfile } from '@/lib/studio/device';
 import { cx, Segmented } from './ui';
 
@@ -170,7 +171,7 @@ export default function ExportDialog({
                         <span className="block text-sm font-bold">{p.label}</span>
                         <span className="block text-[11px] text-mk-dim">{p.desc}</span>
                       </span>
-                      <span className="shrink-0 text-right text-[11px] font-bold text-mk-muted">≈ {estimateMB(p, dur, doc.music.id !== 'none').toFixed(1)} MB</span>
+                      <span className="shrink-0 text-right text-[11px] font-bold text-mk-muted">≈ {estimateMB(p, dur, hasAnyAudio(doc)).toFixed(1)} MB</span>
                     </button>
                   );
                 })}
@@ -184,6 +185,16 @@ export default function ExportDialog({
                 ? '✓ Mode render frame-per-frame aktif: video dijamin mulus, tidak patah-patah, walau HP sedang sibuk.'
                 : 'Browser ini memakai mode rekam real-time. Biarkan tab tetap terbuka sampai selesai. Untuk hasil paling mulus pakai Chrome/Edge terbaru.'}
             </p>
+            {narrationOf(doc).enabled && !hasNarrationAudio(doc) && (
+              <p className="rounded-xl bg-mk-amber/10 px-3 py-2 text-[11px] text-mk-amber">
+                Narasi sedang aktif tapi belum ada rekaman/unggahan suara. Suara narasi belum akan masuk ke video — buka panel Suara → Narasi untuk merekam atau mengunggah voice over.
+              </p>
+            )}
+            {hasNarrationAudio(doc) && (
+              <p className="rounded-xl bg-mk-mint/10 px-3 py-2 text-[11px] text-mk-mint">
+                ✓ Narasi ikut dirender ke video{narrationOf(doc).duckMusic ? ' dan musik otomatis mengecil saat narasi berbunyi' : ''}.
+              </p>
+            )}
             {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-600">{error}</p>}
             <button type="button" className="mk-btn-primary w-full py-3" onClick={start}>
               <Download className="h-4 w-4" /> Buat file video

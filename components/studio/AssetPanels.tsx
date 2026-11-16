@@ -1,15 +1,24 @@
 'use client';
 
-import React, { useMemo, useRef, useState } from 'react';
-import { Check, ImagePlus, Trash2, Upload } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Check, ImagePlus, Mic, Sparkles, Square, Trash2, Upload, Volume2 } from 'lucide-react';
 import type { FontId, ProjectDoc, TextLayer } from '@/lib/studio/types';
-import { canvasSize, uid } from '@/lib/studio/types';
+import { canvasSize, docDuration, uid } from '@/lib/studio/types';
 import { useStudio } from '@/store/useStudio';
 import { allComponents, COMPONENT_GROUPS, COMPONENT_STYLES, getComponent } from '@/lib/studio/packs/components';
 import { allIcons, ICON_GROUP_LIST, iconSvgMarkup } from '@/lib/studio/packs/icons';
 import { getLayout, getTemplate, LAYOUTS, rankTemplates, THEMES, TEMPLATES } from '@/lib/studio/packs/templates';
 import { applyTemplate, makeComponent, makeIcon, makeImage, makeText, recolorDoc, themeOf } from '@/lib/studio/builder';
 import { MUSIC_TRACKS } from '@/lib/studio/music';
+import {
+  buildNarrationScript,
+  estimateSpeechSeconds,
+  findVoice,
+  narrationOf,
+  speakScript,
+  speechVoices,
+  stopSpeaking,
+} from '@/lib/studio/narration';
 import { compressImage } from '@/lib/studio/persist';
 import { FONT_LIST, fontLabel, fontStack } from '@/lib/studio/fonts';
 import { ChipRow, ColorField, cx, Dropdown, LazyVisible, SearchBox, Section, Segmented, Slider } from './ui';
@@ -534,7 +543,365 @@ export function MusicPanel() {
         <Slider label="Volume" value={doc.music.volume} min={0} max={1} step={0.05} onChange={(v) => live((d) => ({ ...d, music: { ...d.music, volume: v } }))} onCommit={endDrag} format={(v) => `${Math.round(v * 100)}%`} />
         <p className="text-[11px] text-mk-dim">Tekan ▶ untuk mendengar. Musik ikut masuk ke file MP4.</p>
       </Section>
+      <NarrationSection />
     </div>
+  );
+}
+
+/* -------------------------------- Narasi -------------------------------- */
+function blobToDataUri(blob: Blob): Promise<string> {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result));
+    r.onerror = () => rej(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+
+function NarrationSection() {
+  const { doc } = useDocBase();
+  const commit = useStudio((s) => s.commit);
+  const live = useStudio((s) => s.live);
+  const endDrag = useStudio((s) => s.endDrag);
+  const n = narrationOf(doc);
+  const dur = docDuration(doc);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [voiceURI, setVoiceURI] = useState('');
+  const [rate, setRate] = useState(0.95);
+  const [speaking, setSpeaking] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recSec, setRecSec] = useState(0);
+  const [err, setErr] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
+  const recRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const load = () => {
+      const list = speechVoices();
+      if (!list.length) return;
+      setVoices(list);
+      setVoiceURI((cur) => cur || findVoice(list)?.voiceURI || '');
+    };
+    load();
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    window.speechSynthesis.addEventListener?.('voiceschanged', load);
+    return () => window.speechSynthesis.removeEventListener?.('voiceschanged', load);
+  }, []);
+
+  useEffect(
+    () => () => {
+      stopSpeaking();
+      try {
+        if (recRef.current && recRef.current.state !== 'inactive') recRef.current.stop();
+      } catch {
+        // abaikan
+      }
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      if (timerRef.current) window.clearInterval(timerRef.current);
+    },
+    []
+  );
+
+  const patch = (extra: Partial<typeof n>) =>
+    commit((d) => ({ ...d, narration: { ...narrationOf(d), ...extra } }));
+
+  const toggle = () =>
+    commit((d) => {
+      const cur = narrationOf(d);
+      return {
+        ...d,
+        narration: {
+          ...cur,
+          enabled: !cur.enabled,
+          script: cur.script || buildNarrationScript(d),
+        },
+      };
+    });
+
+  const autoScript = () => {
+    const script = buildNarrationScript(doc);
+    if (!script) return setErr('Belum ada teks di scene untuk dijadikan narasi. Tulis manual saja.');
+    if (n.script.trim() && n.script.trim() !== script && !window.confirm('Ganti skrip narasi yang sekarang dengan skrip otomatis?')) return;
+    setErr('');
+    patch({ script });
+  };
+
+  const preview = () => {
+    setErr('');
+    if (speaking) {
+      stopSpeaking();
+      setSpeaking(false);
+      return;
+    }
+    if (!n.script.trim()) return setErr('Isi skrip narasi dulu ya.');
+    const ok = speakScript(n.script, {
+      voiceURI,
+      rate,
+      volume: n.volume,
+      onEnd: () => setSpeaking(false),
+    });
+    if (!ok) return setErr('Browser ini belum bisa membacakan teks. Rekam suara sendiri saja.');
+    setSpeaking(true);
+  };
+
+  const stopRec = () => {
+    try {
+      if (recRef.current && recRef.current.state !== 'inactive') recRef.current.stop();
+    } catch {
+      // abaikan
+    }
+  };
+
+  const startRec = async () => {
+    setErr('');
+    if (typeof window === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      return setErr('Browser ini belum mendukung rekaman mikrofon. Pakai tombol Unggah audio.');
+    }
+    if (n.data && !window.confirm('Ganti rekaman narasi yang sekarang?')) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true },
+      });
+      const mime =
+        ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find(
+          (m) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported?.(m)
+        ) || '';
+      const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      chunksRef.current = [];
+      rec.ondataavailable = (e) => {
+        if (e.data.size) chunksRef.current.push(e.data);
+      };
+      rec.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+        if (timerRef.current) window.clearInterval(timerRef.current);
+        timerRef.current = null;
+        setRecording(false);
+        const blob = new Blob(chunksRef.current, { type: mime || 'audio/webm' });
+        chunksRef.current = [];
+        if (blob.size < 1200) {
+          setErr('Rekaman terlalu pendek. Coba rekam lagi.');
+          return;
+        }
+        const data = await blobToDataUri(blob);
+        patch({ enabled: true, data, name: 'Rekaman narasi' });
+      };
+      rec.start();
+      recRef.current = rec;
+      streamRef.current = stream;
+      setRecording(true);
+      setRecSec(0);
+      const t0 = Date.now();
+      timerRef.current = window.setInterval(() => {
+        const s = Math.round(((Date.now() - t0) / 1000) * 10) / 10;
+        setRecSec(s);
+        if (s >= 180) stopRec();
+      }, 200);
+    } catch {
+      setErr('Izin mikrofon ditolak. Aktifkan izin mikrofon di browser lalu coba lagi.');
+    }
+  };
+
+  const onFile = async (f?: File) => {
+    setErr('');
+    if (!f) return;
+    if (!f.type.startsWith('audio/')) return setErr('File harus berupa audio (MP3, M4A, WAV, OGG).');
+    if (f.size > 12 * 1024 * 1024) return setErr('File terlalu besar. Maksimal 12 MB.');
+    const data = await blobToDataUri(f);
+    patch({ enabled: true, data, name: f.name.replace(/\.[^.]+$/, '') });
+  };
+
+  const words = n.script.trim().split(/\s+/).filter(Boolean).length;
+  const approxSec = Math.ceil(estimateSpeechSeconds(n.script, rate));
+
+  return (
+    <Section
+      title="Narasi / voice over"
+      right={
+        n.data ? (
+          <span className="rounded-full bg-mk-mint/15 px-2 py-0.5 text-[10px] font-bold text-mk-mint">
+            {n.enabled ? 'aktif' : 'siap'}
+          </span>
+        ) : null
+      }
+    >
+      <button
+        type="button"
+        onClick={toggle}
+        className={cx(
+          'flex w-full items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition',
+          n.enabled ? 'border-mk-coral bg-mk-coral/10' : 'border-mk-line bg-mk-panel-2'
+        )}
+      >
+        <span
+          className={cx(
+            'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
+            n.enabled ? 'bg-mk-coral text-white' : 'bg-mk-ink text-mk-muted'
+          )}
+        >
+          <Volume2 className="h-4 w-4" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-bold">Suara narator</span>
+          <span className="block text-[11px] text-mk-dim">
+            {n.enabled
+              ? n.data
+                ? `${n.name || 'Narasi'} · ikut masuk ke MP4`
+                : 'Aktif — rekam atau unggah suaranya'
+              : 'Tambah narasi biar videonya seperti bercerita'}
+          </span>
+        </span>
+        <span
+          className={cx(
+            'relative h-5 w-9 shrink-0 rounded-full transition',
+            n.enabled ? 'bg-mk-coral' : 'bg-mk-ink'
+          )}
+        >
+          <span
+            className={cx(
+              'absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all',
+              n.enabled ? 'left-[18px]' : 'left-0.5'
+            )}
+          />
+        </span>
+      </button>
+
+      {n.enabled && (
+        <div className="space-y-2.5">
+          <textarea
+            value={n.script}
+            onChange={(e) =>
+              live((d) => ({ ...d, narration: { ...narrationOf(d), script: e.target.value } }))
+            }
+            rows={4}
+            placeholder="Tulis skrip narasi… contoh: Lagi nyari oleh-oleh khas Bandung? Ini dia yang paling dicari."
+            className="mk-input w-full resize-y text-sm leading-relaxed"
+          />
+          <div className="flex flex-wrap gap-1.5">
+            <button type="button" onClick={autoScript} className="mk-chip text-[11px]">
+              <Sparkles className="h-3.5 w-3.5" /> Buat skrip otomatis
+            </button>
+            <button type="button" onClick={preview} className="mk-chip text-[11px]">
+              {speaking ? <Square className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+              {speaking ? 'Stop contoh' : 'Dengarkan contoh'}
+            </button>
+          </div>
+          <p className="text-[11px] text-mk-dim">
+            {words} kata · ±{approxSec} detik dibacakan · {Math.ceil(dur)} detik video. Contoh suara
+            memakai suara bawaan browser (tidak ikut ke file), sedangkan rekaman/unggahan ikut
+            dirender ke MP4.
+          </p>
+
+          {voices.length > 1 && (
+            <label className="block">
+              <span className="mk-label">Suara contoh</span>
+              <select
+                value={voiceURI}
+                onChange={(e) => setVoiceURI(e.target.value)}
+                className="mk-input w-full text-xs"
+              >
+                {voices.map((v) => (
+                  <option key={v.voiceURI} value={v.voiceURI}>
+                    {v.name} ({v.lang})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <Slider
+            label="Kecepatan contoh"
+            value={rate}
+            min={0.6}
+            max={1.4}
+            step={0.05}
+            onChange={setRate}
+            format={(v) => `${v.toFixed(2)}×`}
+          />
+
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              type="button"
+              onClick={recording ? stopRec : startRec}
+              className={cx('mk-btn text-xs', recording && 'bg-red-500 text-white')}
+            >
+              {recording ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+              {recording ? `Stop ${recSec.toFixed(1)}s` : n.data ? 'Rekam ulang' : 'Rekam suara'}
+            </button>
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className="mk-btn-ghost text-xs"
+            >
+              <Upload className="h-4 w-4" /> Unggah audio
+            </button>
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="audio/*"
+            hidden
+            onChange={(e) => void onFile(e.target.files?.[0])}
+          />
+
+          {n.data && (
+            <>
+              <audio src={n.data} controls className="h-9 w-full" />
+              <Slider
+                label="Volume narasi"
+                value={n.volume}
+                min={0}
+                max={1}
+                step={0.05}
+                onChange={(v) => live((d) => ({ ...d, narration: { ...narrationOf(d), volume: v } }))}
+                onCommit={endDrag}
+                format={(v) => `${Math.round(v * 100)}%`}
+              />
+              <Slider
+                label="Mulai narasi"
+                value={Math.min(n.start, Math.max(0.5, dur - 0.5))}
+                min={0}
+                max={Math.max(0.5, Math.round((dur - 0.5) * 10) / 10)}
+                step={0.1}
+                onChange={(v) => live((d) => ({ ...d, narration: { ...narrationOf(d), start: v } }))}
+                onCommit={endDrag}
+                format={(v) => `${v.toFixed(1)} dtk`}
+              />
+              <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-mk-line bg-mk-panel-2 px-3 py-2 text-xs font-semibold">
+                <input
+                  type="checkbox"
+                  checked={n.duckMusic}
+                  onChange={(e) => patch({ duckMusic: e.target.checked })}
+                  className="h-3.5 w-3.5 accent-[#7C6CFF]"
+                />
+                Kecilkan musik otomatis saat narasi berbunyi
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  stopSpeaking();
+                  setSpeaking(false);
+                  patch({ data: null, name: '' });
+                }}
+                className="mk-btn-ghost w-full text-[11px]"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Hapus rekaman narasi
+              </button>
+            </>
+          )}
+
+          {!n.data && (
+            <p className="rounded-xl bg-mk-amber/10 px-3 py-2 text-[11px] text-mk-amber">
+              Belum ada suara narasi. Rekam langsung dari mikrofon atau unggah file MP3/M4A supaya
+              narasi ikut ke video. Contoh suara di atas hanya untuk pratinjau.
+            </p>
+          )}
+          {err && <p className="text-[11px] text-red-400">{err}</p>}
+        </div>
+      )}
+    </Section>
   );
 }
 

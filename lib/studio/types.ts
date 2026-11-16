@@ -236,6 +236,24 @@ export interface ContentPlan {
   effects?: string[];
 }
 
+/** Narasi / voice over: skrip + suara hasil rekam/unggah. */
+export interface NarrationDoc {
+  /** aktif atau tidak; audio hanya masuk MP4 kalau enabled + ada data */
+  enabled: boolean;
+  /** skrip narasi (bisa dibuat otomatis dari isi scene) */
+  script: string;
+  /** rekaman mikrofon / file audio unggahan (data URI) */
+  data?: string | null;
+  /** nama sumber audio, mis. "Rekaman narasi" */
+  name?: string;
+  /** volume narasi 0..1 */
+  volume: number;
+  /** kecilkan musik otomatis saat narasi berbunyi */
+  duckMusic: boolean;
+  /** geser mulai narasi (detik) */
+  start: number;
+}
+
 export interface ProjectDoc {
   version: 6;
   id: string;
@@ -249,6 +267,8 @@ export interface ProjectDoc {
   music: { id: string; volume: number };
   /** lagu unggahan user (data URI), dipakai bila music.id === 'upload' */
   audio?: { name: string; data: string } | null;
+  /** narasi / voice over (opsional, project lama tidak punya field ini) */
+  narration?: NarrationDoc | null;
   plan: ContentPlan;
   showProgress: boolean;
   watermark?: string;

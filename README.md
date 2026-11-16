@@ -83,6 +83,7 @@ npm run dev
 - **Simpan otomatis**: proyek di `/editor/[id]` dimuat dari database dan disimpan otomatis 1,5 detik setelah perubahan terakhir. Dari `/editor` tanpa id, klik **Simpan proyek**.
 - **Render video** dengan durasi penuh: 1080×1920 (9:16), 1080×1080 (1:1), atau 1920×1080 (16:9). Format MP4 bila browser mendukung (Chrome/Edge terbaru, Safari), selain itu WebM. Opsi *Ketukan musik saat render* menambahkan beat sederhana sesuai tempo gaya. Jangan pindah tab selama merekam.
 - **Gaya dari prompt**: generator membaca topik, suasana, warna, platform, dan kata yang perlu ditonjolkan, lalu memilih paket gaya (palet, latar, layout, transisi, animasi judul, font, kamera, tempo) dan susunan scene (lengkap, alternatif, ringkas). Tombol **🎲 Acak gaya** mengganti gaya tanpa mengubah teks.
+- **Narasi / voice over**: buka panel **Musik → Suara narator**. Skrip narasi bisa dibuat otomatis dari teks tiap scene, didengarkan lewat suara bawaan browser (khusus contoh), lalu direkam langsung dari mikrofon atau diunggah dari file MP3/M4A/WAV. Rekaman ikut dirender ke MP4 dan musik otomatis mengecil saat narasi berbunyi (*ducking*). Semua proses audio berjalan lokal di browser — tanpa API AI eksternal.
 
 ## Training gaya (admin)
 

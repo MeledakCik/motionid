@@ -101,7 +101,7 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
     if (!doc || !rendererRef.current) return;
     rendererRef.current.setDoc(doc);
     clock.setDuration(docDuration(doc));
-    clock.setMusic(doc.music.id, doc.music.volume, doc.audio?.data);
+    clock.setMusic(doc.music.id, doc.music.volume, doc.audio?.data, doc.narration);
     draw();
   }, [doc, clock, draw]);
 

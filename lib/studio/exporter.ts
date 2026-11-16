@@ -2,7 +2,7 @@ import { ArrayBufferTarget, Muxer } from 'mp4-muxer';
 import type { ProjectDoc } from './types';
 import { canvasSize, docDuration } from './types';
 import { Renderer } from './renderer';
-import { renderMusic } from './music';
+import { renderSoundtrack, hasAnyAudio } from './narration';
 import { ensureFonts } from './fonts';
 
 /**
@@ -99,7 +99,7 @@ export async function exportVideo(doc: ProjectDoc, opts: ExportOptions): Promise
   canvas.height = height;
   const ctx = canvas.getContext('2d', { alpha: false })!;
 
-  const audioBps = doc.music.id !== 'none' ? (opts.maxBytes ? 96_000 : 160_000) : 0;
+  const audioBps = hasAnyAudio(doc) ? (opts.maxBytes ? 96_000 : 160_000) : 0;
   let bitrate = bitrateFor(width, height, fps, duration, opts.maxBytes, audioBps);
   const vcfg = await pickVideoConfig(width, height, fps, bitrate);
   if (vcfg && typeof VideoFrame !== 'undefined') {
@@ -132,8 +132,8 @@ async function exportWebCodecs(
   opts: ExportOptions,
   report: (p: number, l: string) => void
 ): Promise<ExportResult> {
-  const acfg = doc.music.id !== 'none' ? await pickAudioConfig(!!opts.maxBytes) : null;
-  const audio = acfg ? await renderMusic(doc.music.id, duration, acfg.cfg.sampleRate, doc.audio?.data) : null;
+  const acfg = hasAnyAudio(doc) ? await pickAudioConfig(!!opts.maxBytes) : null;
+  const audio = acfg ? await renderSoundtrack(doc, duration, acfg.cfg.sampleRate) : null;
 
   const muxer = new Muxer({
     target: new ArrayBufferTarget(),
@@ -157,7 +157,6 @@ async function exportWebCodecs(
       error: (e) => (encErr = e),
     });
     aenc.configure(acfg.cfg);
-    const vol = doc.music.volume ?? 0.7;
     const L = audio.getChannelData(0);
     const R = audio.numberOfChannels > 1 ? audio.getChannelData(1) : L;
     const total = Math.min(audio.length, Math.ceil(duration * audio.sampleRate));
@@ -166,8 +165,8 @@ async function exportWebCodecs(
       const n = Math.min(block, total - off);
       const data = new Float32Array(n * 2);
       for (let i = 0; i < n; i++) {
-        data[i] = L[off + i] * vol;
-        data[n + i] = R[off + i] * vol;
+        data[i] = L[off + i];
+        data[n + i] = R[off + i];
       }
       const ad = new AudioData({ format: 'f32-planar', sampleRate: audio.sampleRate, numberOfFrames: n, numberOfChannels: 2, timestamp: Math.round((off / audio.sampleRate) * 1e6), data });
       aenc.encode(ad);
@@ -228,16 +227,14 @@ async function exportMediaRecorder(
   const vtrack = stream.getVideoTracks()[0] as MediaStreamTrack & { requestFrame?: () => void };
   let actx: AudioContext | null = null;
   let src: AudioBufferSourceNode | null = null;
-  const audio = doc.music.id !== 'none' ? await renderMusic(doc.music.id, duration, 44100, doc.audio?.data) : null;
+  const audio = hasAnyAudio(doc) ? await renderSoundtrack(doc, duration, 44100) : null;
   if (audio) {
     try {
       actx = new AudioContext();
       const dest = actx.createMediaStreamDestination();
       src = actx.createBufferSource();
       src.buffer = audio;
-      const g = actx.createGain();
-      g.gain.value = doc.music.volume ?? 0.7;
-      src.connect(g).connect(dest);
+      src.connect(dest);
       dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
     } catch {
       actx = null;

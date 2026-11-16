@@ -1,4 +1,6 @@
 import { renderMusic } from './music';
+import { decodeAudioUri, narrationSpan } from './narration';
+import type { NarrationDoc } from './types';
 
 /**
  * Jam playback editor. Tidak memakai React state per frame (penyebab preview patah-patah
@@ -16,9 +18,14 @@ export class PlaybackClock {
   private last = 0;
   private audioCtx: AudioContext | null = null;
   private audioSrc: AudioBufferSourceNode | null = null;
-  private gain: GainNode | null = null;
+  private narrSrc: AudioBufferSourceNode | null = null;
+  private syncNode: AudioBufferSourceNode | null = null;
+  private musicGain: GainNode | null = null;
+  private narrGain: GainNode | null = null;
   private musicId = 'none';
   private upload: string | null = null;
+  private narration: NarrationDoc | null = null;
+  private narrationKey = '-';
   private volume = 0.7;
   private audioStartedAt = 0;
   private audioOffset = 0;
@@ -39,12 +46,31 @@ export class PlaybackClock {
     if (this.time > this.duration) this.time = 0;
   }
 
-  setMusic(id: string, volume: number, upload?: string | null) {
-    const changed = id !== this.musicId || (id === 'upload' && (upload || null) !== this.upload);
+  /** `narration` opsional: narasi/voice over yang diputar bersama musik. */
+  setMusic(id: string, volume: number, upload?: string | null, narration?: NarrationDoc | null) {
+    const n = narration || null;
+    const key = n
+      ? [
+          n.enabled ? 1 : 0,
+          n.data ? `${n.data.length}:${n.data.slice(-24)}` : '-',
+          n.volume,
+          n.duckMusic ? 1 : 0,
+          n.start,
+        ].join(':')
+      : '-';
+    const changed =
+      id !== this.musicId ||
+      (id === 'upload' && (upload || null) !== this.upload) ||
+      key !== this.narrationKey;
+
     this.upload = upload || null;
     this.musicId = id;
+    this.narration = n;
+    this.narrationKey = key;
     this.volume = volume;
-    if (this.gain) this.gain.gain.value = volume;
+
+    if (this.musicGain) this.musicGain.gain.value = volume;
+    if (this.narrGain && n) this.narrGain.gain.value = n.volume ?? 1;
     if (changed && this.playing) {
       this.stopAudio();
       void this.startAudio();
@@ -52,22 +78,69 @@ export class PlaybackClock {
   }
 
   private async startAudio() {
-    if (this.musicId === 'none' || typeof window === 'undefined') return;
+    if (typeof window === 'undefined') return;
+    const n = this.narration;
+    const musicOn = this.musicId !== 'none';
+    const narrOn = !!(n && n.enabled && n.data);
+    if (!musicOn && !narrOn) return;
+
     try {
-      const buf = await renderMusic(this.musicId, this.duration, 44100, this.upload);
-      if (!buf || !this.playing) return;
+      const [music, narr] = await Promise.all([
+        musicOn ? renderMusic(this.musicId, this.duration, 44100, this.upload) : Promise.resolve(null),
+        narrOn ? decodeAudioUri(n!.data as string, 44100) : Promise.resolve(null),
+      ]);
+      if ((!music && !narr) || !this.playing) return;
       if (!this.audioCtx) this.audioCtx = new AudioContext();
       if (this.audioCtx.state === 'suspended') await this.audioCtx.resume();
+
       this.stopAudio();
-      const src = this.audioCtx.createBufferSource();
-      src.buffer = buf;
-      this.gain = this.audioCtx.createGain();
-      this.gain.gain.value = this.volume;
-      src.connect(this.gain).connect(this.audioCtx.destination);
-      this.audioOffset = this.time;
-      this.audioStartedAt = this.audioCtx.currentTime;
-      src.start(0, Math.min(this.time, buf.duration - 0.01));
-      this.audioSrc = src;
+      const ctx = this.audioCtx;
+      const start = this.time;
+      const span = narr ? narrationSpan(n!, narr, this.duration) : null;
+      const now = ctx.currentTime;
+
+      if (music) {
+        const src = ctx.createBufferSource();
+        src.buffer = music;
+        const gain = ctx.createGain();
+        gain.gain.value = this.volume;
+        const duck = ctx.createGain();
+        duck.gain.setValueAtTime(1, now);
+
+        // Ducking: musik mengecil selama narasi berbunyi, lalu kembali.
+        if (span && n!.duckMusic && span.end > start) {
+          const rel = (t: number) => Math.max(0, t - start);
+          const duckStart = rel(span.start);
+          const duckEnd = rel(span.end);
+          if (duckStart > 0.25) duck.gain.setValueAtTime(1, now + duckStart - 0.25);
+          duck.gain.linearRampToValueAtTime(0.3, now + duckStart + 0.08);
+          duck.gain.setValueAtTime(0.3, now + Math.max(duckStart + 0.08, duckEnd - 0.28));
+          duck.gain.linearRampToValueAtTime(1, now + duckEnd);
+        }
+
+        src.connect(gain).connect(duck).connect(ctx.destination);
+        src.start(0, Math.min(start, Math.max(0, music.duration - 0.01)));
+        this.audioSrc = src;
+        this.musicGain = gain;
+      }
+
+      if (narr && span) {
+        const offset = start - span.start;
+        if (offset < span.end - span.start - 0.02) {
+          const src = ctx.createBufferSource();
+          src.buffer = narr;
+          const gain = ctx.createGain();
+          gain.gain.value = n!.volume ?? 1;
+          src.connect(gain).connect(ctx.destination);
+          src.start(0, Math.max(0, offset));
+          this.narrSrc = src;
+          this.narrGain = gain;
+        }
+      }
+
+      this.syncNode = this.audioSrc || this.narrSrc;
+      this.audioOffset = start;
+      this.audioStartedAt = ctx.currentTime;
     } catch {
       // audio opsional
     }
@@ -76,10 +149,13 @@ export class PlaybackClock {
   private stopAudio() {
     try {
       this.audioSrc?.stop();
+      this.narrSrc?.stop();
     } catch {
       // abaikan
     }
     this.audioSrc = null;
+    this.narrSrc = null;
+    this.syncNode = null;
   }
 
   play() {
@@ -91,7 +167,7 @@ export class PlaybackClock {
     const step = (now: number) => {
       if (!this.playing) return;
       // sinkron ke jam audio bila ada (anti drift)
-      if (this.audioSrc && this.audioCtx) {
+      if (this.syncNode && this.audioCtx) {
         this.time = this.audioOffset + (this.audioCtx.currentTime - this.audioStartedAt);
       } else {
         this.time += Math.min(0.1, (now - this.last) / 1000);
@@ -141,5 +217,10 @@ export class PlaybackClock {
     this.listeners.clear();
     this.audioCtx?.close().catch(() => {});
     this.audioCtx = null;
+  }
+
+  /** Narasi yang sedang dipakai (dipakai UI untuk pratinjau teks). */
+  currentNarration(): NarrationDoc | null {
+    return this.narration;
   }
 }
