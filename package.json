@@ -7,9 +7,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "mcp:training": "tsx mcp/training-server.ts",
     "lint": "next lint"
   },
   "dependencies": {
+    "@modelcontextprotocol/server": "^2.4.0",
     "@supabase/ssr": "^0.5.1",
     "@supabase/supabase-js": "^2.45.4",
     "class-variance-authority": "^0.7.0",
@@ -23,6 +25,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tailwind-merge": "^2.5.2",
+    "zod": "^4.6.7",
     "zustand": "^4.5.5"
   },
   "devDependencies": {
@@ -33,6 +36,7 @@
     "lucide": "^0.441.0",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.11",
+    "tsx": "^4.23.15",
     "typescript": "^5.6.2"
   }
 }

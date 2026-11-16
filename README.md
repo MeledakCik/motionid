@@ -118,6 +118,30 @@ Di `/admin`, buka tab **🧩 Kode** pada panel kanan. Admin dapat menempel kode 
 
 Isi nama dan kata kunci, lalu klik **Simpan pack ke Supabase**. Pack langsung terdaftar untuk semua user dan ikut dimuat saat training dibaca. Parser bersifat aman: tidak ada eksekusi HTML/JS mentah, hanya pembacaan CSS/SVG terbatas. Kolom `type` pada `ai_training_data` sekarang menerima `icon_pack`, `component_pack`, `transition_pack`, dan `animation_pack` (lihat `supabase/migration.sql`).
 
+## Konektor MCP training
+
+Server MCP lokal di `mcp/training-server.ts` menghubungkan MCP client langsung ke tabel `ai_training_data` di Supabase. Tool yang tersedia: `training_list`, `training_get`, `training_add`, `training_update`, dan `training_delete`. Perubahan menggunakan Supabase Auth + RLS aplikasi; hanya akun admin yang dapat menambah, mengubah, atau menghapus data. Jangan gunakan service-role key.
+
+Jalankan `npm install`, lalu daftarkan server berikut di konfigurasi MCP client. Isi URL, anon key, dan access token dari sesi Supabase admin. Token access dapat kedaluwarsa; jika koneksi mengembalikan pesan token kedaluwarsa, perbarui nilainya lalu restart server.
+
+```json
+{
+  "mcpServers": {
+    "motionid-training": {
+      "command": "npm",
+      "args": ["--prefix", "/path/ke/motionid-main", "run", "mcp:training"],
+      "env": {
+        "SUPABASE_URL": "https://project-id.supabase.co",
+        "SUPABASE_ANON_KEY": "supabase-anon-key",
+        "SUPABASE_ACCESS_TOKEN": "access-token-akun-admin"
+      }
+    }
+  }
+}
+```
+
+Ganti path repo dengan lokasi repo di komputer. Jangan commit file konfigurasi yang berisi access token. Setiap pemanggilan `training_list` dapat mengambil sampai 100 baris dan mendukung offset untuk halaman selanjutnya. Tool tambah/ubah memvalidasi SVG atau kode pack dengan parser yang sama seperti admin web. Data yang ditulis melalui MCP langsung tersimpan di Supabase; editor yang sudah terbuka perlu memuat ulang training untuk memakai perubahan tersebut.
+
 ## Identitas visual & responsivitas
 
 - Warna brand: **Iris `#7C6CFF`**, **Lime `#C8F169`**, **Midnight `#0E0A24`** (variabel `--mk-*` di `app/globals.css` dan `brand.*` di `tailwind.config.ts`).
