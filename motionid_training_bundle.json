@@ -1,0 +1,247 @@
+{
+  "components": [
+    {
+      "name": "Kartu Promo Bulat",
+      "category": "promo",
+      "tags": ["promo", "diskon", "bulat"],
+      "size": { "w": 800, "h": 320 },
+      "props": { "title": "Diskon 30%", "subtitle": "Khusus hari ini" },
+      "layers": [
+        { "type": "rect", "x": 0, "y": 0, "w": 1, "h": 1, "radius": 48, "gradient": ["$primary", "$secondary"], "shadow": true },
+        { "type": "circle", "x": 0.04, "y": 0.16, "w": 0.26, "h": 0.68, "fill": "#FFFFFF", "anim": "pulse" },
+        { "type": "icon", "icon": "badge-percent", "x": 0.08, "y": 0.28, "w": 0.18, "h": 0.44, "color": "$primary" },
+        { "type": "text", "x": 0.36, "y": 0.14, "w": 0.6, "h": 0.42, "text": "{{title}}", "size": 90, "weight": 900, "color": "#FFFFFF" },
+        { "type": "text", "x": 0.36, "y": 0.58, "w": 0.6, "h": 0.26, "text": "{{subtitle}}", "size": 44, "weight": 600, "font": "body", "color": "#FFFFFF", "delay": 0.3 }
+      ]
+    },
+    {
+      "name": "Kartu Menu Kopi",
+      "category": "promo",
+      "tags": ["kopi", "menu", "fnb"],
+      "size": { "w": 800, "h": 340 },
+      "props": { "badge": "BEST SELLER", "title": "Kopi Susu Aren", "subtitle": "Rp 22.000 • Dingin / Panas" },
+      "layers": [
+        { "type": "rect", "x": 0, "y": 0, "w": 1, "h": 1, "radius": 44, "gradient": ["$primary", "$secondary"], "shadow": true },
+        { "type": "circle", "x": 0.04, "y": 0.17, "w": 0.25, "h": 0.66, "fill": "#FFFFFF", "anim": "pulse" },
+        { "type": "icon", "icon": "coffee", "x": 0.085, "y": 0.29, "w": 0.16, "h": 0.42, "color": "$primary" },
+        { "type": "rect", "x": 0.34, "y": 0.14, "w": 0.24, "h": 0.16, "radius": 24, "fill": "#FFFFFF" },
+        { "type": "text", "x": 0.36, "y": 0.16, "w": 0.2, "h": 0.12, "text": "{{badge}}", "size": 24, "weight": 800, "color": "$primary" },
+        { "type": "text", "x": 0.34, "y": 0.36, "w": 0.62, "h": 0.32, "text": "{{title}}", "size": 74, "weight": 900, "color": "#FFFFFF", "delay": 0.15 },
+        { "type": "text", "x": 0.34, "y": 0.7, "w": 0.62, "h": 0.18, "text": "{{subtitle}}", "size": 36, "weight": 600, "font": "body", "color": "#FFFFFF", "delay": 0.3 }
+      ]
+    },
+    {
+      "name": "Kartu Metrik Pertumbuhan",
+      "category": "edukasi",
+      "tags": ["metrik", "growth", "statistik"],
+      "size": { "w": 760, "h": 340 },
+      "props": { "metric": "+148%", "label": "Kenaikan Penjualan Bulan Ini" },
+      "layers": [
+        { "type": "rect", "x": 0, "y": 0, "w": 1, "h": 1, "radius": 40, "gradient": ["$secondary", "$primary"], "shadow": true },
+        { "type": "rect", "x": 0.05, "y": 0.18, "w": 0.24, "h": 0.64, "radius": 32, "fill": "#FFFFFF" },
+        { "type": "icon", "icon": "trending-up", "x": 0.09, "y": 0.29, "w": 0.16, "h": 0.42, "color": "$primary" },
+        { "type": "text", "x": 0.34, "y": 0.16, "w": 0.6, "h": 0.42, "text": "{{metric}}", "size": 108, "weight": 900, "color": "#FFFFFF" },
+        { "type": "text", "x": 0.34, "y": 0.62, "w": 0.6, "h": 0.24, "text": "{{label}}", "size": 38, "weight": 600, "font": "body", "color": "#FFFFFF", "delay": 0.25 }
+      ]
+    },
+    {
+      "name": "Banner Flash Alert",
+      "category": "promo",
+      "tags": ["flash", "alert", "stok"],
+      "size": { "w": 840, "h": 220 },
+      "props": { "title": "Stok Terbatas!", "subtitle": "Tinggal 5 slot lagi hari ini" },
+      "layers": [
+        { "type": "rect", "x": 0, "y": 0, "w": 1, "h": 1, "radius": 110, "gradient": ["$primary", "$secondary"], "shadow": true },
+        { "type": "circle", "x": 0.04, "y": 0.16, "w": 0.18, "h": 0.68, "fill": "#FFFFFF", "anim": "pulse" },
+        { "type": "icon", "icon": "zap", "x": 0.075, "y": 0.28, "w": 0.11, "h": 0.44, "color": "$primary" },
+        { "type": "text", "x": 0.26, "y": 0.16, "w": 0.68, "h": 0.38, "text": "{{title}}", "size": 68, "weight": 900, "color": "#FFFFFF" },
+        { "type": "text", "x": 0.26, "y": 0.56, "w": 0.68, "h": 0.26, "text": "{{subtitle}}", "size": 38, "weight": 600, "font": "body", "color": "#FFFFFF", "delay": 0.2 }
+      ]
+    },
+    {
+      "name": "Kartu Quote Elegan",
+      "category": "quote",
+      "tags": ["quote", "motivasi", "kutipan"],
+      "size": { "w": 800, "h": 360 },
+      "props": { "tag": "DAILY QUOTE", "quote": "Konsistensi kecil setiap hari mengalahkan niat besar yang ditunda.", "author": "— Kasyaf Studio" },
+      "layers": [
+        { "type": "rect", "x": 0, "y": 0, "w": 1, "h": 1, "radius": 44, "gradient": ["$primary", "$secondary"], "shadow": true },
+        { "type": "circle", "x": 0.05, "y": 0.14, "w": 0.14, "h": 0.31, "fill": "#FFFFFF", "anim": "pulse" },
+        { "type": "icon", "icon": "sparkles", "x": 0.075, "y": 0.195, "w": 0.09, "h": 0.2, "color": "$primary" },
+        { "type": "rect", "x": 0.22, "y": 0.17, "w": 0.24, "h": 0.14, "radius": 24, "fill": "#FFFFFF" },
+        { "type": "text", "x": 0.235, "y": 0.195, "w": 0.21, "h": 0.09, "text": "{{tag}}", "size": 22, "weight": 800, "color": "$primary" },
+        { "type": "text", "x": 0.05, "y": 0.48, "w": 0.9, "h": 0.28, "text": "{{quote}}", "size": 42, "weight": 800, "color": "#FFFFFF", "delay": 0.15 },
+        { "type": "text", "x": 0.05, "y": 0.8, "w": 0.9, "h": 0.12, "text": "{{author}}", "size": 28, "weight": 600, "font": "body", "color": "#FFFFFF", "delay": 0.3 }
+      ]
+    },
+    {
+      "name": "Kartu Checklist 3 Langkah",
+      "category": "edukasi",
+      "tags": ["checklist", "langkah", "tutorial"],
+      "size": { "w": 820, "h": 440 },
+      "props": {
+        "title": "3 Langkah Mulai Cepat",
+        "step1": "Tempel tautan atau topik video",
+        "step2": "Pilih gaya warna dan animasi",
+        "step3": "Ekspor MP4 siap upload"
+      },
+      "layers": [
+        { "type": "rect", "x": 0, "y": 0, "w": 1, "h": 1, "radius": 44, "gradient": ["$secondary", "$primary"], "shadow": true },
+        { "type": "text", "x": 0.06, "y": 0.09, "w": 0.88, "h": 0.16, "text": "{{title}}", "size": 52, "weight": 900, "color": "#FFFFFF" },
+        { "type": "rect", "x": 0.06, "y": 0.3, "w": 0.88, "h": 0.17, "radius": 24, "fill": "#FFFFFF", "delay": 0.15 },
+        { "type": "icon", "icon": "check-circle", "x": 0.085, "y": 0.335, "w": 0.055, "h": 0.1, "color": "$primary", "delay": 0.15 },
+        { "type": "text", "x": 0.16, "y": 0.34, "w": 0.74, "h": 0.09, "text": "{{step1}}", "size": 32, "weight": 700, "color": "$primary", "delay": 0.15 },
+        { "type": "rect", "x": 0.06, "y": 0.51, "w": 0.88, "h": 0.17, "radius": 24, "fill": "#FFFFFF", "delay": 0.3 },
+        { "type": "icon", "icon": "check-circle", "x": 0.085, "y": 0.545, "w": 0.055, "h": 0.1, "color": "$primary", "delay": 0.3 },
+        { "type": "text", "x": 0.16, "y": 0.55, "w": 0.74, "h": 0.09, "text": "{{step2}}", "size": 32, "weight": 700, "color": "$primary", "delay": 0.3 },
+        { "type": "rect", "x": 0.06, "y": 0.72, "w": 0.88, "h": 0.17, "radius": 24, "fill": "#FFFFFF", "delay": 0.45 },
+        { "type": "icon", "icon": "check-circle", "x": 0.085, "y": 0.755, "w": 0.055, "h": 0.1, "color": "$primary", "delay": 0.45 },
+        { "type": "text", "x": 0.16, "y": 0.76, "w": 0.74, "h": 0.09, "text": "{{step3}}", "size": 32, "weight": 700, "color": "$primary", "delay": 0.45 }
+      ]
+    },
+    {
+      "name": "Kartu Rating Testimoni",
+      "category": "promo",
+      "tags": ["rating", "review", "testimoni"],
+      "size": { "w": 800, "h": 320 },
+      "props": { "rating": "4.9 / 5.0", "review": "Rasanya juara, pengiriman super cepat!", "reviewer": "Rina • Pelanggan Terverifikasi" },
+      "layers": [
+        { "type": "rect", "x": 0, "y": 0, "w": 1, "h": 1, "radius": 44, "gradient": ["$primary", "$secondary"], "shadow": true },
+        { "type": "rect", "x": 0.05, "y": 0.15, "w": 0.28, "h": 0.2, "radius": 32, "fill": "#FFFFFF" },
+        { "type": "icon", "icon": "star", "x": 0.075, "y": 0.19, "w": 0.055, "h": 0.12, "color": "$primary" },
+        { "type": "text", "x": 0.145, "y": 0.195, "w": 0.16, "h": 0.11, "text": "{{rating}}", "size": 30, "weight": 900, "color": "$primary" },
+        { "type": "text", "x": 0.05, "y": 0.43, "w": 0.9, "h": 0.26, "text": "{{review}}", "size": 44, "weight": 800, "color": "#FFFFFF", "delay": 0.15 },
+        { "type": "text", "x": 0.05, "y": 0.74, "w": 0.9, "h": 0.14, "text": "{{reviewer}}", "size": 30, "weight": 600, "font": "body", "color": "#FFFFFF", "delay": 0.3 }
+      ]
+    },
+    {
+      "name": "Kartu Deploy Tech",
+      "category": "edukasi",
+      "tags": ["tech", "terminal", "deploy"],
+      "size": { "w": 840, "h": 320 },
+      "props": { "badge": "LIVE BUILD", "command": "npx deploy --prod", "status": "Online dalam 12 detik • SSL Aktif" },
+      "layers": [
+        { "type": "rect", "x": 0, "y": 0, "w": 1, "h": 1, "radius": 40, "gradient": ["$primary", "$secondary"], "shadow": true },
+        { "type": "rect", "x": 0.04, "y": 0.16, "w": 0.22, "h": 0.68, "radius": 32, "fill": "#FFFFFF" },
+        { "type": "icon", "icon": "terminal", "x": 0.085, "y": 0.29, "w": 0.13, "h": 0.42, "color": "$primary" },
+        { "type": "rect", "x": 0.31, "y": 0.14, "w": 0.24, "h": 0.16, "radius": 24, "fill": "#FFFFFF" },
+        { "type": "icon", "icon": "rocket", "x": 0.33, "y": 0.17, "w": 0.04, "h": 0.1, "color": "$primary" },
+        { "type": "text", "x": 0.38, "y": 0.17, "w": 0.15, "h": 0.1, "text": "{{badge}}", "size": 22, "weight": 800, "color": "$primary" },
+        { "type": "text", "x": 0.31, "y": 0.36, "w": 0.64, "h": 0.28, "text": "{{command}}", "size": 58, "weight": 900, "color": "#FFFFFF", "delay": 0.15 },
+        { "type": "text", "x": 0.31, "y": 0.68, "w": 0.64, "h": 0.18, "text": "{{status}}", "size": 32, "weight": 600, "font": "body", "color": "#FFFFFF", "delay": 0.3 }
+      ]
+    },
+    {
+      "name": "Tombol CTA Interaktif",
+      "category": "promo",
+      "tags": ["cta", "tombol", "klik"],
+      "size": { "w": 680, "h": 180 },
+      "props": { "label": "Coba Gratis Sekarang", "hint": "Klik link di bio" },
+      "layers": [
+        { "type": "rect", "x": 0, "y": 0, "w": 1, "h": 1, "radius": 90, "gradient": ["$primary", "$secondary"], "shadow": true },
+        { "type": "circle", "x": 0.04, "y": 0.15, "w": 0.18, "h": 0.7, "fill": "#FFFFFF", "anim": "pulse" },
+        { "type": "icon", "icon": "mouse-pointer-click", "x": 0.08, "y": 0.28, "w": 0.1, "h": 0.44, "color": "$primary" },
+        { "type": "text", "x": 0.26, "y": 0.18, "w": 0.68, "h": 0.38, "text": "{{label}}", "size": 52, "weight": 900, "color": "#FFFFFF" },
+        { "type": "text", "x": 0.26, "y": 0.58, "w": 0.68, "h": 0.24, "text": "{{hint}}", "size": 30, "weight": 600, "font": "body", "color": "#FFFFFF", "delay": 0.2 }
+      ]
+    },
+    {
+      "name": "Kartu Event Countdown",
+      "category": "edukasi",
+      "tags": ["event", "webinar", "jadwal"],
+      "size": { "w": 800, "h": 320 },
+      "props": { "badge": "LIVE WEBINAR", "title": "Workshop AI Motion", "schedule": "Sabtu, 19:30 WIB • Gratis" },
+      "layers": [
+        { "type": "rect", "x": 0, "y": 0, "w": 1, "h": 1, "radius": 44, "gradient": ["$secondary", "$primary"], "shadow": true },
+        { "type": "circle", "x": 0.04, "y": 0.16, "w": 0.26, "h": 0.68, "fill": "#FFFFFF", "anim": "pulse" },
+        { "type": "icon", "icon": "clock", "x": 0.09, "y": 0.28, "w": 0.16, "h": 0.44, "color": "$primary" },
+        { "type": "rect", "x": 0.35, "y": 0.14, "w": 0.28, "h": 0.16, "radius": 24, "fill": "#FFFFFF" },
+        { "type": "text", "x": 0.37, "y": 0.17, "w": 0.24, "h": 0.1, "text": "{{badge}}", "size": 22, "weight": 800, "color": "$primary" },
+        { "type": "text", "x": 0.35, "y": 0.36, "w": 0.6, "h": 0.3, "text": "{{title}}", "size": 62, "weight": 900, "color": "#FFFFFF", "delay": 0.15 },
+        { "type": "text", "x": 0.35, "y": 0.68, "w": 0.6, "h": 0.18, "text": "{{schedule}}", "size": 34, "weight": 600, "font": "body", "color": "#FFFFFF", "delay": 0.3 }
+      ]
+    }
+  ],
+  "icons": [
+    {
+      "name": "Rocket Launch",
+      "tags": ["roket", "startup", "deploy"],
+      "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z\"/><path d=\"m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z\"/><path d=\"M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0\"/><path d=\"M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5\"/></svg>"
+    },
+    {
+      "name": "Sparkles AI",
+      "tags": ["ai", "sparkles", "magic"],
+      "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z\"/><path d=\"M20 3v4\"/><path d=\"M22 5h-4\"/><path d=\"M4 17v2\"/><path d=\"M5 18H3\"/></svg>"
+    },
+    {
+      "name": "Coffee Cup",
+      "tags": ["kopi", "cafe", "minuman"],
+      "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M17 8h1a4 4 0 1 1 0 8h-1\"/><path d=\"M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z\"/><line x1=\"6\" x2=\"6\" y1=\"2\" y2=\"4\"/><line x1=\"10\" x2=\"10\" y1=\"2\" y2=\"4\"/><line x1=\"14\" x2=\"14\" y1=\"2\" y2=\"4\"/></svg>"
+    }
+  ],
+  "transitions": [
+    {
+      "name": "Lempar Kartu Miring",
+      "kind": "custom",
+      "duration": 0.7,
+      "easing": "inOutCubic",
+      "outTo": { "x": -900, "rot": -25, "scale": 0.8, "alpha": 0.2 },
+      "inFrom": { "x": 900, "rot": 25, "scale": 0.8 },
+      "inTo": { "x": 0, "rot": 0, "scale": 1 },
+      "mask": "none"
+    },
+    {
+      "name": "Zoom Portal Iris",
+      "kind": "iris",
+      "duration": 0.65,
+      "easing": "outBack",
+      "params": { "origin": "center" },
+      "energy": 3
+    }
+  ],
+  "animations": [
+    {
+      "name": "Lompat Masuk Miring",
+      "kind": "in",
+      "duration": 0.8,
+      "keyframes": [
+        { "t": 0, "y": 300, "rot": -20, "alpha": 0 },
+        { "t": 0.6, "y": -30, "rot": 6, "alpha": 1, "easing": "outCubic" },
+        { "t": 1, "y": 0, "rot": 0, "easing": "outBack" }
+      ]
+    },
+    {
+      "name": "Floating Halus",
+      "kind": "loop",
+      "duration": 2.2,
+      "loop": {
+        "wave": "sin",
+        "amp": { "y": 18, "rot": 2 },
+        "period": 2.2
+      }
+    }
+  ],
+  "effects": [
+    {
+      "name": "Hujan Ikon Kopi Melayang",
+      "kind": "ikon",
+      "icon": "coffee",
+      "motion": "melayang",
+      "intensity": 1.2
+    },
+    {
+      "name": "Kilau Bokeh Emas",
+      "kind": "bokeh",
+      "style": "emas",
+      "intensity": 1.5
+    }
+  ],
+  "hooks": [
+    "{produk} cuma {harga}? Gas sebelum kehabisan!",
+    "Jangan skip! Ini rahasia {topik} dalam {n} langkah cepat."
+  ],
+  "ctas": [
+    "Klik link di bio {toko} sebelum kuota habis!",
+    "Ambil promo {produk} sekarang juga!"
+  ]
+}
