@@ -75,12 +75,27 @@ export function registerHook(category: string, text: string) {
   const key = category === 'quote' ? 'cerita' : category === 'edukasi' ? 'tips' : 'promo';
   (HOOKS[key] = HOOKS[key] || []).unshift(text);
 }
+export function unregisterHook(category: string, text: string) {
+  const key = category === 'quote' ? 'cerita' : category === 'edukasi' ? 'tips' : 'promo';
+  const index = (HOOKS[key] || []).indexOf(text);
+  if (index >= 0) HOOKS[key].splice(index, 1);
+}
 export function registerCta(category: string, text: string) {
   const key = category === 'quote' ? 'quote' : category === 'edukasi' ? 'edukasi' : 'promo';
   (CTAS[key] = CTAS[key] || []).unshift(text);
 }
+export function unregisterCta(category: string, text: string) {
+  const key = category === 'quote' ? 'quote' : category === 'edukasi' ? 'edukasi' : 'promo';
+  const index = (CTAS[key] || []).indexOf(text);
+  if (index >= 0) CTAS[key].splice(index, 1);
+}
 export function registerQuote(text: string, galau = false) {
   QUOTES[galau ? 'galau' : 'motivasi'].unshift(text);
+}
+export function unregisterQuote(text: string, galau = false) {
+  const bank = QUOTES[galau ? 'galau' : 'motivasi'];
+  const index = bank.indexOf(text);
+  if (index >= 0) bank.splice(index, 1);
 }
 
 /* ------------------------------------------------------------------ */

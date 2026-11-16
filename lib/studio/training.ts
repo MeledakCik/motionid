@@ -3,7 +3,10 @@ import { IconDef, parseSvgMarkup, registerIcon, unregisterIcon } from './packs/i
 import { ComponentDef, parseComponentCode, registerComponent, unregisterComponent } from './packs/components';
 import { parseTransitionCode, registerTransition, TransitionSpec, unregisterTransition } from './packs/transitions';
 import { AnimSpec, parseAnimationCode, registerAnimation, unregisterAnimation } from './packs/animations';
-import { registerCta, registerHook, registerQuote } from './prompt';
+import {
+  registerCta, registerHook, registerQuote,
+  unregisterCta, unregisterHook, unregisterQuote,
+} from './prompt';
 import { EffectSpec, parseEffectCode, registerEffect, unregisterEffect } from './packs/effects';
 
 /**
@@ -53,6 +56,21 @@ export interface BulkParseResult {
 export const packId = (row: Pick<TrainingRow, 'id'>, type: string) => `adm-${type.replace('_pack', '')}-${row.id}`;
 
 const applied = new Set<string>();
+type AppliedEntry = { type: TrainingItemType; id: string; category: string; content: string };
+const appliedEntries = new Map<string, AppliedEntry[]>();
+
+function unregisterEntry(entry: AppliedEntry) {
+  if (entry.type === 'icon_pack') unregisterIcon(entry.id);
+  else if (entry.type === 'component_pack') unregisterComponent(entry.id);
+  else if (entry.type === 'transition_pack') unregisterTransition(entry.id);
+  else if (entry.type === 'animation_pack') unregisterAnimation(entry.id);
+  else if (entry.type === 'effect_pack') unregisterEffect(entry.id);
+  else if (entry.type === 'hook') unregisterHook(entry.category, entry.content);
+  else if (entry.type === 'cta') unregisterCta(entry.category, entry.content);
+  else if (entry.type === 'scene2' || entry.type === 'scene3') {
+    if (entry.category === 'quote') unregisterQuote(entry.content);
+  }
+}
 
 function applySingleItem(
   id: string,
@@ -117,10 +135,25 @@ function applySingleItem(
 }
 
 export function applyRow(row: TrainingRow): { ok: boolean; error?: string } {
+  // Replacing a row must remove every registration created by its previous value,
+  // including children expanded from a JSON bundle.
+  (appliedEntries.get(row.id) || []).forEach(unregisterEntry);
+  appliedEntries.delete(row.id);
+  applied.delete(row.id);
   const name = row.subtext || 'Custom';
   const tags = Array.isArray(row.metadata_json?.tags) ? (row.metadata_json!.tags as string[]) : [];
-  const direct = applySingleItem(packId(row, row.type), row.type, name, row.category || 'all', row.content_text, tags);
-  if (direct.ok) return direct;
+  const entries: AppliedEntry[] = [];
+  const register = (id: string, type: TrainingItemType, category: string, content: string) => {
+    const result = applySingleItem(id, type, name, category, content, tags);
+    if (result.ok) entries.push({ id, type, category, content });
+    return result;
+  };
+  const directId = packId(row, row.type);
+  const direct = register(directId, row.type as TrainingItemType, row.category || 'all', row.content_text);
+  if (direct.ok) {
+    appliedEntries.set(row.id, entries);
+    return direct;
+  }
 
   // Fallback apabila content_text berisi JSON Array / Bundle yang disimpan langsung
   const bulk = parseBulkTrainingInput(row.content_text, (row.type as TrainingItemType) || 'component_pack', name, row.category || 'all', tags);
@@ -128,21 +161,21 @@ export function applyRow(row: TrainingRow): { ok: boolean; error?: string } {
     bulk.items.forEach((item, idx) => {
       if (!item.ok) return;
       const subId = bulk.items.length === 1 ? packId(row, item.type) : `${packId(row, item.type)}-${idx}`;
-      applySingleItem(subId, item.type, item.name, item.category, item.content_text, item.tags);
+      const result = applySingleItem(subId, item.type, item.name, item.category, item.content_text, item.tags);
+      if (result.ok) entries.push({ id: subId, type: item.type, category: item.category, content: item.content_text });
     });
+    appliedEntries.set(row.id, entries);
     return { ok: true };
   }
   return direct;
 }
 
 export function removeRow(row: Pick<TrainingRow, 'id' | 'type'>) {
-  const id = packId(row, row.type);
+  const entries = appliedEntries.get(row.id);
+  if (entries) entries.forEach(unregisterEntry);
+  else unregisterEntry({ id: packId(row, row.type), type: row.type as TrainingItemType, category: '', content: '' });
+  appliedEntries.delete(row.id);
   applied.delete(row.id);
-  if (row.type === 'icon_pack') unregisterIcon(id);
-  if (row.type === 'component_pack') unregisterComponent(id);
-  if (row.type === 'transition_pack') unregisterTransition(id);
-  if (row.type === 'animation_pack') unregisterAnimation(id);
-  if (row.type === 'effect_pack') unregisterEffect(id);
 }
 
 /** Deteksi otomatis tipe item JSON jika tidak disebutkan secara eksplisit */
