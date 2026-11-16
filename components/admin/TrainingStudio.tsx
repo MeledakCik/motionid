@@ -63,6 +63,8 @@ const BUCKET_LABEL: Record<string, string> = {
   ctas: 'cta',
 };
 
+const TRAINING_LIST_TYPES = ['icon_pack', 'component_pack', 'transition_pack', 'animation_pack', 'effect_pack', 'hook', 'cta'] as const;
+
 const ICON_EXAMPLE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   <path d="M17 8h1a4 4 0 1 1 0 8h-1"/>
   <path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/>
@@ -561,6 +563,7 @@ export default function TrainingStudio() {
   const [code, setCode] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [rows, setRows] = useState<TrainingRow[]>([]);
+  const [rowTotals, setRowTotals] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
@@ -599,34 +602,39 @@ export default function TrainingStudio() {
   const fetchRows = useCallback(async () => {
     setLoading(true);
     const supabase = createClient();
-    const pageSize = 500;
-    const allRows: TrainingRow[] = [];
-    let error: { message: string } | null = null;
-    for (let from = 0; ; from += pageSize) {
-      const result = await supabase
+    const [rowsResult, countResults] = await Promise.all([
+      supabase
         .from('ai_training_data')
         .select('id,type,category,content_text,subtext,metadata_json,created_at')
-        .in('type', ['icon_pack', 'component_pack', 'transition_pack', 'animation_pack', 'effect_pack', 'hook', 'cta'])
+        .in('type', [...TRAINING_LIST_TYPES])
         .order('created_at', { ascending: false })
         .order('id', { ascending: false })
-        .range(from, from + pageSize - 1);
-      if (result.error) {
-        error = result.error;
-        break;
-      }
-      const page = (result.data || []) as TrainingRow[];
-      allRows.push(...page);
-      if (page.length < pageSize) break;
-    }
-    if (error) {
+        .range(0, 99),
+      Promise.all(TRAINING_LIST_TYPES.map(async (type) => {
+        const result = await supabase
+          .from('ai_training_data')
+          .select('id', { count: 'exact', head: true })
+          .eq('type', type);
+        return [type, result.count || 0, result.error] as const;
+      })),
+    ]);
+    if (rowsResult.error) {
       setNotice({
         ok: false,
-        text: /does not exist|schema/i.test(error.message)
+        text: /does not exist|schema/i.test(rowsResult.error.message)
           ? 'Tabel ai_training_data belum ada. Jalankan supabase/migration.sql.'
-          : error.message,
+          : rowsResult.error.message,
       });
     }
-    setRows(allRows);
+    const totals: Record<string, number> = {};
+    countResults.forEach(([type, count, countError]) => {
+      totals[type] = count;
+      if (countError && !rowsResult.error) {
+        setNotice({ ok: false, text: countError.message });
+      }
+    });
+    setRowTotals(totals);
+    setRows((rowsResult.data || []) as TrainingRow[]);
     setLoading(false);
   }, []);
 
@@ -817,6 +825,7 @@ export default function TrainingStudio() {
     removeRow(row);
     setRows((r) => r.filter((x) => x.id !== row.id));
     force((n) => n + 1);
+    fetchRows();
   };
 
   const edit = (row: TrainingRow) => {
@@ -852,6 +861,11 @@ export default function TrainingStudio() {
   const listForTab = rows.filter((r) =>
     tab === 'bundle_pack' ? true : tab === 'teks' ? r.type === 'hook' || r.type === 'cta' : r.type === tab
   );
+  const totalForTab = tab === 'bundle_pack'
+    ? TRAINING_LIST_TYPES.reduce((total, type) => total + (rowTotals[type] || 0), 0)
+    : tab === 'teks'
+      ? (rowTotals.hook || 0) + (rowTotals.cta || 0)
+      : rowTotals[tab] || 0;
   const counts = {
     icon_pack: allIcons().length,
     component_pack: componentCount(),
@@ -1219,7 +1233,10 @@ export default function TrainingStudio() {
         {/* ------ daftar ------ */}
         <div className="mk-card mt-6 p-4 sm:p-5">
           <div className="mb-3 flex items-center justify-between">
-            <div className="text-sm font-extrabold">Hasil training ({listForTab.length})</div>
+            <div>
+              <div className="text-sm font-extrabold">Hasil training ({totalForTab})</div>
+              <div className="mt-1 text-xs text-mk-dim">Menampilkan {listForTab.length} data terbaru, maksimal 100.</div>
+            </div>
             <button type="button" className="mk-btn-icon" onClick={fetchRows} title="Muat ulang">
               <RefreshCw className={cx('h-4 w-4', loading && 'animate-spin')} />
             </button>
