@@ -178,7 +178,7 @@ function inferItemType(obj: Record<string, unknown>, fallback: TrainingItemType)
     }
   }
   if (typeof obj.intensity === 'number' || typeof obj.motion === 'string' || typeof obj.style === 'string') {
-    if (typeof obj.kind === 'string') return 'effect_pack';
+    return 'effect_pack';
   }
   if (typeof obj.hook === 'string') return 'hook';
   if (typeof obj.cta === 'string') return 'cta';
@@ -468,6 +468,245 @@ export function parseBulkTrainingInput(
         : firstErr.error
       : undefined,
   };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Impor file JSON / SVG massal                                                */
+/* -------------------------------------------------------------------------- */
+
+export type TrainingBucketKey =
+  | 'icons'
+  | 'components'
+  | 'transitions'
+  | 'animations'
+  | 'effects'
+  | 'hooks'
+  | 'ctas';
+
+export interface TrainingUploadFile {
+  name: string;
+  text: string;
+}
+
+export interface MergedTrainingUpload {
+  /** JSON siap tempel ke textarea (array tunggal atau bundle multi-kategori). */
+  code: string;
+  itemCount: number;
+  bucketCounts: Partial<Record<TrainingBucketKey, number>>;
+  /** File yang diawali `{`/`[` tetapi JSON-nya tidak bisa dibaca. */
+  failedFiles: string[];
+}
+
+const BUCKET_KEYS: TrainingBucketKey[] = [
+  'icons',
+  'components',
+  'transitions',
+  'animations',
+  'effects',
+  'hooks',
+  'ctas',
+];
+
+/** Alias key bundle yang diterima, termasuk nama tipe database (`*_pack`). */
+const BUCKET_ALIASES: Record<string, TrainingBucketKey> = {
+  icons: 'icons',
+  icon_pack: 'icons',
+  components: 'components',
+  component_pack: 'components',
+  widgets: 'components',
+  transitions: 'transitions',
+  transition_pack: 'transitions',
+  animations: 'animations',
+  animation_pack: 'animations',
+  effects: 'effects',
+  effect_pack: 'effects',
+  hooks: 'hooks',
+  ctas: 'ctas',
+};
+
+function bucketForType(type: TrainingItemType): TrainingBucketKey {
+  switch (type) {
+    case 'icon_pack':
+      return 'icons';
+    case 'component_pack':
+      return 'components';
+    case 'transition_pack':
+      return 'transitions';
+    case 'animation_pack':
+      return 'animations';
+    case 'effect_pack':
+      return 'effects';
+    case 'cta':
+      return 'ctas';
+    default:
+      return 'hooks';
+  }
+}
+
+function typeForBucket(bucket: TrainingBucketKey): TrainingItemType {
+  switch (bucket) {
+    case 'icons':
+      return 'icon_pack';
+    case 'components':
+      return 'component_pack';
+    case 'transitions':
+      return 'transition_pack';
+    case 'animations':
+      return 'animation_pack';
+    case 'effects':
+      return 'effect_pack';
+    case 'ctas':
+      return 'cta';
+    default:
+      return 'hook';
+  }
+}
+
+function bucketForItem(item: unknown, fallback: TrainingBucketKey): TrainingBucketKey {
+  if (typeof item === 'string') {
+    return /<svg[\s\S]*<\/svg>/i.test(item) ? 'icons' : fallback;
+  }
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return fallback;
+  const inferred = inferItemType(item as Record<string, unknown>, typeForBucket(fallback));
+  return bucketForType(inferred);
+}
+
+function parseJsonLoose(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    try {
+      return JSON.parse(`[${text.replace(/\}\s*\{/g, '},{')}]`);
+    } catch {
+      return undefined;
+    }
+  }
+}
+
+function fileBaseName(name: string): string {
+  return String(name || 'item')
+    .replace(/\.[^.]+$/, '')
+    .replace(/[_-]+/g, ' ')
+    .trim() || 'item';
+}
+
+function svgName(svg: string): string {
+  const match = svg.match(/(?:data-name|aria-label|id)=["']([^"']+)["']/i);
+  return match?.[1] || '';
+}
+
+/**
+ * Menggabungkan banyak file upload (JSON array, bundle JSON, file SVG, atau
+ * daftar teks) menjadi satu JSON siap parse. Semua item dikelompokkan ke
+ * kategori yang sesuai supaya bisa disimpan sekaligus.
+ */
+export function mergeTrainingUploads(
+  files: TrainingUploadFile[],
+  fallbackType: TrainingItemType
+): MergedTrainingUpload {
+  const buckets: Record<TrainingBucketKey, unknown[]> = {
+    icons: [],
+    components: [],
+    transitions: [],
+    animations: [],
+    effects: [],
+    hooks: [],
+    ctas: [],
+  };
+  const fallback = bucketForType(fallbackType);
+  const failedFiles: string[] = [];
+  let itemCount = 0;
+
+  const push = (bucket: TrainingBucketKey, item: unknown) => {
+    buckets[bucket].push(item);
+    itemCount++;
+  };
+
+  const absorb = (parsed: unknown) => {
+    if (Array.isArray(parsed)) {
+      parsed.forEach((item) => push(bucketForItem(item, fallback), item));
+      return;
+    }
+    if (!parsed || typeof parsed !== 'object') return;
+    const obj = parsed as Record<string, unknown>;
+
+    let hasBundleKey = false;
+    for (const [rawKey, bucket] of Object.entries(BUCKET_ALIASES)) {
+      if (!Array.isArray(obj[rawKey])) continue;
+      hasBundleKey = true;
+      (obj[rawKey] as unknown[]).forEach((item) => push(bucket, item));
+    }
+    if (hasBundleKey) return;
+
+    const genericKey = ['items', 'presets', 'data', 'packs', 'training'].find((key) =>
+      Array.isArray(obj[key])
+    );
+    if (genericKey) {
+      (obj[genericKey] as unknown[]).forEach((item) => push(bucketForItem(item, fallback), item));
+      return;
+    }
+
+    push(bucketForItem(obj, fallback), obj);
+  };
+
+  for (const file of files) {
+    const text = String(file.text || '').trim();
+    if (!text) continue;
+
+    let handled = false;
+    if (text.startsWith('{') || text.startsWith('[')) {
+      const parsed = parseJsonLoose(text);
+      if (parsed !== undefined) {
+        absorb(parsed);
+        handled = true;
+      } else {
+        failedFiles.push(file.name);
+      }
+    }
+    if (handled) continue;
+
+    const svgMatches = text.match(/<svg[\s\S]*?<\/svg>/gi);
+    if (svgMatches?.length) {
+      const base = fileBaseName(file.name);
+      svgMatches.forEach((svg, index) => {
+        const name = svgName(svg) || (svgMatches.length > 1 ? `${base} ${index + 1}` : base);
+        push('icons', { name, svg });
+      });
+      continue;
+    }
+
+    if (fallbackType === 'hook' || fallbackType === 'cta') {
+      const lines = text
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+      lines.forEach((line) => push(fallback, line));
+      continue;
+    }
+
+    // Teks mentah pada tab pack tetap dibawa apa adanya supaya error
+    // validasinya terlihat jelas di preview.
+    push(fallback, text);
+  }
+
+  const usedKeys = BUCKET_KEYS.filter((key) => buckets[key].length > 0);
+  const bucketCounts: Partial<Record<TrainingBucketKey, number>> = {};
+  usedKeys.forEach((key) => {
+    bucketCounts[key] = buckets[key].length;
+  });
+
+  let code = '';
+  if (usedKeys.length === 1) {
+    code = JSON.stringify(buckets[usedKeys[0]], null, 2);
+  } else if (usedKeys.length > 1) {
+    code = JSON.stringify(
+      Object.fromEntries(usedKeys.map((key) => [key, buckets[key]])),
+      null,
+      2
+    );
+  }
+
+  return { code, itemCount, bucketCounts, failedFiles };
 }
 
 let inflight: Promise<number> | null = null;

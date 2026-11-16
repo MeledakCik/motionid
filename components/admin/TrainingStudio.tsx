@@ -21,15 +21,16 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { allIcons, IconDef, iconSvgMarkup, parseSvgMarkup } from '@/lib/studio/packs/icons';
-import { allComponents, COMPONENT_CODE_EXAMPLE, componentKinds, ComponentDef, drawComponent, parseComponentCode } from '@/lib/studio/packs/components';
-import { allTransitions, drawTransition, parseTransitionCode, TRANSITION_CODE_EXAMPLE, TransitionSpec } from '@/lib/studio/packs/transitions';
+import { allComponents, COMPONENT_CODE_EXAMPLE, componentKinds, ComponentDef, drawComponent, parseComponentCode, componentCount } from '@/lib/studio/packs/components';
+import { allTransitions, drawTransition, parseTransitionCode, TRANSITION_CODE_EXAMPLE, transitionCount, TransitionSpec } from '@/lib/studio/packs/transitions';
 import { allAnimations, ANIMATION_CODE_EXAMPLE, AnimSpec, evalIn, evalLoop, parseAnimationCode } from '@/lib/studio/packs/animations';
 import { TEMPLATES, THEMES } from '@/lib/studio/packs/templates';
-import { allEffects, EFFECT_CODE_EXAMPLE, effectKinds, EffectSpec, parseEffectCode } from '@/lib/studio/packs/effects';
+import { allEffects, EFFECT_CODE_EXAMPLE, effectCount, effectKinds, EffectSpec, parseEffectCode } from '@/lib/studio/packs/effects';
 import { EffectThumb } from '@/components/studio/Thumbs';
 import {
   applyRow,
   loadTraining,
+  mergeTrainingUploads,
   parseBulkTrainingInput,
   ParsedTrainingItem,
   removeRow,
@@ -51,6 +52,16 @@ const TABS: Array<{ id: Tab; label: string; short: string }> = [
   { id: 'effect_pack', label: 'Input Kode Efek', short: 'Efek' },
   { id: 'teks', label: 'Bank Teks (Hook/CTA)', short: 'Teks' },
 ];
+
+const BUCKET_LABEL: Record<string, string> = {
+  icons: 'ikon',
+  components: 'komponen',
+  transitions: 'transisi',
+  animations: 'animasi',
+  effects: 'efek',
+  hooks: 'hook',
+  ctas: 'cta',
+};
 
 const ICON_EXAMPLE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   <path d="M17 8h1a4 4 0 1 1 0 8h-1"/>
@@ -236,7 +247,10 @@ const GUIDE: Record<Exclude<Tab, 'teks'>, React.ReactNode> = {
         Tipe tiap objek juga bisa dideteksi otomatis dari struktur field-nya (misal ada <code>layers</code> = Komponen, ada <code>svg</code> = Ikon, ada <code>keyframes</code> = Animasi, ada <code>outTo/inFrom</code> = Transisi).
       </li>
       <li>
-        Kamu juga bisa langsung klik <b>Upload File .json</b> untuk memasukkan puluhan preset sekaligus tanpa input satu-satu.
+        Klik <b>Upload File (bisa banyak)</b> atau <b>drag &amp; drop</b> ke form untuk memasukkan puluhan preset sekaligus. File boleh berupa beberapa JSON, SVG, atau TXT — semuanya digabung otomatis per kategori.
+      </li>
+      <li>
+        Item yang valid tetap bisa disimpan walau ada item yang rusak; item rusak akan dilewati dan ditandai merah di preview.
       </li>
     </ul>
   ),
@@ -554,6 +568,7 @@ export default function TrainingStudio() {
   const [selectedPreviewIdx, setSelectedPreviewIdx] = useState(0);
   const [, force] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
   const [debounced, setDebounced] = useState({ code: '', name: '', category: 'all', tags: '' });
 
   useEffect(() => {
@@ -625,16 +640,23 @@ export default function TrainingStudio() {
       .map((t) => t.trim())
       .filter(Boolean);
     const parsedNow = parseBulkTrainingInput(code, defaultItemType, name, category, tagList);
+    const itemsToSave = parsedNow.items.filter((item) => item.ok);
+    const skipped = parsedNow.items.length - itemsToSave.length;
 
-    if (!parsedNow.ok || !parsedNow.items.length) {
-      return setNotice({ ok: false, text: parsedNow.errorSummary || 'Kode belum valid.' });
+    if (!itemsToSave.length) {
+      return setNotice({
+        ok: false,
+        text:
+          parsedNow.errorSummary ||
+          'Tidak ada item valid. Periksa item bertanda merah di preview lalu coba lagi.',
+      });
     }
 
     setSaving(true);
     const supabase = createClient();
 
     if (editingId && parsedNow.items.length === 1) {
-      const item = parsedNow.items[0];
+      const item = itemsToSave[0];
       const payload = {
         type: item.type,
         category: item.category,
@@ -654,7 +676,7 @@ export default function TrainingStudio() {
       return;
     }
 
-    const payloads = parsedNow.items.map((item) => ({
+    const payloads = itemsToSave.map((item) => ({
       type: item.type,
       category: item.category,
       content_text: item.content_text,
@@ -669,30 +691,65 @@ export default function TrainingStudio() {
     const insertedRows = (res.data || []) as TrainingRow[];
     insertedRows.forEach((row) => applyRow(row));
 
+    const skippedText =
+      skipped > 0 ? ` ${skipped} item tidak valid dilewati — perbaiki kodenya lalu simpan ulang.` : '';
     setNotice({
       ok: true,
       text:
-        insertedRows.length > 1
+        (insertedRows.length > 1
           ? `Berhasil menyimpan ${insertedRows.length} item training sekaligus! Semua langsung aktif di editor.`
-          : 'Tersimpan! Pack baru langsung muncul di editor semua user.',
+          : 'Tersimpan! Pack baru langsung muncul di editor semua user.') + skippedText,
     });
     reset();
     fetchRows();
     force((n) => n + 1);
   };
 
+  const loadFiles = async (files: File[]) => {
+    const readable = files.filter((file) => /\.(json|svg|txt)$/i.test(file.name) || file.type.includes('json') || file.type.includes('svg') || file.type.includes('text'));
+    if (!readable.length) {
+      return setNotice({ ok: false, text: 'Pilih file .json, .svg, atau .txt yang berisi data training.' });
+    }
+
+    const contents = await Promise.all(
+      readable.map(async (file) => ({ name: file.name, text: await file.text() }))
+    );
+    const merged = mergeTrainingUploads(contents, defaultItemType);
+
+    if (!merged.itemCount) {
+      return setNotice({
+        ok: false,
+        text: `Tidak ada item yang bisa dibaca dari ${readable.length} file.${
+          merged.failedFiles.length ? ` JSON gagal dibaca: ${merged.failedFiles.join(', ')}.` : ''
+        }`,
+      });
+    }
+
+    const categories = Object.keys(merged.bucketCounts);
+    setCode(merged.code);
+    setSelectedPreviewIdx(0);
+    if (categories.length > 1) setTab('bundle_pack');
+    setNotice({
+      ok: true,
+      text: `${readable.length} file dimuat: ${merged.itemCount} item (${categories
+        .map((key) => BUCKET_LABEL[key] || key)
+        .join(', ')}). Periksa preview lalu klik Simpan.${
+        merged.failedFiles.length ? ` File gagal dibaca: ${merged.failedFiles.join(', ')}.` : ''
+      }`,
+    });
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const content = String(reader.result || '');
-      setCode(content);
-      setSelectedPreviewIdx(0);
-      setNotice({ ok: true, text: `File "${file.name}" berhasil dimuat. Periksa preview lalu klik Simpan.` });
-    };
-    reader.readAsText(file);
+    const files = Array.from(e.target.files || []);
+    if (files.length) void loadFiles(files);
     e.target.value = '';
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragOver(false);
+    const files = Array.from(e.dataTransfer.files || []);
+    if (files.length) void loadFiles(files);
   };
 
   const exportAllJson = () => {
@@ -766,12 +823,12 @@ export default function TrainingStudio() {
 
   const formatJson = () => {
     try {
-      const stitched = code.trim().startsWith('{') || code.trim().startsWith('[') ? code : code;
+      const trimmed = code.trim();
       let parsed: unknown;
       try {
-        parsed = JSON.parse(stitched);
+        parsed = JSON.parse(trimmed);
       } catch {
-        parsed = JSON.parse(`[${stitched.replace(/\}\s*\{/g, '},{')}]`);
+        parsed = JSON.parse(`[${trimmed.replace(/\}\s*\{/g, '},{')}]`);
       }
       setCode(JSON.stringify(parsed, null, 2));
     } catch (e) {
@@ -853,14 +910,34 @@ export default function TrainingStudio() {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".json,.svg,.txt,application/json"
+          multiple
+          accept=".json,.svg,.txt,application/json,image/svg+xml,text/plain"
           onChange={handleFileUpload}
           className="hidden"
         />
 
         <div className="grid gap-5 lg:grid-cols-2">
           {/* ------ form ------ */}
-          <div className="mk-card space-y-4 p-4 sm:p-5">
+          <div
+            className={cx(
+              'mk-card space-y-4 p-4 transition sm:p-5',
+              dragOver && 'ring-2 ring-mk-coral ring-offset-2 ring-offset-mk-page'
+            )}
+            onDragOver={(e) => {
+              e.preventDefault();
+              if (!dragOver) setDragOver(true);
+            }}
+            onDragLeave={(e) => {
+              if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+              setDragOver(false);
+            }}
+            onDrop={handleDrop}
+          >
+            {dragOver && (
+              <div className="rounded-xl border border-dashed border-mk-coral bg-mk-coral/10 px-3 py-2 text-center text-xs font-bold text-mk-coral">
+                Lepas file .json / .svg / .txt di sini untuk mengimpor sekaligus
+              </div>
+            )}
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-sm font-extrabold">
                 {tab === 'bundle_pack' ? <FileJson className="h-4 w-4 text-mk-coral" /> : <Code2 className="h-4 w-4 text-mk-coral" />}
@@ -871,9 +948,9 @@ export default function TrainingStudio() {
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 className="mk-chip py-1 text-xs"
-                title="Upload file .json atau .svg dari komputer"
+                title="Upload satu atau beberapa file .json / .svg / .txt"
               >
-                <Upload className="h-3.5 w-3.5" /> Upload File .json
+                <Upload className="h-3.5 w-3.5" /> Upload File (bisa banyak)
               </button>
             </div>
 
@@ -974,8 +1051,16 @@ export default function TrainingStudio() {
                         : '[\n  { "name": "Preset 1", ... },\n  { "name": "Preset 2", ... }\n]'
                     }
                   />
-                  <div className={cx('mt-1.5 text-[11px] font-semibold', !debounced.code ? 'text-mk-dim' : v.ok ? 'text-mk-mint' : 'text-red-300')}>
-                    {!debounced.code ? 'Tempel kode lalu lihat preview langsung di kanan.' : v.ok ? '✓ Kode valid — preview aktif' : `✗ ${v.error}`}
+                  <div className={cx('mt-1.5 text-[11px] font-semibold', !debounced.code ? 'text-mk-dim' : bulkResult.validCount > 0 ? 'text-mk-mint' : 'text-red-300')}>
+                    {!debounced.code
+                      ? 'Tempel kode atau upload file, lalu lihat preview langsung di kanan.'
+                      : bulkResult.validCount > 0
+                      ? `✓ ${bulkResult.validCount} item valid${
+                          bulkResult.items.length > bulkResult.validCount
+                            ? ` · ${bulkResult.items.length - bulkResult.validCount} item perlu diperbaiki`
+                            : ' — preview aktif'
+                        }`
+                      : `✗ ${bulkResult.errorSummary || 'Belum ada item valid'}`}
                   </div>
                 </div>
               </>
@@ -998,12 +1083,16 @@ export default function TrainingStudio() {
             </div>
 
             <div className="flex gap-2">
-              <button type="button" onClick={save} disabled={saving || !bulkResult.ok} className="mk-btn-primary flex-1">
+              <button type="button" onClick={save} disabled={saving || bulkResult.validCount === 0} className="mk-btn-primary flex-1">
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}{' '}
                 {editingId
                   ? 'Simpan perubahan'
-                  : bulkResult.items.length > 1
-                  ? `Simpan & Aktifkan Semua (${bulkResult.items.length} Item)`
+                  : bulkResult.validCount > 1
+                  ? `Simpan ${bulkResult.validCount} Item Valid${
+                      bulkResult.items.length > bulkResult.validCount
+                        ? ` (lewati ${bulkResult.items.length - bulkResult.validCount})`
+                        : ''
+                    }`
                   : 'Simpan & Aktifkan'}
               </button>
               {(editingId || code) && (
@@ -1012,6 +1101,11 @@ export default function TrainingStudio() {
                 </button>
               )}
             </div>
+            {bulkResult.items.length > bulkResult.validCount && bulkResult.validCount > 0 && (
+              <p className="text-[11px] leading-relaxed text-mk-amber">
+                Item yang tidak valid akan dilewati. Perbaiki item bertanda merah di preview kalau ingin menyimpan semuanya.
+              </p>
+            )}
 
             {tab !== 'teks' && (
               <details className="rounded-xl bg-mk-ink p-3 text-[12px] text-mk-muted">
@@ -1040,6 +1134,25 @@ export default function TrainingStudio() {
                 </span>
               )}
             </div>
+
+            {bulkResult.items.length > 1 && (
+              <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold">
+                <span className="text-mk-muted">Total {bulkResult.items.length}</span>
+                <span className="text-mk-mint">{bulkResult.validCount} valid</span>
+                {bulkResult.items.length > bulkResult.validCount && (
+                  <button
+                    type="button"
+                    className="text-red-400 underline decoration-dotted"
+                    onClick={() => {
+                      const firstBad = bulkResult.items.findIndex((item) => !item.ok);
+                      if (firstBad >= 0) setSelectedPreviewIdx(firstBad);
+                    }}
+                  >
+                    {bulkResult.items.length - bulkResult.validCount} gagal — lihat error
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Pemilih item saat mode Batch JSON */}
             {bulkResult.items.length > 1 && (
@@ -1084,7 +1197,7 @@ export default function TrainingStudio() {
               <PreviewAnimation spec={activePreviewItem.anim} />
             ) : activePreviewItem.fx ? (
               <div className="mx-auto aspect-[16/10] w-full overflow-hidden rounded-2xl">
-                <EffectThumb spec={v.fx} primary="#FF6A3D" secondary="#FFB547" autoplay w={640} h={400} />
+                <EffectThumb spec={activePreviewItem.fx} primary="#FF6A3D" secondary="#FFB547" autoplay w={640} h={400} />
               </div>
             ) : null}
           </div>
