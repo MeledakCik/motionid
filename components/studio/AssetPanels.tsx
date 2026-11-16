@@ -56,32 +56,8 @@ export function TemplatePanel() {
         <Segmented value={tab} onChange={(v) => (setTab(v), setLimit(PAGE))} options={[{ value: 'cocok', label: 'Cocok untuk prompt' }, { value: 'semua', label: `Semua (${TEMPLATES.length})` }]} />
         {tab === 'semua' && (
           <div className="space-y-2">
-            <div className="grid grid-cols-2 gap-2">
-              <Dropdown
-                label="Layout"
-                value={layout}
-                onChange={(v) => (setLayout(v), setLimit(PAGE))}
-                options={[{ value: 'all', label: `Semua layout (${LAYOUTS.length})` }, ...LAYOUTS.map((l) => ({ value: l.id, label: l.name, desc: l.desc }))]}
-                className="w-full"
-                menuWidth={300}
-              />
-              <Dropdown
-                label="Warna"
-                value={theme}
-                onChange={(v) => (setTheme(v), setLimit(PAGE))}
-                options={[
-                  { value: 'all', label: `Semua warna (${THEMES.length})` },
-                  ...THEMES.map((t) => ({
-                    value: t.id,
-                    label: t.name,
-                    icon: <span className="h-5 w-5 rounded-md border border-white/20" style={{ background: `linear-gradient(135deg, ${t.palette.bg} 0 50%, ${t.palette.primary} 50% 100%)` }} />,
-                  })),
-                ]}
-                className="w-full"
-                menuWidth={280}
-                align="right"
-              />
-            </div>
+            <ChipRow value={layout} onChange={(v) => (setLayout(v), setLimit(PAGE))} options={[{ id: 'all', label: 'Semua layout' }, ...LAYOUTS.map((l) => ({ id: l.id, label: l.name }))]} />
+            <ChipRow value={theme} onChange={(v) => (setTheme(v), setLimit(PAGE))} options={[{ id: 'all', label: 'Semua warna' }, ...THEMES.map((t) => ({ id: t.id, label: t.name }))]} />
           </div>
         )}
         <p className="text-[11px] text-mk-dim">Ganti template = susunan & warna baru, teks dan fotomu tetap dipakai.</p>
@@ -101,22 +77,22 @@ export function TemplatePanel() {
               <LazyVisible minH={120} className="aspect-[9/14] bg-mk-ink">
                 <TemplateThumb plan={doc.plan} templateId={t.id} aspect={doc.aspect} assets={doc.assets} />
               </LazyVisible>
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-1.5 pb-1.5 pt-5">
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-1.5 pb-1.5 pt-5 text-white">
                 <div className="truncate text-[11px] font-bold">{t.name}</div>
               </div>
               {active && (
-                <span className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-mk-coral text-mk-ink">
+                <span className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-mk-coral text-white">
                   <Check className="h-3 w-3" />
                 </span>
               )}
               {confirm === t.id && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-black/80 p-2 text-center">
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-mk-deep/85 p-2 text-center text-white">
                   <span className="text-[11px] font-semibold">Terapkan? Posisi elemen akan disusun ulang.</span>
                   <span className="flex gap-1">
-                    <span role="button" tabIndex={0} onClick={(e) => (e.stopPropagation(), apply(t.id))} className="rounded-lg bg-mk-coral px-2 py-1 text-[11px] font-bold text-mk-ink">
+                    <span role="button" tabIndex={0} onClick={(e) => (e.stopPropagation(), apply(t.id))} className="rounded-lg bg-mk-coral px-2 py-1 text-[11px] font-bold text-white">
                       Ya
                     </span>
-                    <span role="button" tabIndex={0} onClick={(e) => (e.stopPropagation(), setConfirm(null))} className="rounded-lg bg-mk-panel-3 px-2 py-1 text-[11px] font-bold">
+                    <span role="button" tabIndex={0} onClick={(e) => (e.stopPropagation(), setConfirm(null))} className="rounded-lg bg-white/15 px-2 py-1 text-[11px] font-bold">
                       Batal
                     </span>
                   </span>
@@ -267,7 +243,7 @@ export function ElementsPanel() {
       <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-3 lg:grid-cols-2">
         {list.slice(0, limit).map((c) => (
           <button key={c.id} type="button" onClick={() => add(c.id)} className="mk-card-2 group overflow-hidden text-left transition hover:border-mk-coral/60" title={c.name}>
-            <LazyVisible minH={90} className="aspect-[20/13] bg-[radial-gradient(circle_at_30%_20%,#3a2a24,#120e0c)]">
+            <LazyVisible minH={90} className="aspect-[20/13] bg-[radial-gradient(circle_at_30%_20%,#3B2C7A,#120B2E)]">
               <ComponentThumb id={c.id} colors={colors} heading={doc.theme.headingFont} body={doc.theme.bodyFont} />
             </LazyVisible>
             <div className="truncate px-2 py-1.5 text-[11px] font-semibold text-mk-muted group-hover:text-mk-cream">
@@ -310,7 +286,7 @@ export function IconsPanel({ onPick }: { onPick?: (id: string) => void }) {
         <ChipRow value={group} onChange={(v) => (setGroup(v), setLimit(60))} options={[{ id: 'all', label: 'Semua' }, ...ICON_GROUP_LIST.map((g) => ({ id: g.id, label: g.label }))]} />
         {!onPick && (
           <label className="flex items-center gap-2 text-xs text-mk-muted">
-            <input type="checkbox" checked={withBg} onChange={(e) => setWithBg(e.target.checked)} className="accent-[#FF6A3D]" />
+            <input type="checkbox" checked={withBg} onChange={(e) => setWithBg(e.target.checked)} className="accent-[#7B50FF]" />
             Pakai latar bulat warna tema
           </label>
         )}
@@ -378,7 +354,7 @@ export function MediaPanel() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={doc.assets[id]} alt="" className="aspect-square w-full object-cover" />
               <div className="grid grid-cols-3 gap-1 p-1.5">
-                <button type="button" title="Jadikan latar scene ini" onClick={() => updateScene(sceneIdx, { background: { type: 'image', color: doc.theme.palette.bg, src: id, fit: 'cover', dim: 0.45, kenBurns: true } })} className="rounded-lg bg-mk-panel-3 py-1 text-[11px] font-bold hover:bg-mk-coral hover:text-mk-ink">
+                <button type="button" title="Jadikan latar scene ini" onClick={() => updateScene(sceneIdx, { background: { type: 'image', color: doc.theme.palette.bg, src: id, fit: 'cover', dim: 0.45, kenBurns: true } })} className="rounded-lg bg-mk-panel-3 py-1 text-[11px] font-bold hover:bg-mk-coral hover:text-white">
                   Latar
                 </button>
                 <button
@@ -389,7 +365,7 @@ export function MediaPanel() {
                     const h = Math.min(H * 0.45, w * 1.1);
                     addLayer(makeImage(id, (W - w) / 2, (H - h) / 2, w, h, { border: { color: '#FFFFFF', width: 8 }, animIn: { id: 'pop-sedang-membal', duration: 0.55, delay: 0.1 }, shadow: { color: 'rgba(0,0,0,0.45)', blur: 40, x: 0, y: 20 } }));
                   }}
-                  className="rounded-lg bg-mk-panel-3 py-1 text-[11px] font-bold hover:bg-mk-coral hover:text-mk-ink"
+                  className="rounded-lg bg-mk-panel-3 py-1 text-[11px] font-bold hover:bg-mk-coral hover:text-white"
                 >
                   <ImagePlus className="mx-auto h-3.5 w-3.5" />
                 </button>
@@ -461,7 +437,7 @@ export function BackgroundPanel() {
             <Slider label="Gelapkan" value={bg.dim ?? 0.4} min={0} max={0.9} step={0.05} onChange={(v) => set({ dim: v })} format={(v) => `${Math.round(v * 100)}%`} />
             <Slider label="Blur" value={bg.blur ?? 0} min={0} max={30} onChange={(v) => set({ blur: v })} />
             <label className="flex items-center gap-2 text-xs text-mk-muted">
-              <input type="checkbox" checked={!!bg.kenBurns} onChange={(e) => set({ kenBurns: e.target.checked })} className="accent-[#FF6A3D]" /> Zoom pelan (Ken Burns)
+              <input type="checkbox" checked={!!bg.kenBurns} onChange={(e) => set({ kenBurns: e.target.checked })} className="accent-[#7B50FF]" /> Zoom pelan (Ken Burns)
             </label>
           </>
         )}
@@ -540,7 +516,7 @@ export function MusicPanel() {
         <button type="button" className="mk-btn-ghost w-full text-xs" onClick={() => audioRef.current?.click()}>
           <Upload className="h-4 w-4" /> {doc.audio ? 'Ganti lagu' : 'Unggah lagu (MP3/M4A, maks 5 MB)'}
         </button>
-        {audioErr && <p className="text-xs text-red-300">{audioErr}</p>}
+        {audioErr && <p className="text-xs text-red-600">{audioErr}</p>}
         <p className="text-xs text-mk-dim">Pastikan kamu punya hak memakai lagunya. Atau pilih musik bebas royalti di bawah, lalu tambahkan lagu trending langsung di TikTok.</p>
       </Section>
       <Section title="Musik bebas royalti (dibuat otomatis)">

@@ -52,8 +52,9 @@ export default function HeroDemo() {
         </div>
       </div>
       <div className="flex min-w-0 justify-center">
-        <div className="relative">
-          <div className="absolute -inset-6 -z-10 rounded-[40px] bg-mk-coral/20 blur-3xl" />
+        <div className="relative isolate">
+          {/* cahaya lembut di belakang ponsel: gradien radial biasa (tanpa filter blur → ringan di semua HP) */}
+          <div aria-hidden className="pointer-events-none absolute -inset-10 -z-10 rounded-[48px] bg-[radial-gradient(closest-side,rgba(123,80,255,0.38),rgba(123,80,255,0.2)_45%,rgba(123,80,255,0.06)_75%,transparent)]" />
           <LivePreview doc={doc} width={260} />
         </div>
       </div>

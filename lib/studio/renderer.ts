@@ -834,7 +834,7 @@ export class Renderer {
     const h = Math.max(3, 8 * u);
     ctx.fillStyle = 'rgba(255,255,255,0.22)';
     ctx.fillRect(0, ph - h, pw, h);
-    ctx.fillStyle = this.doc?.theme.palette.primary || '#FF6A3D';
+    ctx.fillStyle = this.doc?.theme.palette.primary || '#7B50FF';
     ctx.fillRect(0, ph - h, pw * clamp(p), h);
     ctx.restore();
   }

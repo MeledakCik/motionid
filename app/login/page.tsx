@@ -57,8 +57,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="mk-hero-bg flex min-h-screen items-center justify-center p-5 text-mk-cream">
-      <div className="w-full max-w-md space-y-6 rounded-3xl border border-mk-line bg-mk-panel/95 p-7 text-center shadow-2xl sm:p-8">
+    <div className="flex min-h-screen items-center justify-center p-5 text-mk-cream">
+      <div className="mk-glass mk-float w-full max-w-md animate-mk-up space-y-6 rounded-3xl border border-white/80 p-7 text-center sm:p-8">
         <div className="flex justify-center">
           <Logo className="text-lg" />
         </div>
@@ -71,7 +71,7 @@ export default function LoginPage() {
         </div>
 
         {errorMsg && (
-          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-600">
             {errorMsg}
           </div>
         )}
@@ -79,7 +79,7 @@ export default function LoginPage() {
         <button
           onClick={handleGoogleLogin}
           disabled={loading}
-          className="flex w-full items-center justify-center gap-3 rounded-2xl bg-mk-cream px-5 py-3.5 text-sm font-bold text-mk-ink shadow-lg transition hover:bg-white disabled:opacity-50"
+          className="flex w-full items-center justify-center gap-3 rounded-2xl border border-mk-line bg-white px-5 py-3.5 text-sm font-bold text-mk-cream shadow-mk-card transition hover:border-mk-coral/50 hover:bg-mk-panel-2 disabled:opacity-50"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path

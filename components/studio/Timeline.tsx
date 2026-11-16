@@ -86,13 +86,13 @@ export default function Timeline({ clock, onOpenTool }: { clock: PlaybackClock; 
   const trackW = desktop ? 520 : 300;
 
   return (
-    <div className="select-none border-t border-mk-line bg-mk-panel">
+    <div className="mk-glass select-none border-t border-white/60">
       {/* kontrol */}
       <div className="flex items-center gap-2 px-3 py-1.5">
         <button type="button" className="mk-btn-icon" onClick={() => (clock.pause(), clock.seek(0))} title="Ke awal">
           <SkipBack className="h-4 w-4" />
         </button>
-        <button type="button" onClick={() => clock.toggle()} className="flex h-9 w-9 items-center justify-center rounded-full bg-mk-grad text-mk-ink shadow-mk-glow" title="Putar / jeda (Spasi)">
+        <button type="button" onClick={() => clock.toggle()} className="flex h-9 w-9 items-center justify-center rounded-full bg-mk-grad text-white shadow-mk-glow" title="Putar / jeda (Spasi)">
           {playing ? <Pause className="h-4 w-4" /> : <Play className="ml-0.5 h-4 w-4" />}
         </button>
         <span className="font-mono text-xs tabular-nums text-mk-cream">

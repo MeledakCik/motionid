@@ -387,7 +387,7 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
       }}
     >
       {view.z > 1 && (
-        <button type="button" onClick={() => setView({ z: 1, x: 0, y: 0 })} className="absolute bottom-3 right-3 z-20 rounded-full bg-mk-panel/95 px-3 py-1.5 text-xs font-bold text-mk-cream shadow">
+        <button type="button" onClick={() => setView({ z: 1, x: 0, y: 0 })} className="mk-glass mk-pop mk-float absolute bottom-3 right-3 z-20 rounded-full px-3 py-1.5 text-xs font-bold text-mk-cream">
           {Math.round(view.z * 100)}% · Reset zoom
         </button>
       )}
@@ -419,7 +419,7 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
                 className="pointer-events-none absolute rounded border-2 border-dashed border-mk-amber/80"
                 style={{ left: l.x * scale, top: l.y * scale, width: l.w * scale, height: l.h * scale, transform: `rotate(${l.rotation}deg)` }}
               >
-                <span className="absolute -top-2.5 left-1 rounded bg-mk-amber px-1 text-[10px] font-extrabold text-mk-ink">CONTOH</span>
+                <span className="absolute -top-2.5 left-1 rounded bg-mk-amber px-1 text-[10px] font-extrabold text-white">CONTOH</span>
               </div>
             ))}
 
@@ -468,13 +468,13 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
                 onPointerDown={(e) => startHandle(e, 'rot')}
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}
-                className={`pointer-events-auto absolute left-1/2 flex cursor-grab touch-none items-center justify-center rounded-full border-[1.5px] border-mk-coral bg-white text-mk-ink shadow ${coarse ? '-bottom-14 -ml-5 h-10 w-10 text-base' : '-bottom-9 -ml-3 h-6 w-6 text-[11px]'}`}
+                className={`pointer-events-auto absolute left-1/2 flex cursor-grab touch-none items-center justify-center rounded-full border-[1.5px] border-mk-coral bg-white text-mk-coral shadow ${coarse ? '-bottom-14 -ml-5 h-10 w-10 text-base' : '-bottom-9 -ml-3 h-6 w-6 text-[11px]'}`}
                 title="Putar"
               >
                 ↻
               </span>
             )}
-            <span className="absolute -top-6 left-0 whitespace-nowrap rounded bg-mk-coral px-1.5 py-0.5 text-[11px] font-bold text-mk-ink">
+            <span className="absolute -top-6 left-0 whitespace-nowrap rounded bg-mk-coral px-1.5 py-0.5 text-[11px] font-bold text-white">
               {Math.round(selected.w)} × {Math.round(selected.h)}
             </span>
           </div>

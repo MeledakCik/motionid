@@ -125,20 +125,32 @@ function kickerFor(item: PlanItem, c: Ctx): string {
         ({ 'flash-sale': 'FLASH SALE', 'menu-kuliner': 'MENU', launching: 'BARU', event: 'EVENT', testimoni: 'TESTIMONI', 'before-after': 'SEBELUM & SESUDAH', fakta: 'FAKTA', tutorial: 'TUTORIAL', tips: 'TIPS', lowongan: 'LOWONGAN', pengumuman: 'INFO', travel: 'TRAVEL' } as Record<string, string>)[plan.intent] ??
         (plan.category === 'promo' ? 'PROMO' : '')
       );
-    case 'poin':
-      return plan.intent === 'fakta' ? `FAKTA #${nth}` : plan.intent === 'travel' ? `SPOT #${nth}` : nPoints > 1 ? `#${nth} DARI ${nPoints}` : 'KEUNGGULAN';
+    case 'poin': {
+      // label hanya untuk poin bernomor; poin lain diberi label sesuai isinya
+      const numbered = plan.items.filter((i) => i.role === 'poin' && !!i.value && /^\d+$/.test(i.value));
+      if (item.value && /^\d+$/.test(item.value)) {
+        if (plan.intent === 'fakta') return `FAKTA #${item.value}`;
+        if (plan.intent === 'travel') return /^hari\s+\d/i.test(item.title) ? 'ITINERARY' : `SPOT #${item.value}`;
+        return numbered.length > 1 ? `#${item.value} DARI ${numbered.length}` : 'TIPS';
+      }
+      if (/^cara\s+(order|booking|daftar|survei|mulai|ikut)/i.test(item.title)) return 'CARANYA';
+      if (/\?$/.test(item.title)) return '';
+      if (plan.intent === 'lowongan') return 'KUALIFIKASI';
+      if (/^(isi paketnya|pilihan|daftar harga|fasilitas|fitur|materi|benefit)/i.test(item.title)) return 'LENGKAPNYA';
+      return plan.category === 'promo' ? 'KEUNGGULAN' : nPoints > 1 ? `#${nth} DARI ${nPoints}` : 'INFO';
+    }
     case 'langkah':
-      return `LANGKAH ${nth}`;
+      return `LANGKAH ${item.value || nth}`;
     case 'harga':
-      return 'HARGA SPESIAL';
+      return plan.intent === 'event' ? (/gratis/i.test(item.title) ? 'BIAYA' : 'TIKET') : item.value || (item.body && /^rp\s?\d/i.test(item.body)) ? 'HARGA SPESIAL' : 'HARGA';
     case 'bukti':
-      return 'BUKTI NYATA';
+      return plan.intent === 'testimoni' ? (item.placeholder ? 'REVIEW' : 'KATA MEREKA') : 'BUKTI NYATA';
     case 'produk':
-      return plan.intent === 'menu-kuliner' ? 'MENU' : 'PRODUK';
+      return plan.intent === 'menu-kuliner' ? 'MENU' : plan.intent === 'before-after' ? 'SESUDAH' : plan.intent === 'lowongan' ? 'POSISI' : plan.intent === 'event' ? 'ACARA' : 'PRODUK';
     case 'info':
       return 'INFO';
     case 'masalah':
-      return 'MASALAH';
+      return /\?$/.test(item.title) ? '' : plan.intent === 'before-after' ? 'SEBELUM' : 'MASALAH';
     case 'cta':
       return 'YUK!';
     default:
@@ -307,7 +319,9 @@ function buildRole(item: PlanItem, c: Ctx): Layer[] {
     out.push(headline(c, item.title, t0 + 110 * k, H * 0.18));
     if (item.body) out.push(bodyText(c, item.body, t0 + 110 * k + H * 0.19, H * 0.08));
     if (item.role === 'produk' && plan.keywords.length) {
-      const chips = (item.value || plan.keywords.slice(0, 3).map((w) => w[0].toUpperCase() + w.slice(1)).join('|'));
+      // chip di bawah foto: keunggulan dari prompt lebih bermakna daripada kata kunci acak
+      const feats = (plan.features || []).filter((f) => f.length <= 22).slice(0, 3);
+      const chips = item.value || (feats.length >= 2 ? feats.join('|') : plan.keywords.slice(0, 3).map((w) => w[0].toUpperCase() + w.slice(1)).join('|'));
       out.push(makeComponent(c, componentIdFor('chips', st), c.x0, H * 0.86, c.cw, 110 * k, { items: chips }, { animIn: anim('fade', 1) }));
     }
     return out;
@@ -321,7 +335,7 @@ function buildRole(item: PlanItem, c: Ctx): Layer[] {
       if (item.body) out.push(bodyText(c, item.body, Y(0.6), area * 0.1));
       if (plan.discount && plan.category === 'promo') {
         const s = 300 * k;
-        out.push(makeComponent(c, componentIdFor('discount', st === 'kaca' ? 'gradien' : st), L.align === 'left' ? W - s - c.m : (W - s) / 2, Y(0.72), s, s, { value: plan.discount, label: plan.discount === 'B1G1' ? 'PROMO' : 'OFF' }, { animIn: anim('fisika-elastis-kuat', 0.9), animLoop: 'loop-denyut-lembut' }));
+        out.push(makeComponent(c, componentIdFor('discount', st === 'kaca' ? 'gradien' : st), L.align === 'left' ? W - s - c.m : (W - s) / 2, Y(0.72), s, s, { value: plan.discount, label: /^B\d+G\d+$/.test(plan.discount) ? 'PROMO' : 'OFF' }, { animIn: anim('fisika-elastis-kuat', 0.9), animLoop: 'loop-denyut-lembut' }));
       } else if (item.icon) out.push(iconBadge(c, item.icon, L.align === 'left' ? c.x0 + 110 * k : W / 2, Y(0.84), 200 * k, 0.9));
       break;
     }
@@ -371,10 +385,14 @@ function buildRole(item: PlanItem, c: Ctx): Layer[] {
       add(kicker(c, kickerFor(item, c), Y(0.06)));
       out.push(headline(c, plan.product || 'Harga Spesial', Y(0.14), area * 0.2, 0.15));
       const pw = Math.min(c.cw, 800 * k);
-      out.push(makeComponent(c, componentIdFor('price', st), L.align === 'left' ? c.x0 : (W - pw) / 2, Y(0.38), pw, 380 * k, { label: 'Harga spesial', old: item.body || '', price: item.title }, { animIn: anim(pick(L.elemAnim, c.idx), 0.45) }));
+      // body hanya dicoret bila memang harga lama; catatan seperti "Bisa nego" tampil sebagai keterangan
+      const isOld = !!item.body && /^rp\s?\d/i.test(item.body);
+      const label = plan.intent === 'event' ? (/gratis/i.test(item.title) ? 'Biaya' : 'Tiket') : isOld || item.value ? 'Harga spesial' : 'Harga';
+      out.push(makeComponent(c, componentIdFor('price', st), L.align === 'left' ? c.x0 : (W - pw) / 2, Y(0.38), pw, 380 * k, { label, old: isOld ? item.body || '' : '', price: item.title }, { animIn: anim(pick(L.elemAnim, c.idx), 0.45) }));
+      if (item.body && !isOld) out.push(bodyText(c, item.body, Y(0.38) + 400 * k, area * 0.08, 0.9));
       if (item.value) {
         const s = 280 * k;
-        out.push(makeComponent(c, componentIdFor('discount', st === 'kaca' ? 'gradien' : st), W - s - c.m * 0.6, Y(0.3), s, s, { value: item.value, label: item.value === 'B1G1' || item.value === 'BARU' ? '!' : 'OFF' }, { animIn: anim('fisika-elastis-kuat', 0.9), animLoop: 'loop-denyut-sedang' }));
+        out.push(makeComponent(c, componentIdFor('discount', st === 'kaca' ? 'gradien' : st), W - s - c.m * 0.6, Y(0.3), s, s, { value: item.value, label: /^B\d+G\d+$/.test(item.value) || item.value === 'BARU' ? '!' : 'OFF' }, { animIn: anim('fisika-elastis-kuat', 0.9), animLoop: 'loop-denyut-sedang' }));
       }
       const stick = /hari ini/i.test(plan.prompt) ? 'Hari ini saja' : plan.intent === 'flash-sale' ? 'Flash sale' : plan.discount && plan.discount.endsWith('%') ? `Hemat ${plan.discount}` : '';
       if (stick) out.push(makeComponent(c, componentIdFor('sticker', st === 'kaca' ? 'retro' : st), c.x0, Y(0.84), 480 * k, 140 * k, { text: stick }, { animIn: anim('gaya-tada-normal', 1.2), rotation: -4 }));
@@ -427,8 +445,19 @@ function buildRole(item: PlanItem, c: Ctx): Layer[] {
       add(kicker(c, kickerFor(item, c), Y(0.12)));
       out.push(headline(c, item.title, Y(0.2), area * 0.3, 0.15));
       const bw = Math.min(c.cw, 720 * k);
-      out.push(makeComponent(c, componentIdFor('button', st === 'garis' || st === 'kaca' ? 'gradien' : st), (W - bw) / 2, Y(0.56), bw, 160 * k, { label: plan.category === 'promo' ? 'Pesan Sekarang' : plan.category === 'quote' ? 'Bagikan' : 'Simpan Video' }, { animIn: anim('fisika-elastis-lembut', 0.7), animLoop: 'loop-denyut-lembut' }));
-      if (plan.handle || plan.store) out.push(makeComponent(c, componentIdFor('follow', st === 'brutal' ? 'minimal' : st), c.x0, Y(0.78), c.cw, 200 * k, { name: plan.store || plan.handle?.replace('@', '') || 'MotionKu', handle: plan.handle || `@${(plan.store || 'motionku').toLowerCase().replace(/\s+/g, '')}` }, { animIn: anim('geser-atas-pendek-membal', 1.2) }));
+      // tombol memakai kontak/aksi dari prompt (WA, email, link, "Daftar Sekarang"), bukan teks umum
+      const fallbackLabel =
+        plan.intent === 'event' ? 'Daftar Sekarang' : plan.intent === 'lowongan' ? 'Kirim CV' : plan.intent === 'launching' ? 'Coba Sekarang' : plan.intent === 'pengumuman' ? 'Simpan Info' : plan.category === 'promo' ? 'Pesan Sekarang' : plan.category === 'quote' ? 'Bagikan' : 'Simpan Video';
+      const btnLabel = item.value && item.value.length <= 26 ? item.value : fallbackLabel;
+      out.push(makeComponent(c, componentIdFor('button', st === 'garis' || st === 'kaca' ? 'gradien' : st), (W - bw) / 2, Y(0.56), bw, 160 * k, { label: btnLabel }, { animIn: anim('fisika-elastis-lembut', 0.7), animLoop: 'loop-denyut-lembut' }));
+      const hasFollow = !!(plan.handle || plan.store);
+      // keterangan CTA (urgensi, batas waktu) — kecuali yang sudah tampil di kartu akun
+      const note = (item.body || '')
+        .split(' · ')
+        .filter((x) => x && x !== plan.store && x !== plan.handle && !/^—\s/.test(x))
+        .join(' · ');
+      if (note && !split && (!hasFollow || H > W)) out.push(bodyText(c, note, Y(hasFollow ? 0.69 : 0.74), area * 0.07, 1.0));
+      if (hasFollow) out.push(makeComponent(c, componentIdFor('follow', st === 'brutal' ? 'minimal' : st), c.x0, Y(0.78), c.cw, 200 * k, { name: plan.store || plan.handle?.replace('@', '') || 'MotionKu', handle: plan.handle || `@${(plan.store || 'motionku').toLowerCase().replace(/\s+/g, '')}` }, { animIn: anim('geser-atas-pendek-membal', 1.2) }));
       break;
     }
   }

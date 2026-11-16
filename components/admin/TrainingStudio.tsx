@@ -21,28 +21,11 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { allIcons, IconDef, iconSvgMarkup, parseSvgMarkup } from '@/lib/studio/packs/icons';
-import {
-  componentCount,
-  COMPONENT_CODE_EXAMPLE,
-  componentKinds,
-  ComponentDef,
-  drawComponent,
-} from '@/lib/studio/packs/components';
-import {
-  transitionCount,
-  drawTransition,
-  TRANSITION_CODE_EXAMPLE,
-  TransitionSpec,
-} from '@/lib/studio/packs/transitions';
-import {
-  allAnimations,
-  ANIMATION_CODE_EXAMPLE,
-  AnimSpec,
-  evalIn,
-  evalLoop,
-} from '@/lib/studio/packs/animations';
+import { allComponents, COMPONENT_CODE_EXAMPLE, componentKinds, ComponentDef, drawComponent, parseComponentCode } from '@/lib/studio/packs/components';
+import { allTransitions, drawTransition, parseTransitionCode, TRANSITION_CODE_EXAMPLE, TransitionSpec } from '@/lib/studio/packs/transitions';
+import { allAnimations, ANIMATION_CODE_EXAMPLE, AnimSpec, evalIn, evalLoop, parseAnimationCode } from '@/lib/studio/packs/animations';
 import { TEMPLATES, THEMES } from '@/lib/studio/packs/templates';
-import { effectCount, EFFECT_CODE_EXAMPLE, effectKinds } from '@/lib/studio/packs/effects';
+import { allEffects, EFFECT_CODE_EXAMPLE, effectKinds, EffectSpec, parseEffectCode } from '@/lib/studio/packs/effects';
 import { EffectThumb } from '@/components/studio/Thumbs';
 import {
   applyRow,
@@ -861,12 +844,7 @@ export default function TrainingStudio() {
         </div>
 
         {notice && (
-          <div
-            className={cx(
-              'mb-4 flex items-start gap-2 rounded-xl px-4 py-3 text-sm',
-              notice.ok ? 'bg-mk-mint/10 text-mk-mint' : 'bg-red-500/10 text-red-600'
-            )}
-          >
+          <div className={cx('mb-4 flex items-start gap-2 rounded-xl px-4 py-3 text-sm', notice.ok ? 'bg-mk-mint/10 text-mk-mint' : 'bg-red-500/10 text-red-300')}>
             {notice.ok ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />}
             {notice.text}
           </div>
@@ -996,19 +974,8 @@ export default function TrainingStudio() {
                         : '[\n  { "name": "Preset 1", ... },\n  { "name": "Preset 2", ... }\n]'
                     }
                   />
-                  <div
-                    className={cx(
-                      'mt-1.5 text-[11px] font-semibold',
-                      !debounced.code ? 'text-mk-dim' : bulkResult.ok ? 'text-mk-mint' : 'text-red-600'
-                    )}
-                  >
-                    {!debounced.code
-                      ? 'Tempel 1 item atau Array JSON banyak item sekaligus, lalu cek preview di kanan.'
-                      : bulkResult.ok
-                      ? bulkResult.items.length > 1
-                        ? `✓ Batch JSON valid – ${bulkResult.items.length} item siap disimpan sekaligus!`
-                        : `✓ Kode valid (${bulkResult.items[0]?.name}) – preview aktif`
-                      : `✕ ${bulkResult.errorSummary}`}
+                  <div className={cx('mt-1.5 text-[11px] font-semibold', !debounced.code ? 'text-mk-dim' : v.ok ? 'text-mk-mint' : 'text-red-300')}>
+                    {!debounced.code ? 'Tempel kode lalu lihat preview langsung di kanan.' : v.ok ? '✓ Kode valid — preview aktif' : `✗ ${v.error}`}
                   </div>
                 </div>
               </>
@@ -1117,7 +1084,7 @@ export default function TrainingStudio() {
               <PreviewAnimation spec={activePreviewItem.anim} />
             ) : activePreviewItem.fx ? (
               <div className="mx-auto aspect-[16/10] w-full overflow-hidden rounded-2xl">
-                <EffectThumb spec={activePreviewItem.fx} primary="#7B50FF" secondary="#C6F432" autoplay w={640} h={400} />
+                <EffectThumb spec={v.fx} primary="#FF6A3D" secondary="#FFB547" autoplay w={640} h={400} />
               </div>
             ) : null}
           </div>

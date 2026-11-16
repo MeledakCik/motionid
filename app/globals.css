@@ -3,87 +3,311 @@
 @tailwind utilities;
 
 /* ===========================================================================
-   MotionKu — identitas "Sunset Coral"
-   coral #FF6A3D · amber #FFB547 · tinta #120E0C · krem #FFF3EA
+   MotionKu — "Depup Violet" + kaca ala aplikasi Depup Office
+   violet #7B50FF · lavender #EEE9FF · teks #120B2E · gelap #1E1150 · limau #C6F432
+
+   Aturan kaca (sama dengan Depup Office, lihat Glass.kt / LiquidGlass.kt):
+   1. Latar = gradien halus yang DIAM (fixed). Kartu & panel tembus pandang di atasnya
+      sudah terlihat seperti kaca buram tanpa blur sungguhan — blur atas gradien halus
+      hasilnya hampir sama, jadi biayanya nol.
+   2. Blur sungguhan (backdrop-filter) hanya untuk lapisan navigasi yang melayang di atas
+      isi yang bergulir: header, kapsul navigasi bawah, judul panel menempel (.mk-bar).
+   3. Menu, panel geser & kaca di atas video yang sedang diputar (.mk-pop) hanya diblur di
+      perangkat kencang. Tidak ada kaca di atas kaca.
+
+   Tingkat perangkat dipasang di <html> oleh skrip kecil di app/layout.tsx sebelum
+   halaman tampil (dan diturunkan otomatis bila saat digulir frame-nya tersendat):
+     html.mk-hi   → .mk-bar & .mk-pop diblur (16px, saturasi 160%)
+     html.mk-mid  → hanya .mk-bar diblur (12px); menu/dialog pekat tanpa blur
+     html.mk-lite → tanpa blur sama sekali, kaca dibuat pekat
 =========================================================================== */
 :root {
-  color-scheme: dark;
-  --mk-coral: #ff6a3d;
-  --mk-amber: #ffb547;
-  --mk-ink: #120e0c;
-  --mk-panel: #1b1512;
-  --mk-panel-2: #241c18;
-  --mk-line: rgba(255, 236, 220, 0.1);
-  --mk-cream: #fff3ea;
-  --mk-muted: #bba99c;
+  color-scheme: light;
+  --mk-bg: #eee9ff;
+  --mk-cream: #120b2e;
+
+  /* gradien halus: alfa tiap cahaya turun mengikuti kurva lembut (1 − smoothstep),
+     jadi tidak ada "cincin" di tepi dan tidak ada titik terang di tengah */
+  --mk-mesh: radial-gradient(circle 75vmax at 0% 0%, rgba(123, 80, 255, 0.34) 0%, rgba(123, 80, 255, 0.321) 14%, rgba(123, 80, 255, 0.273) 29%, rgba(123, 80, 255, 0.206) 43%, rgba(123, 80, 255, 0.134) 57%, rgba(123, 80, 255, 0.067) 71%, rgba(123, 80, 255, 0.019) 86%, rgba(123, 80, 255, 0) 100%),
+    radial-gradient(circle 62vmax at 100% 10%, rgba(79, 123, 255, 0.26) 0%, rgba(79, 123, 255, 0.246) 14%, rgba(79, 123, 255, 0.208) 29%, rgba(79, 123, 255, 0.158) 43%, rgba(79, 123, 255, 0.102) 57%, rgba(79, 123, 255, 0.052) 71%, rgba(79, 123, 255, 0.014) 86%, rgba(79, 123, 255, 0) 100%),
+    radial-gradient(circle 66vmax at 88% 100%, rgba(192, 132, 252, 0.22) 0%, rgba(192, 132, 252, 0.208) 14%, rgba(192, 132, 252, 0.176) 29%, rgba(192, 132, 252, 0.133) 43%, rgba(192, 132, 252, 0.087) 57%, rgba(192, 132, 252, 0.044) 71%, rgba(192, 132, 252, 0.012) 86%, rgba(192, 132, 252, 0) 100%),
+    radial-gradient(circle 56vmax at 6% 92%, rgba(125, 211, 252, 0.2) 0%, rgba(125, 211, 252, 0.189) 14%, rgba(125, 211, 252, 0.16) 29%, rgba(125, 211, 252, 0.121) 43%, rgba(125, 211, 252, 0.079) 57%, rgba(125, 211, 252, 0.04) 71%, rgba(125, 211, 252, 0.011) 86%, rgba(125, 211, 252, 0) 100%),
+    linear-gradient(165deg, #f6f3ff 0%, #eee8ff 46%, #e7e2ff 100%);
+  --mk-mesh-deep: radial-gradient(circle 520px at 0% 0%, rgba(123, 80, 255, 0.75) 0%, rgba(123, 80, 255, 0.708) 14%, rgba(123, 80, 255, 0.601) 29%, rgba(123, 80, 255, 0.455) 43%, rgba(123, 80, 255, 0.295) 57%, rgba(123, 80, 255, 0.149) 71%, rgba(123, 80, 255, 0.042) 86%, rgba(123, 80, 255, 0) 100%),
+    radial-gradient(circle 520px at 100% 100%, rgba(59, 91, 255, 0.55) 0%, rgba(59, 91, 255, 0.52) 14%, rgba(59, 91, 255, 0.441) 29%, rgba(59, 91, 255, 0.334) 43%, rgba(59, 91, 255, 0.216) 57%, rgba(59, 91, 255, 0.109) 71%, rgba(59, 91, 255, 0.03) 86%, rgba(59, 91, 255, 0) 100%),
+    radial-gradient(circle 360px at 82% 18%, rgba(217, 70, 239, 0.28) 0%, rgba(217, 70, 239, 0.264) 14%, rgba(217, 70, 239, 0.224) 29%, rgba(217, 70, 239, 0.17) 43%, rgba(217, 70, 239, 0.11) 57%, rgba(217, 70, 239, 0.056) 71%, rgba(217, 70, 239, 0.016) 86%, rgba(217, 70, 239, 0) 100%),
+    linear-gradient(135deg, #24135f 0%, #1e1150 55%, #170d42 100%);
+
+  /* kaca: radius blur & saturasi (Depup Office: 16dp + saturasi 160%) */
+  --mk-blur: 16px;
+  --mk-sat: 160%;
+  /* garis cahaya di tepi kaca: terang di sisi atas (arah cahaya), redup di sisi bawah */
+  --mk-rim: inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 1px 0 0 rgba(255, 255, 255, 0.32), inset -1px 0 0 rgba(255, 255, 255, 0.18), inset 0 -1px 0 rgba(255, 255, 255, 0.24);
+  --mk-rim-deep: inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+  --mk-edge: 0 0 0 1px rgba(18, 11, 46, 0.05);
+  --mk-depth: 0 12px 32px -12px rgba(30, 17, 80, 0.3), 0 2px 8px rgba(30, 17, 80, 0.08);
+  /* gerak (Motion.kt): STANDARD & ENTER */
+  --mk-ease: cubic-bezier(0.2, 0, 0, 1);
+  --mk-ease-in: cubic-bezier(0.05, 0.7, 0.1, 1);
+}
+html.mk-mid {
+  --mk-blur: 12px;
+  --mk-sat: 150%;
 }
 
+html {
+  background: var(--mk-bg);
+  color: var(--mk-cream);
+}
 html,
 body {
   max-width: 100%;
   overflow-x: clip;
-  background: var(--mk-ink);
-  color: var(--mk-cream);
   -webkit-tap-highlight-color: transparent;
+}
+body {
+  background: transparent;
+}
+/* Latar gradien halus: satu lapisan tetap di belakang semua isi. Digambar sekali, lalu
+   hanya digeser GPU saat halaman digulir — tidak pernah dilukis ulang. */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  height: 100lvh;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--mk-mesh);
 }
 
 ::selection {
-  background: rgba(255, 106, 61, 0.4);
+  background: rgba(123, 80, 255, 0.24);
 }
 
 @layer components {
   .mk-page {
-    @apply min-h-screen bg-mk-night text-mk-cream;
+    @apply min-h-screen text-mk-cream;
   }
+  /* kartu kaca: putih tembus pandang di atas gradien (tanpa blur → ringan untuk grid panjang) */
   .mk-card {
-    @apply rounded-2xl border border-mk-line bg-mk-panel;
+    @apply rounded-2xl;
+    border: 1px solid rgba(255, 255, 255, 0.78);
+    background-color: rgba(255, 255, 255, 0.66);
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 46%);
+    box-shadow: var(--mk-rim), 0 1px 2px rgba(30, 17, 80, 0.04), 0 18px 40px -26px rgba(48, 24, 140, 0.4);
   }
   .mk-card-2 {
     @apply rounded-xl border border-mk-line bg-mk-panel-2;
   }
   .mk-btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50;
   }
   .mk-btn-primary {
-    @apply mk-btn bg-mk-grad text-mk-ink shadow-mk-glow hover:brightness-105;
+    @apply mk-btn text-white hover:brightness-110;
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0) 52%), linear-gradient(100deg, #6a3cf6 0%, #7b50ff 55%, #9775ff 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32), 0 12px 26px -12px rgba(123, 80, 255, 0.7);
+  }
+  .mk-btn-lime {
+    @apply mk-btn bg-mk-lime text-mk-cream hover:brightness-105;
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0) 55%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 10px 28px -12px rgba(150, 190, 20, 0.8);
   }
   .mk-btn-ghost {
-    @apply mk-btn border border-mk-line bg-mk-panel-2 text-mk-cream hover:border-mk-line-2 hover:bg-mk-panel-3;
+    @apply mk-btn border border-white/80 bg-white/70 text-mk-cream hover:bg-white;
+    box-shadow: var(--mk-edge);
   }
   .mk-btn-icon {
-    @apply inline-flex h-9 w-9 items-center justify-center rounded-lg text-mk-muted transition hover:bg-mk-panel-3 hover:text-mk-cream disabled:opacity-35;
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-lg text-mk-muted transition hover:bg-white/80 hover:text-mk-cream active:scale-[0.94] disabled:opacity-35;
   }
   .mk-input {
-    @apply w-full rounded-xl border border-mk-line bg-mk-ink px-3 py-2.5 text-sm text-mk-cream placeholder:text-mk-dim focus:border-mk-coral focus:outline-none focus:ring-2 focus:ring-mk-coral/25;
+    @apply w-full rounded-xl border border-mk-line bg-white px-3 py-2.5 text-sm text-mk-cream placeholder:text-mk-dim focus:border-mk-coral focus:outline-none focus:ring-2 focus:ring-mk-coral/20;
   }
   .mk-label {
     @apply mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-mk-muted;
   }
   .mk-chip {
-    @apply inline-flex items-center gap-1.5 rounded-full border border-mk-line bg-mk-panel-2 px-3 py-1.5 text-xs font-semibold text-mk-muted transition hover:text-mk-cream;
+    @apply inline-flex items-center gap-1.5 rounded-full border border-white/80 bg-white/70 px-3 py-1.5 text-xs font-semibold text-mk-muted transition hover:bg-white hover:text-mk-cream active:scale-[0.96];
+    box-shadow: var(--mk-edge);
   }
   .mk-chip-on {
-    @apply border-mk-coral/60 bg-mk-coral/15 text-mk-cream;
+    @apply border-mk-coral bg-mk-coral text-white hover:bg-mk-coral hover:text-white;
   }
   .mk-grad-text {
-    background: linear-gradient(100deg, #ffffff 0%, #ffd2bf 40%, #ff8a5c 75%, #ffb547 100%);
+    background: linear-gradient(100deg, #4b23d6 0%, #7b50ff 55%, #9c7bff 100%);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
   }
+
+  /* ---------- Kaca ---------- */
+  /* Tampilan dasar = panel diam di atas gradien (tanpa blur). Variabel:
+     --ga alfa yang dipakai · --gb saat blur bilah menyala · --gp saat blur menu menyala ·
+     --gs pekat (bilah/menu di atas isi yang bergerak tetapi blur mati).
+     --gb/--gp sengaja cukup pekat: CSS tidak punya "kaca adaptif" seperti shader Depup Office,
+     jadi label di atas thumbnail gelap tetap kontras ≥ 4,5 : 1. */
+  .mk-glass,
+  .mk-glass-deep {
+    --g: 255, 255, 255;
+    --ga: 0.68;
+    --gb: 0.74;
+    --gp: 0.8;
+    --gs: 0.97;
+    background-color: rgba(var(--g), var(--ga));
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0) 58%);
+    box-shadow: var(--mk-rim), var(--mk-edge);
+  }
+  .mk-glass-deep {
+    --g: 30, 17, 80;
+    --ga: 0.86;
+    --gb: 0.78;
+    --gp: 0.82;
+    --gs: 0.97;
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0) 58%);
+    box-shadow: var(--mk-rim-deep), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  }
+  /* bilah navigasi / menu / panel di atas isi: pekat dulu, tingkat perangkat yang menyalakan blur */
+  .mk-glass.mk-bar,
+  .mk-glass.mk-pop,
+  .mk-glass.mk-solid,
+  .mk-glass-deep.mk-bar,
+  .mk-glass-deep.mk-pop,
+  .mk-glass-deep.mk-solid {
+    --ga: var(--gs);
+  }
+  /* dialog & panel geser: hampir pekat, isi di belakang tidak berbayang (blur ada di .mk-scrim) */
+  .mk-glass.mk-solid {
+    --ga: 0.985;
+  }
+  /* kaca melayang (kapsul, menu, dialog): bayangan lembut seperti kapsul Depup Office */
+  .mk-glass.mk-float {
+    box-shadow: var(--mk-rim), var(--mk-edge), var(--mk-depth);
+  }
+  .mk-glass-deep.mk-float {
+    box-shadow: var(--mk-rim-deep), 0 0 0 1px rgba(255, 255, 255, 0.06), 0 16px 40px -14px rgba(18, 8, 60, 0.55);
+  }
+  /* latar redup di belakang dialog & panel geser (diblur hanya di perangkat kencang) */
+  .mk-scrim {
+    background: rgba(30, 17, 80, 0.42);
+  }
+  /* panel gradien gelap (banner, CTA) */
+  .mk-mesh-deep {
+    background: var(--mk-mesh-deep);
+  }
+}
+
+/* ---------- Tingkat perangkat: blur hanya menyala di sini ---------- */
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  html.mk-hi .mk-bar,
+  html.mk-mid .mk-bar {
+    --ga: var(--gb);
+    -webkit-backdrop-filter: blur(var(--mk-blur)) saturate(var(--mk-sat));
+    backdrop-filter: blur(var(--mk-blur)) saturate(var(--mk-sat));
+  }
+  html.mk-hi .mk-pop {
+    --ga: var(--gp);
+    -webkit-backdrop-filter: blur(var(--mk-blur)) saturate(var(--mk-sat));
+    backdrop-filter: blur(var(--mk-blur)) saturate(var(--mk-sat));
+  }
+  html.mk-hi .mk-scrim {
+    background: rgba(30, 17, 80, 0.3);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+  }
+}
+/* Anggaran blur: di HP menengah & bawah, blur bawaan Tailwind (backdrop-blur-*) selalu mati */
+html.mk-mid [class*='backdrop-blur'],
+html.mk-lite [class*='backdrop-blur'] {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+/* pengguna memilih "kurangi transparansi": kaca pekat, tanpa blur */
+@media (prefers-reduced-transparency: reduce) {
+  html .mk-bar,
+  html .mk-pop {
+    --ga: var(--gs) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
+
+/* ---------- Kapsul navigasi: tekan seperti gel + cahaya sentuh (GlassBar di Depup Office) ---------- */
+.mk-gel {
+  transform-origin: var(--gox, 50%) 50%;
+  transition: transform 0.2s var(--mk-ease);
+}
+.mk-gel[data-press] {
+  transform: scale(1.03, 0.985);
+  transition-duration: 0.14s;
+}
+.mk-gel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(circle 72px at var(--gx, 50%) var(--gy, 50%), rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0) 72%);
+  opacity: 0;
+  transition: opacity 0.35s var(--mk-ease);
+}
+.mk-gel[data-press]::before {
+  opacity: 1;
+  transition-duration: 0.14s;
+}
+html.mk-lite .mk-gel[data-press] {
+  transform: none;
+}
+/* pil penanda tab: meluncur antar-tab, memanjang sedikit di tengah jalan lalu bulat lagi (tanpa pantulan) */
+.mk-pill {
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  border-radius: 999px;
+  pointer-events: none;
+  transition:
+    transform 0.35s var(--mk-ease),
+    width 0.35s var(--mk-ease);
+}
+.mk-pill > i {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 55%), linear-gradient(100deg, #6a3cf6 0%, #7b50ff 55%, #9775ff 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 6px 16px -6px rgba(123, 80, 255, 0.75);
+}
+.mk-pill > i.mk-morph {
+  animation: mk-morph 0.35s var(--mk-ease);
+}
+@keyframes mk-morph {
+  45% {
+    transform: scale(1.14, 0.88);
+  }
+}
+/* tekan: mengecil sedikit lalu kembali mulus (squish 0.94 di Depup Office) */
+.mk-squish {
+  transition:
+    transform 0.2s var(--mk-ease),
+    color 0.2s var(--mk-ease);
+}
+.mk-squish:active {
+  transform: scale(0.94);
+  transition-duration: 0.1s;
 }
 
 /* scrollbar tipis */
 .mk-scroll {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 236, 220, 0.18) transparent;
+  scrollbar-color: rgba(18, 11, 46, 0.2) transparent;
 }
 .mk-scroll::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 .mk-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255, 236, 220, 0.18);
+  background: rgba(18, 11, 46, 0.2);
   border-radius: 999px;
 }
 .mk-noscroll {
@@ -104,7 +328,7 @@ input[type='range'].mk-range {
 input[type='range'].mk-range::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: 999px;
-  background: rgba(255, 236, 220, 0.16);
+  background: rgba(18, 11, 46, 0.14);
 }
 input[type='range'].mk-range::-webkit-slider-thumb {
   -webkit-appearance: none;
@@ -112,20 +336,21 @@ input[type='range'].mk-range::-webkit-slider-thumb {
   width: 18px;
   height: 18px;
   border-radius: 999px;
-  background: #ff6a3d;
-  border: 3px solid #fff3ea;
+  background: #7b50ff;
+  border: 3px solid #ffffff;
+  box-shadow: 0 2px 6px rgba(48, 24, 140, 0.35);
 }
 input[type='range'].mk-range::-moz-range-track {
   height: 4px;
   border-radius: 999px;
-  background: rgba(255, 236, 220, 0.16);
+  background: rgba(18, 11, 46, 0.14);
 }
 input[type='range'].mk-range::-moz-range-thumb {
   width: 14px;
   height: 14px;
   border-radius: 999px;
-  background: #ff6a3d;
-  border: 3px solid #fff3ea;
+  background: #7b50ff;
+  border: 3px solid #ffffff;
 }
 
 input[type='color'].mk-color {
@@ -144,36 +369,21 @@ input[type='color'].mk-color::-webkit-color-swatch-wrapper {
   padding: 0;
 }
 input[type='color'].mk-color::-webkit-color-swatch {
-  border: 2px solid rgba(255, 236, 220, 0.2);
+  border: 2px solid rgba(18, 11, 46, 0.15);
   border-radius: 10px;
 }
 
-/* Landing */
-.mk-hero-bg {
-  background:
-    radial-gradient(700px circle at 15% 0%, rgba(255, 106, 61, 0.28), transparent 60%),
-    radial-gradient(520px circle at 90% 20%, rgba(255, 181, 71, 0.14), transparent 60%),
-    radial-gradient(600px circle at 50% 110%, rgba(255, 106, 61, 0.12), transparent 60%),
-    #0c0908;
-}
 .mk-dots {
-  background-image: radial-gradient(rgba(255, 236, 220, 0.09) 1px, transparent 1px);
+  background-image: radial-gradient(rgba(18, 11, 46, 0.08) 1px, transparent 1px);
   background-size: 22px 22px;
 }
 
+/* "Hapus animasi" di HP: animasi & transisi langsung selesai */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
-  }
-}
-
-/* HP kelas bawah: matikan efek mahal */
-@media (max-width: 640px) {
-  .mk-blur-soft {
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
   }
 }

@@ -23,19 +23,19 @@ const jsonLd = {
 };
 
 const STATS = [
-  ['360', 'template'],
-  ['360', 'komponen'],
+  ['5.000', 'template'],
+  ['6.700', 'komponen'],
   ['630', 'ikon'],
-  ['328', 'transisi'],
-  ['342', 'animasi'],
-  ['370', 'efek'],
+  ['9.700', 'transisi'],
+  ['5.400', 'animasi'],
+  ['6.600', 'efek'],
 ];
 
 const FEATURES = [
   { icon: Wand2, title: 'Prompt yang benar-benar dibaca', desc: 'Bukan cuma pilih 3 kategori. 17 jenis video dikenali otomatis — promo, flash sale, menu, tips, tutorial, quote, lowongan, event — dan jumlah scene mengikuti isi prompt.' },
   { icon: MousePointer2, title: 'Edit bebas ala Figma', desc: 'Klik elemen, seret, ubah ukuran, putar, snap ke tengah. Ketuk dua kali untuk mengetik langsung di video.' },
   { icon: Film, title: 'Timeline ala CapCut', desc: 'Atur durasi scene, transisi antar scene, dan waktu muncul tiap elemen. Undo/redo tanpa batas.' },
-  { icon: Sparkles, title: '370+ efek visual', desc: 'Kaca pecah, pasir, hujan, salju, confetti, kembang api, petir, bara api, VHS, film grain, hujan emoji, dan banyak lagi — tinggal klik per scene.' },
+  { icon: Sparkles, title: '6.600+ efek visual', desc: 'Kaca pecah, pasir, hujan, salju, confetti, kembang api, petir, bara api, VHS, film grain, hujan emoji, dan banyak lagi — tinggal klik per scene.' },
   { icon: Layers, title: 'Foto, latar & komponen', desc: 'Unggah foto produk sebagai latar atau elemen. Tambah label harga, tombol, rating, chat, countdown, mockup HP.' },
   { icon: Zap, title: 'Export MP4 super mulus', desc: 'Dirender frame-per-frame dengan timestamp pasti, jadi video tidak patah-patah meski HP sedang sibuk.' },
   { icon: MonitorSmartphone, title: 'Ringan di HP kentang', desc: 'Resolusi preview & efek otomatis menyesuaikan kemampuan perangkat. Nyaman di layar kecil, tablet, dan desktop.' },
@@ -43,9 +43,9 @@ const FEATURES = [
 
 export default function LandingPage() {
   return (
-    <div className="mk-hero-bg min-h-screen text-mk-cream">
+    <div className="min-h-screen text-mk-cream">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      <header className="sticky top-0 z-40 border-b border-mk-line/60 bg-mk-night/70 backdrop-blur">
+      <header className="mk-glass mk-bar sticky top-0 z-40 border-b border-white/60">
         <nav className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-5">
           <Link href="/" aria-label="MotionKu, ke beranda">
             <Logo />
@@ -111,7 +111,7 @@ export default function LandingPage() {
           <div className="mt-8 grid gap-3 md:grid-cols-3">
             {[
               ['1', 'Tulis idemu', 'Ketik bebas seperti chat. Tambahkan foto produk kalau ada.'],
-              ['2', 'Pilih template', 'Dari 360 template, yang paling cocok dengan prompt muncul paling atas.'],
+              ['2', 'Pilih template', 'Dari 5.000+ template, yang paling cocok dengan prompt muncul paling atas.'],
               ['3', 'Edit & export', 'Ubah teks, warna, posisi, animasi. Export MP4 sampai 1080p 60fps.'],
             ].map(([n, t, d]) => (
               <div key={n} className="mk-card relative overflow-hidden p-5">
@@ -144,17 +144,20 @@ export default function LandingPage() {
         </section>
 
         <section className="mx-auto max-w-6xl px-5 pb-20">
-          <div className="relative overflow-hidden rounded-3xl bg-mk-grad p-8 text-mk-ink sm:p-12">
-            <Smartphone className="absolute -bottom-6 right-6 h-40 w-40 opacity-15" />
-            <h2 className="max-w-xl text-3xl font-extrabold tracking-tight sm:text-4xl">Video pertamamu tinggal satu kalimat lagi.</h2>
-            <Link href="/create" className="mt-6 inline-flex items-center gap-2 rounded-xl bg-mk-ink px-5 py-3 text-sm font-bold text-mk-cream">
+          <div className="mk-mesh-deep relative overflow-hidden rounded-3xl p-8 text-white shadow-[0_24px_60px_-28px_rgba(30,17,80,0.65)] sm:p-12">
+            <svg className="pointer-events-none absolute right-8 top-8 hidden h-14 w-52 sm:block" viewBox="0 0 208 56" fill="none" aria-hidden>
+              <path d="M3 40c12 0 14-34 28-34s14 44 28 44 14-38 28-38 14 32 28 32 14-26 28-26 14 18 28 18 14-30 35-34" stroke="#C6F432" strokeWidth="4" strokeLinecap="round" />
+            </svg>
+            <Smartphone className="absolute -bottom-6 right-6 h-40 w-40 text-white opacity-10" />
+            <h2 className="relative max-w-xl text-3xl font-extrabold tracking-tight sm:text-4xl">Video pertamamu tinggal satu kalimat lagi.</h2>
+            <Link href="/create" className="mk-btn-lime relative mt-6 rounded-full px-6 py-3">
               Buat video sekarang <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
         </section>
       </main>
 
-      <footer className="border-t border-mk-line py-8 text-center text-xs text-mk-dim">
+      <footer className="border-t border-white/60 py-8 text-center text-xs text-mk-dim">
         © {new Date().getFullYear()} {SITE_NAME} · Ikon oleh Lucide (ISC)
       </footer>
     </div>

@@ -93,8 +93,8 @@ export default function ExportDialog({
   const canShare = typeof navigator !== 'undefined' && !!navigator.canShare && !!result && navigator.canShare({ files: [new File([result.blob], fileName, { type: result.mime })] });
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" role="dialog" aria-label="Export video">
-      <div className="w-full max-w-md animate-mk-up rounded-t-3xl border border-mk-line bg-mk-panel p-5 shadow-2xl sm:rounded-3xl">
+    <div className="mk-scrim fixed inset-0 z-[60] flex items-end justify-center p-0 sm:items-center sm:p-4" role="dialog" aria-label="Export video">
+      <div className="mk-glass mk-solid mk-float w-full max-w-md animate-mk-up rounded-t-3xl border border-white/80 p-5 sm:rounded-3xl">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-base font-extrabold">Export video</h3>
           <button type="button" className="mk-btn-icon" onClick={() => (abortRef.current?.abort(), onClose())} aria-label="Tutup">
@@ -165,7 +165,7 @@ export default function ExportDialog({
                   const on = preset === p.id;
                   return (
                     <button key={p.id} type="button" onClick={() => setPreset(p.id)} className={cx('flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition', on ? 'border-mk-coral bg-mk-coral/10' : 'border-mk-line bg-mk-panel-2 hover:border-mk-line-2')}>
-                      <span className={cx('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-base', on ? 'bg-mk-coral text-mk-ink' : 'bg-mk-ink')}>{p.emoji}</span>
+                      <span className={cx('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-base', on ? 'bg-mk-coral text-white' : 'bg-mk-ink')}>{p.emoji}</span>
                       <span className="min-w-0 flex-1">
                         <span className="block text-sm font-bold">{p.label}</span>
                         <span className="block text-[11px] text-mk-dim">{p.desc}</span>
@@ -184,7 +184,7 @@ export default function ExportDialog({
                 ? '✓ Mode render frame-per-frame aktif: video dijamin mulus, tidak patah-patah, walau HP sedang sibuk.'
                 : 'Browser ini memakai mode rekam real-time. Biarkan tab tetap terbuka sampai selesai. Untuk hasil paling mulus pakai Chrome/Edge terbaru.'}
             </p>
-            {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-300">{error}</p>}
+            {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-600">{error}</p>}
             <button type="button" className="mk-btn-primary w-full py-3" onClick={start}>
               <Download className="h-4 w-4" /> Buat file video
             </button>

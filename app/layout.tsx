@@ -93,9 +93,21 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#120E0C',
-  colorScheme: 'dark',
+  themeColor: '#EEE9FF',
+  colorScheme: 'light',
 };
+
+/**
+ * Menandai tingkat perangkat di <html> sebelum halaman tampil (aturannya sama dengan lib/studio/device.ts):
+ * mk-lite = RAM ≤ 3 GB, CPU ≤ 4 inti, hemat data, atau "kurangi transparansi" → tanpa blur
+ * mk-mid  = HP lain / RAM ≤ 6 GB / CPU ≤ 6 inti → blur hanya di header & navigasi
+ * mk-hi   = sisanya → blur juga di menu, dialog & panel geser
+ *
+ * Penjaga otomatis (seperti GlassGuard di Depup Office): saat pertama kali digulir, waktu frame diukur
+ * 1,5 detik. Bila median frame > 26 ms (di bawah ±38 fps), tingkatnya turun satu (hi → mid → lite) dan
+ * diingat 3 hari di localStorage, jadi HP yang ternyata keberatan langsung lancar tanpa perlu setelan.
+ */
+const FX_TIER_SCRIPT = `(function(){var d=document.documentElement;try{var n=navigator,w=window,L=['mk-lite','mk-mid','mk-hi'],K='motionku:fx',m=n.deviceMemory||4,c=n.hardwareConcurrency||4,s=n.connection&&n.connection.saveData,mob=/Android|iPhone|iPad|Mobi/i.test(n.userAgent),rt=w.matchMedia&&w.matchMedia('(prefers-reduced-transparency: reduce)').matches,t=m<=3||c<=4||s||rt?0:mob||m<=6||c<=6?1:2,v=null;try{v=localStorage.getItem(K)}catch(e){}if(v){var p=v.split('|');if(Date.now()-p[1]<2592e5){if(+p[0]<t)t=+p[0]}else try{localStorage.removeItem(K)}catch(e){}}d.classList.add(L[t]);if(t&&w.requestAnimationFrame&&w.performance){var go=function(){w.removeEventListener('scroll',go,true);var a=[],l=0,end=performance.now()+1500;requestAnimationFrame(function f(ts){if(l)a.push(ts-l);l=ts;if(ts<end)return requestAnimationFrame(f);a.sort(function(x,y){return x-y});if(a.length>12&&a[a.length>>1]>26){d.classList.remove(L[t]);t--;d.classList.add(L[t]);try{localStorage.setItem(K,t+'|'+Date.now())}catch(e){}}})};w.addEventListener('scroll',go,{passive:true,capture:true})}}catch(e){d.classList.add('mk-mid')}})();`;
 
 export default function RootLayout({
   children,
@@ -105,9 +117,13 @@ export default function RootLayout({
   return (
     <html
       lang="id"
-      className={`dark ${poppins.variable} ${montserrat.variable} ${bebasNeue.variable} ${playfair.variable} ${spaceGrotesk.variable} ${anton.variable} ${jakarta.variable}`}
+      suppressHydrationWarning
+      className={`${poppins.variable} ${montserrat.variable} ${bebasNeue.variable} ${playfair.variable} ${spaceGrotesk.variable} ${anton.variable} ${jakarta.variable}`}
     >
-      <body className="min-h-screen bg-mk-ink font-sans text-mk-cream antialiased">
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: FX_TIER_SCRIPT }} />
+      </head>
+      <body className="min-h-screen font-sans text-mk-cream antialiased">
         {children}
       </body>
     </html>
