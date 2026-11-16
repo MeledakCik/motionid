@@ -599,12 +599,25 @@ export default function TrainingStudio() {
   const fetchRows = useCallback(async () => {
     setLoading(true);
     const supabase = createClient();
-    const { data, error } = await supabase
-      .from('ai_training_data')
-      .select('id,type,category,content_text,subtext,metadata_json,created_at')
-      .in('type', ['icon_pack', 'component_pack', 'transition_pack', 'animation_pack', 'effect_pack', 'hook', 'cta'])
-      .order('created_at', { ascending: false })
-      .limit(500);
+    const pageSize = 500;
+    const allRows: TrainingRow[] = [];
+    let error: { message: string } | null = null;
+    for (let from = 0; ; from += pageSize) {
+      const result = await supabase
+        .from('ai_training_data')
+        .select('id,type,category,content_text,subtext,metadata_json,created_at')
+        .in('type', ['icon_pack', 'component_pack', 'transition_pack', 'animation_pack', 'effect_pack', 'hook', 'cta'])
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(from, from + pageSize - 1);
+      if (result.error) {
+        error = result.error;
+        break;
+      }
+      const page = (result.data || []) as TrainingRow[];
+      allRows.push(...page);
+      if (page.length < pageSize) break;
+    }
     if (error) {
       setNotice({
         ok: false,
@@ -613,7 +626,7 @@ export default function TrainingStudio() {
           : error.message,
       });
     }
-    setRows((data || []) as TrainingRow[]);
+    setRows(allRows);
     setLoading(false);
   }, []);
 

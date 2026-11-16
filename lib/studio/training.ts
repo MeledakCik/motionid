@@ -750,20 +750,26 @@ export function loadTraining(force = false): Promise<number> {
   inflight = (async () => {
     try {
       const supabase = createClient();
-      const { data, error } = await supabase
-        .from('ai_training_data')
-        .select('id,type,category,content_text,subtext,metadata_json,created_at')
-        .in('type', ['icon_pack', 'component_pack', 'transition_pack', 'animation_pack', 'effect_pack', 'hook', 'cta', 'scene2', 'scene3'])
-        .order('created_at', { ascending: true })
-        .limit(2000);
-      if (error || !data) return 0;
+      const pageSize = 500;
       let n = 0;
-      for (const row of data as TrainingRow[]) {
-        if (applied.has(row.id) && !force) continue;
-        if (applyRow(row).ok) {
-          applied.add(row.id);
-          n++;
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await supabase
+          .from('ai_training_data')
+          .select('id,type,category,content_text,subtext,metadata_json,created_at')
+          .in('type', ['icon_pack', 'component_pack', 'transition_pack', 'animation_pack', 'effect_pack', 'hook', 'cta', 'scene2', 'scene3'])
+          .order('created_at', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, from + pageSize - 1);
+        if (error || !data) return n;
+        const page = data as TrainingRow[];
+        for (const row of page) {
+          if (applied.has(row.id) && !force) continue;
+          if (applyRow(row).ok) {
+            applied.add(row.id);
+            n++;
+          }
         }
+        if (page.length < pageSize) break;
       }
       return n;
     } catch {
