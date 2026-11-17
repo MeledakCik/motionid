@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "mcp:training": "tsx mcp/training-server.ts",
+    "mcp:audit": "tsx scripts/audit-motion-lab.ts",
     "lint": "next lint"
   },
   "dependencies": {

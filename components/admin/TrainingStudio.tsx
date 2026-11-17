@@ -40,6 +40,7 @@ import {
 import { canvasFamily, ensureFonts } from '@/lib/studio/fonts';
 import { EASINGS } from '@/lib/studio/easing';
 import { cx, Dropdown, Logo, Segmented } from '@/components/studio/ui';
+import AdminNav from './AdminNav';
 
 type Tab = 'bundle_pack' | 'icon_pack' | 'component_pack' | 'transition_pack' | 'animation_pack' | 'effect_pack' | 'teks';
 
@@ -897,6 +898,8 @@ export default function TrainingStudio() {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 pb-20 pt-6">
+        <AdminNav className="mb-5" />
+
         <div className="mb-5 grid grid-cols-3 gap-2 sm:grid-cols-6">
           {[
             ['Template', TEMPLATES.length],

@@ -8,6 +8,10 @@ import {
   unregisterCta, unregisterHook, unregisterQuote,
 } from './prompt';
 import { EffectSpec, parseEffectCode, registerEffect, unregisterEffect } from './packs/effects';
+import { installMotionPresets } from './packs/motion-presets';
+
+// Preset Motion Lab (2D/3D/kinetic/UI) tersedia sebelum admin/editor merender daftar pack.
+installMotionPresets();
 
 /**
  * Menyuntikkan hasil training admin (tabel ai_training_data) ke registry pack.

@@ -109,27 +109,41 @@ Semua pack bisa dicari dan difilter lewat tab **Pack** di panel kiri Studio. Pil
 
 ## Training kode pack (admin)
 
-Di `/admin`, buka tab **🧩 Kode** pada panel kanan. Admin dapat menempel kode untuk empat jenis pack:
+Ada tiga halaman admin (semua dijaga middleware + RLS `is_admin()`):
+
+- `/admin` — **Training Studio**: impor batch JSON/SVG, input kode komponen/transisi/animasi/efek, edit/hapus, ekspor bundle.
+- `/admin/research` — **Motion Lab**: 30 resep gerak (CapCut, Illustrator, Figma, Alight Motion, Premiere, After Effects) + generator brief riset per detik.
+- `/admin/mcp` — **MCP Connector**: status sesi, konfigurasi siap salin untuk Claude/Cursor/VS Code/OpenCode, katalog tool/prompt/resource, dan tes endpoint.
+
+Format kode yang diterima:
 
 - **SVG ikon** — tempel `<svg>...</svg>` atau isi atribut `d` saja. Hanya `path` yang dibaca; script dan event handler diabaikan.
-- **Kode komponen** — pasangan `background: ...; color: ...; border: ...; radius: ...; shadow: ...; opacity: ...; accent: ...;`.
-- **Kode transisi** — mis. `fromX=-45; fromY=0; scale=0.94; rotate=-2; fade=1; duration=0.45s; ease=ease-out;`.
-- **Kode animasi** — mis. `fromY=36; scale=0.86; rotate=-3; stagger=0.06; fade=1; duration=0.45s;`.
+- **Kode komponen** — pasangan `background: ...; color: ...; border: ...; radius: ...; shadow: ...; opacity: ...; accent: ...;` atau JSON komponen.
+- **Kode transisi** — JSON `{ "kind": "whip", "duration": 0.4, "params": { "dir": "left", "fx": "kilat" } }`.
+- **Kode animasi** — JSON `{ "kind": "in", "duration": 0.6, "keyframes": [{ "t": 0, "y": 40, "alpha": 0 }, { "t": 1 }] }`.
+- **Kode efek** — JSON `{ "kind": "ikon", "icon": "coffee", "motion": "melayang", "intensity": 1.2 }`.
 
-Isi nama dan kata kunci, lalu klik **Simpan pack ke Supabase**. Pack langsung terdaftar untuk semua user dan ikut dimuat saat training dibaca. Parser bersifat aman: tidak ada eksekusi HTML/JS mentah, hanya pembacaan CSS/SVG terbatas. Kolom `type` pada `ai_training_data` sekarang menerima `icon_pack`, `component_pack`, `transition_pack`, dan `animation_pack` (lihat `supabase/migration.sql`).
+Parser bersifat aman: tidak ada eksekusi HTML/JS mentah, hanya pembacaan JSON/SVG terbatas. Kolom `type` pada `ai_training_data` menerima `icon_pack`, `component_pack`, `transition_pack`, `animation_pack`, `effect_pack`, `hook`, `cta`, `scene2`, dan `scene3` (lihat `supabase/migration.sql`).
 
-## Konektor MCP training
+## Konektor MCP training v2
 
-Server MCP lokal di `mcp/training-server.ts` menghubungkan MCP client langsung ke tabel `ai_training_data` di Supabase. Tool yang tersedia: `training_list`, `training_get`, `training_add`, `training_update`, dan `training_delete`. Perubahan menggunakan Supabase Auth + RLS aplikasi; hanya akun admin yang dapat menambah, mengubah, atau menghapus data. Jangan gunakan service-role key.
+MCP membuat asisten AI bisa membaca, memvalidasi, menambah, mengubah, mengekspor, dan meriset bank training. Ada dua jalur:
 
-Jalankan `npm install`, lalu daftarkan server berikut di konfigurasi MCP client. Isi URL, anon key, dan access token dari sesi Supabase admin. Token access dapat kedaluwarsa; jika koneksi mengembalikan pesan token kedaluwarsa, perbarui nilainya lalu restart server.
+1. **Remote HTTP** — `POST /api/mcp`, header `Authorization: Bearer <access token sesi admin>`. Tidak perlu install repo. Cocok untuk Claude, Cursor, VS Code, dan OpenCode.
+2. **Lokal stdio** — `npm run mcp:training` dengan env `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_ACCESS_TOKEN`.
+
+Tool yang tersedia (13): `training_health`, `training_schema`, `training_list`, `training_get`, `training_stats`, `training_validate`, `training_add`, `training_bulk_add`, `training_update`, `training_delete`, `training_export`, `motion_lab_list`, `motion_lab_brief`.
+
+Selain tool, server menyediakan 4 prompt riset (`deep_research_motion`, `audit_training_quality`, `design_pack_from_reference`, `refresh_motion_library`) dan 4 resource (`motionid://guide/mcp`, `motionid://schema/training`, `motionid://examples/packs`, `motionid://motion-lab/recipes`).
+
+Konfigurasi lokal:
 
 ```json
 {
   "mcpServers": {
     "motionid-training": {
       "command": "npm",
-      "args": ["--prefix", "/path/ke/motionid-main", "run", "mcp:training"],
+      "args": ["--prefix", "/path/ke/motionid", "run", "mcp:training"],
       "env": {
         "SUPABASE_URL": "https://project-id.supabase.co",
         "SUPABASE_ANON_KEY": "supabase-anon-key",
@@ -140,7 +154,23 @@ Jalankan `npm install`, lalu daftarkan server berikut di konfigurasi MCP client.
 }
 ```
 
-Ganti path repo dengan lokasi repo di komputer. Jangan commit file konfigurasi yang berisi access token. Setiap pemanggilan `training_list` dapat mengambil sampai 100 baris dan mendukung offset untuk halaman selanjutnya. Tool tambah/ubah memvalidasi SVG atau kode pack dengan parser yang sama seperti admin web. Data yang ditulis melalui MCP langsung tersimpan di Supabase; editor yang sudah terbuka perlu memuat ulang training untuk memakai perubahan tersebut.
+Konfigurasi remote (Cursor/Claude):
+
+```json
+{
+  "mcpServers": {
+    "motionid-training": {
+      "url": "https://domain-kamu.com/api/mcp",
+      "headers": { "Authorization": "Bearer access-token-akun-admin" }
+    }
+  }
+}
+```
+
+Cara termudah: buka `/admin/mcp`, pilih client + mode, lalu salin JSON yang sudah terisi otomatis. Token diambil dari sesi login dan tidak dikirim ke pihak lain. Jangan memakai service-role key, dan jangan commit file konfigurasi yang berisi token. Token sesi berlaku sekitar satu jam; bila kedaluwarsa, muat ulang halaman admin dan ganti nilainya.
+
+`npm run mcp:audit` memeriksa 30 resep Motion Lab terhadap parser pack yang sama dengan admin, sehingga kode yang disimpan lewat MCP tidak mungkin ditolak diam-diam.
+
 
 ## Identitas visual & responsivitas
 

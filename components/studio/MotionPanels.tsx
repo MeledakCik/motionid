@@ -5,6 +5,7 @@ import { Shuffle } from 'lucide-react';
 import { useStudio, currentLayer } from '@/store/useStudio';
 import { allTransitions, getTransition, hasTransition, TRANSITION_FX, TRANSITION_GROUPS } from '@/lib/studio/packs/transitions';
 import { allAnimations, ANIM_GROUPS, getAnimation } from '@/lib/studio/packs/animations';
+import { installMotionPresets } from '@/lib/studio/packs/motion-presets';
 import { sceneStarts } from '@/lib/studio/renderer';
 import type { PlaybackClock } from '@/lib/studio/clock';
 import { ChipRow, cx, LazyVisible, SearchBox, Section, Segmented, Slider } from './ui';
@@ -12,6 +13,8 @@ import { AnimationThumb, EffectThumb, TransitionThumb } from './Thumbs';
 import { allEffects, EFFECT_GROUPS, EFFECT_PALETTES, effectId, effectKinds, getEffect, INTENSITY_LEVELS, splitEffectId } from '@/lib/studio/packs/effects';
 
 const PAGE = 30;
+
+installMotionPresets();
 
 const KIND_LABEL: Record<string, string> = {
   cut: 'Potong',

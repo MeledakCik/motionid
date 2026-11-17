@@ -378,6 +378,28 @@ input[type='color'].mk-color::-webkit-color-swatch {
   background-size: 22px 22px;
 }
 
+/* ---------- Motion Lab: pratinjau gerak kartu resep ---------- */
+@keyframes mk-recipe-in {
+  from {
+    transform: translate3d(var(--rx, 0), var(--ry, 0), 0) scale(var(--rs, 1)) rotate(var(--rr, 0deg)) skewX(var(--rsk, 0deg));
+    opacity: var(--ro, 1);
+    filter: blur(var(--rb, 0));
+  }
+  to {
+    transform: translate3d(0, 0, 0) scale(1) rotate(0deg) skewX(0deg);
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+.mk-recipe-demo {
+  animation: mk-recipe-in var(--rd, 0.6s) var(--re, cubic-bezier(0.2, 0, 0, 1)) both;
+}
+.mk-recipe-stage:hover .mk-recipe-demo,
+.mk-recipe-stage:focus-visible .mk-recipe-demo,
+.mk-recipe-demo-loop {
+  animation: mk-recipe-in var(--rd, 0.6s) var(--re, cubic-bezier(0.2, 0, 0, 1)) infinite alternate;
+}
+
 /* "Hapus animasi" di HP: animasi & transisi langsung selesai */
 @media (prefers-reduced-motion: reduce) {
   *,
