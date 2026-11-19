@@ -140,6 +140,7 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
     r.onAssetLoaded = () => requestAnimationFrame(draw);
     rendererRef.current = r;
     return () => {
+      r.dispose();
       rendererRef.current = null;
     };
   }, [profile, draw]);
@@ -176,6 +177,7 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
       const now = performance.now();
       if (isPlaying && now - lastFrame < minGap) return;
       lastFrame = now;
+      rendererRef.current?.syncMedia(t, isPlaying);
       draw();
       setPlaying((p) => (p !== isPlaying ? isPlaying : p));
       const s = useStudio.getState();

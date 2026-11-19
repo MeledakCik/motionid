@@ -112,13 +112,18 @@ export async function exportVideo(doc: ProjectDoc, opts: ExportOptions): Promise
         report(0, `File ${(res.blob.size / 1048576).toFixed(1)} MB, dikecilkan agar muat…`);
         res = await exportWebCodecs(doc, renderer, canvas, ctx, { ...vcfg, bitrate }, fps, totalFrames, duration, opts, report);
       }
+      renderer.dispose();
       return res;
     } catch (e) {
       if (opts.signal?.aborted) throw e;
       console.warn('WebCodecs gagal, pindah ke MediaRecorder', e);
     }
   }
-  return exportMediaRecorder(doc, renderer, canvas, ctx, fps, totalFrames, duration, opts, report, bitrate);
+  try {
+    return await exportMediaRecorder(doc, renderer, canvas, ctx, fps, totalFrames, duration, opts, report, bitrate);
+  } finally {
+    renderer.dispose();
+  }
 }
 
 async function exportWebCodecs(
@@ -187,6 +192,7 @@ async function exportWebCodecs(
     }
     if (encErr) throw encErr;
     const t = f / fps;
+    await renderer.seekMedia(t);
     renderer.render(ctx, canvas.width, canvas.height, t);
     const frame = new VideoFrame(canvas, { timestamp: Math.round(f * frameDur), duration: Math.round(frameDur) });
     venc.encode(frame, { keyFrame: f % (fps * 2) === 0 });
@@ -260,6 +266,7 @@ async function exportMediaRecorder(
     const due = start + (f * 1000) / fps;
     const wait = due - performance.now();
     if (wait > 1) await new Promise((r) => setTimeout(r, wait));
+    await renderer.seekMedia(f / fps);
     renderer.render(ctx, canvas.width, canvas.height, f / fps);
     vtrack.requestFrame?.();
     if (f % 10 === 0) report(f / totalFrames, `Merekam ${Math.floor(f / fps)} / ${Math.ceil(duration)} dtk… (jangan pindah tab)`);

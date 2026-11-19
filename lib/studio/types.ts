@@ -73,7 +73,7 @@ export interface AnimRef {
   delay?: number;
 }
 
-export type LayerKind = 'text' | 'image' | 'icon' | 'component' | 'shape' | 'path' | 'group';
+export type LayerKind = 'text' | 'image' | 'icon' | 'component' | 'shape' | 'path' | 'group' | 'video';
 
 /**
  * Keyframe gaya After Effects / Alight Motion. Waktu dalam detik sejak awal scene.
@@ -86,7 +86,10 @@ export interface Keyframe {
   rotation: number;
   opacity: number;
   scale: number;
+  /** id easing, atau 'custom' untuk kurva bezier sendiri (graph editor) */
   ease: string;
+  /** kurva cubic-bezier [x1, y1, x2, y2] bila ease === 'custom' */
+  bez?: [number, number, number, number];
 }
 
 export interface LayerBase {
@@ -192,6 +195,8 @@ export interface PathLayer extends LayerBase {
   stroke: { color: string; width: number; cap?: 'round' | 'butt' | 'square' } | null;
   /** efek "gambar garis" (trim path): garis tergambar selama N detik sejak layer muncul */
   drawOn?: number;
+  /** kontur tambahan (hasil boolean: lubang / pulau), digambar dengan aturan evenodd */
+  extra?: PathPoint[][];
 }
 
 /** Grup / instance komponen buatan sendiri (gaya Figma). Anak memakai koordinat lokal grup. */
@@ -203,9 +208,44 @@ export interface GroupLayer extends LayerBase {
   ch: number;
   /** id komponen utama (ProjectDoc.symbols) bila ini instance komponen */
   symbolId?: string;
+  /** anak paling bawah menjadi bentuk mask untuk anak lainnya (gaya Figma) */
+  mask?: boolean;
 }
 
-export type Layer = TextLayer | ImageLayer | IconLayer | ComponentLayer | ShapeLayer | PathLayer | GroupLayer;
+/** Klip video (gaya CapCut): potong awal/akhir, kecepatan, volume. */
+export interface VideoLayer extends LayerBase {
+  kind: 'video';
+  /** id di ProjectDoc.media */
+  mediaId: string;
+  /** detik di file sumber tempat klip mulai */
+  trimIn: number;
+  /** detik di file sumber tempat klip selesai */
+  trimOut: number;
+  speed: number;
+  volume: number;
+  muted?: boolean;
+  fit: 'cover' | 'contain';
+  radius: number;
+}
+
+/** Berkas media besar (video). Isinya disimpan di IndexedDB / Supabase Storage, bukan di dokumen. */
+export interface MediaInfo {
+  id: string;
+  name: string;
+  kind: 'video';
+  mime: string;
+  duration: number;
+  w: number;
+  h: number;
+  size: number;
+  hasAudio?: boolean;
+  /** path di bucket Supabase "media" bila sudah terunggah */
+  remote?: string;
+  /** dari proyek impor: file belum disambungkan */
+  missing?: boolean;
+}
+
+export type Layer = TextLayer | ImageLayer | IconLayer | ComponentLayer | ShapeLayer | PathLayer | GroupLayer | VideoLayer;
 
 /** Komponen buatan user: disimpan di proyek, bisa dipakai ulang berkali-kali. */
 export interface SymbolDef {
@@ -336,6 +376,10 @@ export interface ProjectDoc {
   watermark?: string;
   /** komponen buatan user (gaya Figma) */
   symbols?: Record<string, SymbolDef>;
+  /** klip video (isi file di IndexedDB / Supabase Storage) */
+  media?: Record<string, MediaInfo>;
+  /** asal proyek impor + catatan bagian yang tidak bisa diterjemahkan */
+  imported?: { from: 'after-effects' | 'alight-motion' | 'capcut'; file: string; notes: string[] };
 }
 
 export const BASE_W = 1080;

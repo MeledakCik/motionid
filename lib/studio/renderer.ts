@@ -1,4 +1,5 @@
-import type { Fill, ImageLayer, Layer, PathLayer, ProjectDoc, Scene, ShapeLayer, TextLayer } from './types';
+import type { Fill, ImageLayer, Layer, PathLayer, ProjectDoc, Scene, ShapeLayer, TextLayer, VideoLayer } from './types';
+import { mediaUrl, videoSourceTime } from './media';
 import { canvasSize, docDuration } from './types';
 import { combinePose, evalIn, evalLoop, getAnimation, IDENTITY, Pose, TextAnimSpec } from './packs/animations';
 import { drawTransition, getTransition } from './packs/transitions';
@@ -111,18 +112,156 @@ export class Renderer {
     return null;
   }
 
+  /* -------------------------- video (gaya CapCut) -------------------------- */
+  private videos = new Map<string, HTMLVideoElement>();
+
+  /** Elemen video per layer (satu file boleh dipakai beberapa klip dengan waktu berbeda). */
+  video(L: VideoLayer): HTMLVideoElement | null {
+    const info = this.doc?.media?.[L.mediaId];
+    if (!info || info.missing || typeof document === 'undefined') return null;
+    const key = `${L.id}:${L.mediaId}`;
+    let el = this.videos.get(key);
+    if (!el) {
+      const v = document.createElement('video');
+      v.muted = true;
+      v.playsInline = true;
+      v.preload = 'auto';
+      v.crossOrigin = 'anonymous';
+      v.onloadeddata = () => this.onAssetLoaded?.();
+      v.onseeked = () => this.onAssetLoaded?.();
+      this.videos.set(key, v);
+      mediaUrl(info).then((u) => {
+        if (u) {
+          v.src = u;
+          v.load();
+        }
+      });
+      el = v;
+    }
+    return el;
+  }
+
+  /** Klip video yang tampil pada waktu global t, beserta waktu sumbernya. */
+  private videosAt(t: number): Array<{ L: VideoLayer; el: HTMLVideoElement; target: number }> {
+    const doc = this.doc;
+    if (!doc || !doc.media) return [];
+    const out: Array<{ L: VideoLayer; el: HTMLVideoElement; target: number }> = [];
+    const { idx, local } = locate(doc, t);
+    const starts = sceneStarts(doc);
+    const scan = (scene: Scene, lt: number) => {
+      const walk = (l: Layer) => {
+        if (l.hidden) return;
+        if (l.kind === 'group') return l.children.forEach(walk);
+        if (l.kind !== 'video' || lt < l.start || (l.end !== null && lt >= l.end)) return;
+        const el = this.video(l);
+        if (el) out.push({ L: l, el, target: videoSourceTime(l, lt) });
+      };
+      scene.layers.forEach(walk);
+    };
+    scan(doc.scenes[idx], local);
+    if (idx > 0 && local < 1.2) scan(doc.scenes[idx - 1], t - starts[idx - 1]);
+    return out;
+  }
+
+  /** Preview: putar / jeda / sinkronkan elemen video dengan jam editor. */
+  syncMedia(t: number, playing: boolean) {
+    if (!this.videos.size && !this.doc?.media) return;
+    const active = new Set<HTMLVideoElement>();
+    for (const { L, el, target } of this.videosAt(t)) {
+      active.add(el);
+      if (playing) {
+        el.muted = !!L.muted || L.volume <= 0;
+        el.volume = clamp(L.volume);
+        el.playbackRate = L.speed || 1;
+        if (el.paused) {
+          if (Math.abs(el.currentTime - target) > 0.05) el.currentTime = target;
+          el.play().catch(() => {});
+        } else if (Math.abs(el.currentTime - target) > 0.3) el.currentTime = target;
+      } else {
+        if (!el.paused) el.pause();
+        if (!el.seeking && Math.abs(el.currentTime - target) > 0.03 && el.readyState >= 1) el.currentTime = target;
+      }
+    }
+    this.videos.forEach((el) => {
+      if (!active.has(el) && !el.paused) el.pause();
+    });
+  }
+
+  /** Export: pastikan setiap klip sudah di frame yang tepat sebelum frame dirender. */
+  async seekMedia(t: number): Promise<void> {
+    const list = this.videosAt(t);
+    if (!list.length) return;
+    await Promise.all(list.map(({ el, target }) => seekVideo(el, target)));
+  }
+
+  /** Lepas semua elemen video (saat editor ditutup). */
+  dispose() {
+    this.videos.forEach((v) => {
+      v.pause();
+      v.removeAttribute('src');
+      v.load();
+    });
+    this.videos.clear();
+  }
+
+  private drawVideoLayer(ctx: CanvasRenderingContext2D, L: VideoLayer) {
+    const el = this.video(L);
+    const { w, h } = L;
+    ctx.save();
+    if (L.radius > 0) {
+      ctx.beginPath();
+      ctx.roundRect(0, 0, w, h, Math.min(L.radius, w / 2, h / 2));
+      ctx.clip();
+    }
+    if (el && el.readyState >= 2 && el.videoWidth) {
+      const vw = el.videoWidth;
+      const vh = el.videoHeight;
+      const s = L.fit === 'contain' ? Math.min(w / vw, h / vh) : Math.max(w / vw, h / vh);
+      const dw = vw * s;
+      const dh = vh * s;
+      if (L.fit === 'contain') {
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, w, h);
+      }
+      ctx.drawImage(el, (w - dw) / 2, (h - dh) / 2, dw, dh);
+    } else {
+      // klip belum siap / file belum disambungkan
+      const missing = !el;
+      ctx.fillStyle = missing ? '#2A1A63' : '#1E1150';
+      ctx.fillRect(0, 0, w, h);
+      const u = Math.min(w, h);
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.beginPath();
+      ctx.moveTo(w / 2 - u * 0.08, h / 2 - u * 0.1);
+      ctx.lineTo(w / 2 + u * 0.1, h / 2);
+      ctx.lineTo(w / 2 - u * 0.08, h / 2 + u * 0.1);
+      ctx.closePath();
+      ctx.fill();
+      ctx.font = `600 ${Math.max(14, u * 0.045)}px ${canvasFamily('Plus Jakarta Sans')}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(missing ? `File belum disambungkan: ${L.name}` : 'Memuat video…', w / 2, h / 2 + u * 0.16, w * 0.9);
+    }
+    ctx.restore();
+  }
+
   /** Muat semua gambar yang dipakai dokumen (wajib sebelum export). */
   async preload(): Promise<void> {
     const doc = this.doc;
     if (!doc) return;
     const srcs = new Set<string>();
+    const vids: VideoLayer[] = [];
+    const walk = (l: Layer) => {
+      if (l.kind === 'image') srcs.add(l.src);
+      if (l.kind === 'component' && l.props.image) srcs.add(l.props.image);
+      if (l.kind === 'video') vids.push(l);
+      if (l.kind === 'group') l.children.forEach(walk);
+    };
     doc.scenes.forEach((s) => {
       if (s.background.type === 'image' && s.background.src) srcs.add(s.background.src);
-      s.layers.forEach((l) => {
-        if (l.kind === 'image') srcs.add(l.src);
-        if (l.kind === 'component' && l.props.image) srcs.add(l.props.image);
-      });
+      s.layers.forEach(walk);
     });
+    await Promise.all(vids.map((v) => this.video(v)).filter((e): e is HTMLVideoElement => !!e).map((el) => waitReady(el)));
     await Promise.all(
       [...srcs].map(
         (s) =>
@@ -517,11 +656,20 @@ export class Renderer {
       case 'path':
         this.drawPath(ctx, layer, st.local);
         break;
+      case 'video':
+        this.drawVideoLayer(ctx, layer);
+        break;
       case 'group': {
         ctx.shadowColor = 'transparent';
         ctx.scale(layer.w / Math.max(1, layer.cw), layer.h / Math.max(1, layer.ch));
         // anak mewarisi transparansi grup (termasuk keyframe & animasi grup)
-        for (const child of layer.children) if (!child.hidden) this.drawLayer(ctx, child, t, alpha);
+        if (layer.mask && layer.children.length > 1) {
+          // mask: anak paling bawah jadi bentuk potong, anak lain tampil di dalamnya
+          ctx.save();
+          this.clipToLayer(ctx, layer.children[0], t);
+          for (const child of layer.children.slice(1)) if (!child.hidden) this.drawLayer(ctx, child, t, alpha);
+          ctx.restore();
+        } else for (const child of layer.children) if (!child.hidden) this.drawLayer(ctx, child, t, alpha);
         break;
       }
     }
@@ -534,6 +682,8 @@ export class Renderer {
     const draw = L.drawOn && L.drawOn > 0 ? clamp(local / L.drawOn) : 1;
     ctx.beginPath();
     tracePath(ctx, L.points, L.closed, L.w, L.h);
+    // kontur tambahan hasil boolean (lubang / pulau)
+    if (L.closed) for (const c of L.extra || []) tracePath(ctx, c, true, L.w, L.h);
     if (L.fill && L.closed) {
       const fa = draw >= 1 ? 1 : clamp((draw - 0.55) / 0.45);
       if (fa > 0) {
@@ -547,7 +697,7 @@ export class Renderer {
           g.addColorStop(1, L.gradient.to);
           ctx.fillStyle = g;
         } else ctx.fillStyle = L.fill;
-        ctx.fill();
+        ctx.fill(L.extra?.length ? 'evenodd' : 'nonzero');
         ctx.globalAlpha = ga;
       }
     }
@@ -805,8 +955,75 @@ export class Renderer {
   }
 
   private drawShape(ctx: CanvasRenderingContext2D, L: ShapeLayer, t: number) {
-    const { w, h } = L;
     ctx.beginPath();
+    shapeGeometry(ctx, L, t);
+    if (L.shape !== 'line') {
+      ctx.fillStyle = L.fill;
+      ctx.fill();
+    }
+    ctx.shadowColor = 'transparent';
+    if (L.stroke && L.stroke.width > 0) {
+      ctx.lineWidth = L.stroke.width;
+      ctx.strokeStyle = L.stroke.color;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+    } else if (L.shape === 'line') {
+      ctx.lineWidth = Math.max(2, L.h);
+      ctx.strokeStyle = L.fill;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+    }
+  }
+
+  /** Mask grup: bentuk anak paling bawah memotong anak lain (gaya Figma). */
+  private clipToLayer(ctx: CanvasRenderingContext2D, m0: Layer, t: number) {
+    const { layer: m, scale: k } = posed(m0, t);
+    const keep = ctx.getTransform();
+    ctx.translate(m.x + m.w / 2, m.y + m.h / 2);
+    if (m.rotation) ctx.rotate((m.rotation * Math.PI) / 180);
+    if (k !== 1) ctx.scale(k, k);
+    ctx.translate(-m.w / 2, -m.h / 2);
+    ctx.beginPath();
+    if (m.kind === 'shape' && m.shape !== 'line') shapeGeometry(ctx, m, t);
+    else if (m.kind === 'path' && m.closed) {
+      tracePath(ctx, m.points, true, m.w, m.h);
+      for (const c of m.extra || []) tracePath(ctx, c, true, m.w, m.h);
+    } else if ((m.kind === 'image' || m.kind === 'video') && m.radius > 0) ctx.roundRect(0, 0, m.w, m.h, Math.min(m.radius, m.w / 2, m.h / 2));
+    else ctx.rect(0, 0, m.w, m.h);
+    ctx.setTransform(keep);
+    ctx.clip(m.kind === 'path' && m.extra?.length ? 'evenodd' : 'nonzero');
+  }
+
+  private drawProgress(ctx: CanvasRenderingContext2D, pw: number, ph: number, p: number) {
+    const u = Math.min(pw, ph) / 1080;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const h = Math.max(3, 8 * u);
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    ctx.fillRect(0, ph - h, pw, h);
+    ctx.fillStyle = this.doc?.theme.palette.primary || '#7B50FF';
+    ctx.fillRect(0, ph - h, pw * clamp(p), h);
+    ctx.restore();
+  }
+
+  private drawWatermark(ctx: CanvasRenderingContext2D, pw: number, ph: number, text: string) {
+    const u = Math.min(pw, ph) / 1080;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.font = `700 ${28 * u}px ${canvasFamily('Plus Jakarta Sans')}`;
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(text, pw - 30 * u, ph - 30 * u);
+    ctx.restore();
+  }
+
+}
+
+/** Bangun geometri bentuk dasar (dipakai untuk menggambar & mask). */
+function shapeGeometry(ctx: CanvasRenderingContext2D, L: ShapeLayer, t: number) {
+  {
+    const { w, h } = L;
     switch (L.shape) {
       case 'circle':
         ctx.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
@@ -861,46 +1078,6 @@ export class Renderer {
       default:
         ctx.roundRect(0, 0, w, h, Math.min(L.radius, w / 2, h / 2));
     }
-    if (L.shape !== 'line') {
-      ctx.fillStyle = L.fill;
-      ctx.fill();
-    }
-    ctx.shadowColor = 'transparent';
-    if (L.stroke && L.stroke.width > 0) {
-      ctx.lineWidth = L.stroke.width;
-      ctx.strokeStyle = L.stroke.color;
-      ctx.lineCap = 'round';
-      ctx.stroke();
-    } else if (L.shape === 'line') {
-      ctx.lineWidth = Math.max(2, h);
-      ctx.strokeStyle = L.fill;
-      ctx.lineCap = 'round';
-      ctx.stroke();
-    }
-  }
-
-  private drawProgress(ctx: CanvasRenderingContext2D, pw: number, ph: number, p: number) {
-    const u = Math.min(pw, ph) / 1080;
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    const h = Math.max(3, 8 * u);
-    ctx.fillStyle = 'rgba(255,255,255,0.22)';
-    ctx.fillRect(0, ph - h, pw, h);
-    ctx.fillStyle = this.doc?.theme.palette.primary || '#7B50FF';
-    ctx.fillRect(0, ph - h, pw * clamp(p), h);
-    ctx.restore();
-  }
-
-  private drawWatermark(ctx: CanvasRenderingContext2D, pw: number, ph: number, text: string) {
-    const u = Math.min(pw, ph) / 1080;
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.font = `700 ${28 * u}px ${canvasFamily('Plus Jakarta Sans')}`;
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'bottom';
-    ctx.fillText(text, pw - 30 * u, ph - 30 * u);
-    ctx.restore();
   }
 }
 
@@ -934,4 +1111,32 @@ export function layerAt(scene: Scene, x: number, y: number, t?: number): Layer |
     if (Math.abs(lx) <= l.w / 2 && Math.abs(ly) <= l.h / 2) return l0;
   }
   return null;
+}
+
+/** Tunggu sampai video bisa digambar (maks. 12 dtk). */
+function waitReady(el: HTMLVideoElement): Promise<void> {
+  return new Promise((res) => {
+    if (el.readyState >= 2) return res();
+    const done = () => {
+      el.removeEventListener('loadeddata', done);
+      res();
+    };
+    el.addEventListener('loadeddata', done);
+    setTimeout(done, 12000);
+  });
+}
+
+/** Seek presisi untuk export frame demi frame. */
+async function seekVideo(el: HTMLVideoElement, target: number): Promise<void> {
+  await waitReady(el);
+  if (el.readyState >= 2 && Math.abs(el.currentTime - target) < 0.004) return;
+  await new Promise<void>((res) => {
+    const done = () => {
+      el.removeEventListener('seeked', done);
+      res();
+    };
+    el.addEventListener('seeked', done);
+    el.currentTime = target;
+    setTimeout(done, 2500);
+  });
 }

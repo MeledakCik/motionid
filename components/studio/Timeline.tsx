@@ -169,7 +169,7 @@ export default function Timeline({ clock, onOpenTool }: { clock: PlaybackClock; 
                   onPointerMove={(e) => {
                     const r = resizing.current;
                     if (!r) return;
-                    const d = Math.max(1, Math.min(15, Math.round((r.d + (e.clientX - r.x) / pps) * 10) / 10));
+                    const d = Math.max(1, Math.min(60, Math.round((r.d + (e.clientX - r.x) / pps) * 10) / 10));
                     st.live((doc2) => ({ ...doc2, scenes: doc2.scenes.map((sc, k) => (k === r.idx ? { ...sc, duration: d } : sc)) }));
                   }}
                   onPointerUp={() => {

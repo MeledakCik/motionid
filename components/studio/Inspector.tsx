@@ -13,8 +13,9 @@ import { FONT_LIST, fontLabel, fontStack } from '@/lib/studio/fonts';
 import { ColorField, cx, Field, NumberField, Section, Segmented, Slider } from './ui';
 import { poseAt } from '@/lib/studio/vector';
 import { AlignBar, GroupProps, KeyframeSection, MultiInspector, PathProps } from './DesignPanels';
+import { VideoProps } from './VideoPanels';
 
-const KIND_ID: Record<string, string> = { text: 'Teks', image: 'Foto', icon: 'Ikon', component: 'Elemen', shape: 'Bentuk', path: 'Vektor', group: 'Grup' };
+const KIND_ID: Record<string, string> = { text: 'Teks', image: 'Foto', icon: 'Ikon', component: 'Elemen', shape: 'Bentuk', path: 'Vektor', group: 'Grup', video: 'Video' };
 const kindLabel = (l: Layer) => (l.kind === 'group' && l.symbolId ? 'Komponen' : KIND_ID[l.kind] || l.kind);
 
 function useSwatches() {
@@ -93,6 +94,7 @@ function LayerInspector({ layer, pro, onOpenTool, aspect }: { layer: Layer; pro:
       {layer.kind === 'shape' && <ShapeProps layer={layer} />}
       {layer.kind === 'path' && <PathProps layer={layer} />}
       {layer.kind === 'group' && <GroupProps layer={layer} />}
+      {layer.kind === 'video' && <VideoProps layer={layer} />}
 
       <Section title="Animasi">
         <button type="button" onClick={() => onOpenTool('animasi')} className="flex w-full items-center justify-between rounded-xl border border-mk-line bg-mk-ink px-3 py-2.5 text-left text-xs hover:border-mk-coral/60">
@@ -371,7 +373,7 @@ function SceneInspector({ onOpenTool }: { onOpenTool: (t: Tool) => void }) {
         <Field label="Nama scene">
           <input className="mk-input py-2 text-xs" value={scene.name} onChange={(e) => st.live((d) => ({ ...d, scenes: d.scenes.map((s, i) => (i === sceneIdx ? { ...s, name: e.target.value } : s)) }))} onBlur={st.endDrag} />
         </Field>
-        <Slider label="Durasi" value={scene.duration} min={1} max={15} step={0.1} onChange={(v) => st.live((d) => ({ ...d, scenes: d.scenes.map((s, i) => (i === sceneIdx ? { ...s, duration: v } : s)) }))} onCommit={st.endDrag} format={(v) => `${v.toFixed(1)} dtk`} />
+        <Slider label="Durasi" value={scene.duration} min={1} max={60} step={0.1} onChange={(v) => st.live((d) => ({ ...d, scenes: d.scenes.map((s, i) => (i === sceneIdx ? { ...s, duration: v } : s)) }))} onCommit={st.endDrag} format={(v) => `${v.toFixed(1)} dtk`} />
         <div className="grid grid-cols-2 gap-1.5">
           <button type="button" className="mk-btn-ghost text-[11px]" onClick={() => onOpenTool('latar')}>
             <Palette className="h-3.5 w-3.5" /> Latar

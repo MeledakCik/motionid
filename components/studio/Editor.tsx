@@ -14,6 +14,7 @@ import {
   Image as ImageIcon,
   PenTool,
   Layers,
+  ListOrdered,
   LayoutTemplate,
   Loader2,
   Music,
@@ -45,6 +46,7 @@ import Timeline from './Timeline';
 import { BackgroundPanel, ElementsPanel, IconsPanel, MediaPanel, MusicPanel, TemplatePanel, TextPanel } from './AssetPanels';
 import { AnimationPanel, EffectsPanel, TransitionPanel } from './MotionPanels';
 import { ComponentsPanel } from './DesignPanels';
+import { RecipePanel } from './RecipePanel';
 import { BLANK_TEMPLATE } from '@/lib/studio/vector';
 import { Inspector, LayersPanel } from './Inspector';
 import ExportDialog from './ExportDialog';
@@ -52,9 +54,10 @@ import ExportDialog from './ExportDialog';
 const TOOLS: Array<{ id: Tool; label: string; icon: React.ComponentType<{ className?: string }>; pro?: boolean }> = [
   { id: 'template', label: 'Template', icon: LayoutTemplate },
   { id: 'teks', label: 'Teks', icon: Type },
-  { id: 'foto', label: 'Foto', icon: ImageIcon },
+  { id: 'foto', label: 'Media', icon: ImageIcon },
   { id: 'elemen', label: 'Elemen', icon: Shapes },
   { id: 'komponen', label: 'Komponen', icon: ComponentIcon },
+  { id: 'resep', label: 'Cara buat', icon: ListOrdered },
   { id: 'ikon', label: 'Ikon', icon: Smile },
   { id: 'latar', label: 'Latar', icon: Palette },
   { id: 'efek', label: 'Efek', icon: CloudRain },
@@ -68,9 +71,10 @@ const TOOL_TITLE: Record<Tool, string> = {
   efek: 'Efek (370+)',
   template: 'Template (360)',
   teks: 'Teks',
-  foto: 'Foto & Media',
+  foto: 'Video & Foto',
   elemen: 'Elemen siap pakai',
   komponen: 'Komponen saya',
+  resep: 'Cara pembuatan',
   ikon: 'Ikon',
   latar: 'Latar & Warna',
   musik: 'Musik',
@@ -149,7 +153,21 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
 
   // panel default desktop
   useEffect(() => {
-    if (desktop && !useStudio.getState().tool) useStudio.setState({ tool: useStudio.getState().doc?.templateId === BLANK_TEMPLATE ? 'komponen' : 'template' });
+    let want: Tool | null = null;
+    try {
+      // baru diimpor → langsung tampilkan cara pembuatannya
+      if (localStorage.getItem('motionku:open-tool') === 'resep') {
+        localStorage.removeItem('motionku:open-tool');
+        want = 'resep';
+      }
+    } catch {
+      // abaikan
+    }
+    if (want) useStudio.setState({ tool: want });
+    else if (desktop && !useStudio.getState().tool) {
+      const d = useStudio.getState().doc;
+      useStudio.setState({ tool: d?.imported ? 'resep' : d?.templateId === BLANK_TEMPLATE ? 'komponen' : 'template' });
+    }
   }, [desktop]);
 
   // autosave
@@ -223,6 +241,8 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
         return <ElementsPanel />;
       case 'komponen':
         return <ComponentsPanel />;
+      case 'resep':
+        return <RecipePanel clock={clock} />;
       case 'ikon':
         return <IconsPanel onPick={iconPick} />;
       case 'latar':

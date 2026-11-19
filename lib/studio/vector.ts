@@ -47,7 +47,8 @@ export function poseAt(l: Layer, t: number): Pose2 {
     const a = ks[i];
     const b = ks[i + 1];
     if (t >= a.t && t <= b.t) {
-      const p = a.ease === 'snap' ? 0 : ease(a.ease, (t - a.t) / Math.max(1e-4, b.t - a.t));
+      const u = (t - a.t) / Math.max(1e-4, b.t - a.t);
+      const p = a.ease === 'snap' ? 0 : a.ease === 'custom' && a.bez ? cubicBezier(a.bez, u) : ease(a.ease, u);
       return {
         x: a.x + (b.x - a.x) * p,
         y: a.y + (b.y - a.y) * p,
@@ -59,6 +60,38 @@ export function poseAt(l: Layer, t: number): Pose2 {
   }
   return pick(last);
 }
+
+/** cubic-bezier(x1, y1, x2, y2) seperti CSS / After Effects. */
+export function cubicBezier(b: [number, number, number, number], x: number): number {
+  const [x1, y1, x2, y2] = b;
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  const cx = (t: number) => 3 * (1 - t) * (1 - t) * t * x1 + 3 * (1 - t) * t * t * x2 + t * t * t;
+  const cy = (t: number) => 3 * (1 - t) * (1 - t) * t * y1 + 3 * (1 - t) * t * t * y2 + t * t * t;
+  let lo = 0;
+  let hi = 1;
+  let t = x;
+  for (let i = 0; i < 24; i++) {
+    const v = cx(t);
+    if (Math.abs(v - x) < 1e-5) break;
+    if (v < x) lo = t;
+    else hi = t;
+    t = (lo + hi) / 2;
+  }
+  return cy(t);
+}
+
+/** Kurva bezier perkiraan untuk easing bernama (untuk ditampilkan di graph editor). */
+export const EASE_BEZ: Record<string, [number, number, number, number]> = {
+  linear: [0, 0, 1, 1],
+  inOutCubic: [0.65, 0, 0.35, 1],
+  outCubic: [0.33, 1, 0.68, 1],
+  inCubic: [0.32, 0, 0.67, 0],
+  outBack: [0.34, 1.56, 0.64, 1],
+  inOutSine: [0.37, 0, 0.63, 1],
+  outQuad: [0.5, 1, 0.89, 1],
+  outExpo: [0.16, 1, 0.3, 1],
+};
 
 function pick(k: Keyframe): Pose2 {
   return { x: k.x, y: k.y, rotation: k.rotation, opacity: k.opacity, scale: k.scale };
@@ -218,6 +251,21 @@ export function pathFromAbs(abs: AbsPoint[], closed: boolean, style: Pick<PathLa
   };
 }
 
+/** Banyak kontur (koordinat kanvas) → satu layer path; kontur pertama utama, sisanya lubang/pulau. */
+export function pathFromContours(contours: AbsPoint[][], closed: boolean, style: Pick<PathLayer, 'fill' | 'stroke'> & Partial<PathLayer>): PathLayer {
+  const main = pathFromAbs(contours[0], closed, style);
+  if (contours.length < 2 || !closed) return main;
+  const all = pathFromAbs(contours.flat(), true, style);
+  const norm = (c: AbsPoint[]): PathPoint[] =>
+    c.map((p) => {
+      const o: PathPoint = { x: (p.x - all.x) / all.w, y: (p.y - all.y) / all.h };
+      if (p.ix !== undefined || p.iy !== undefined) (o.ix = (p.ix || 0) / all.w), (o.iy = (p.iy || 0) / all.h);
+      if (p.ox !== undefined || p.oy !== undefined) (o.ox = (p.ox || 0) / all.w), (o.oy = (p.oy || 0) / all.h);
+      return o;
+    });
+  return { ...main, x: all.x, y: all.y, w: all.w, h: all.h, points: norm(contours[0]), extra: contours.slice(1).map(norm) };
+}
+
 /** Titik path (ternormalisasi) → koordinat kanvas, memperhitungkan rotasi layer. */
 export function pathToAbs(l: PathLayer): AbsPoint[] {
   const cx = l.x + l.w / 2;
@@ -243,6 +291,20 @@ export function pathToAbs(l: PathLayer): AbsPoint[] {
 
 /** Ganti titik path dari koordinat kanvas; kotak layer dihitung ulang (rotasi dipertahankan). */
 export function setPathAbs(l: PathLayer, abs: AbsPoint[]): PathLayer {
+  if (l.extra?.length) {
+    // kontur tambahan (hasil boolean) ikut dinormalisasi ulang ke kotak baru
+    const absExtra = l.extra.map((c) => pathToAbs({ ...l, points: c }));
+    const base = setPathAbs({ ...l, extra: undefined }, abs);
+    const local = (q: AbsPoint): PathPoint => {
+      const cx = base.x + base.w / 2;
+      const cy = base.y + base.h / 2;
+      const a = (-base.rotation * Math.PI) / 180;
+      const dx = q.x - cx;
+      const dy = q.y - cy;
+      return { x: (dx * Math.cos(a) - dy * Math.sin(a) + base.w / 2) / base.w, y: (dx * Math.sin(a) + dy * Math.cos(a) + base.h / 2) / base.h };
+    };
+    return { ...base, extra: absExtra.map((c) => c.map(local)) };
+  }
   if (!l.rotation) {
     const n = pathFromAbs(abs, l.closed, l);
     return { ...l, x: n.x, y: n.y, w: n.w, h: n.h, points: n.points };
@@ -555,6 +617,8 @@ export function splitScene(scene: Scene, t: number): [Scene, Scene] | null {
         end: l.end === null ? null : Math.round((l.end - at) * 100) / 100,
         // sudah tampil sebelum potongan → jangan animasi masuk lagi
         animIn: l.start < at ? null : l.animIn,
+        // klip video lanjut dari titik potong di file sumber
+        ...(l.kind === 'video' && l.start < at ? { trimIn: Math.min(l.trimOut - 0.05, l.trimIn + (at - l.start) * (l.speed || 1)) } : {}),
         keyframes: l.keyframes?.map((k) => ({ ...k, t: Math.round((k.t - at) * 100) / 100 })),
       })),
   };

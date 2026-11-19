@@ -1,5 +1,6 @@
 'use client';
 
+import { VideoSection } from './VideoPanels';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ImagePlus, Mic, Sparkles, Square, Trash2, Upload, Volume2 } from 'lucide-react';
 import type { FontId, ProjectDoc, TextLayer } from '@/lib/studio/types';
@@ -348,6 +349,7 @@ export function MediaPanel() {
 
   return (
     <div>
+      <VideoSection />
       <Section title="Foto kamu">
         <input ref={inputRef} type="file" accept="image/*" multiple hidden onChange={(e) => onFiles(e.target.files)} />
         <button type="button" onClick={() => inputRef.current?.click()} disabled={busy} className="flex w-full flex-col items-center gap-1.5 rounded-2xl border-2 border-dashed border-mk-line-2 bg-mk-ink px-4 py-5 text-center transition hover:border-mk-coral/70">

@@ -245,3 +245,65 @@ commit;
 -- Cek hasil (semua tabel harus rowsecurity = true):
 --   select tablename, rowsecurity from pg_tables
 --   where schemaname = 'public' and tablename in ('projects', 'ai_training_data', 'app_admins');
+
+-- =====================================================================
+-- v9 · Studio desain bebas: pustaka komponen & klip video
+-- Aman dijalankan ulang (idempotent).
+-- =====================================================================
+begin;
+
+-- Komponen buatan user (gaya Figma) yang bisa dipakai di semua proyek & perangkat
+create table if not exists public.user_components (
+  id text primary key,
+  user_id uuid not null references auth.users (id) on delete cascade default auth.uid(),
+  name text not null default 'Komponen',
+  data jsonb not null,
+  updated_at timestamptz not null default now()
+);
+create index if not exists user_components_user_idx on public.user_components (user_id, updated_at desc);
+alter table public.user_components enable row level security;
+
+drop policy if exists "Komponen: user hanya melihat miliknya" on public.user_components;
+create policy "Komponen: user hanya melihat miliknya"
+  on public.user_components for select to authenticated
+  using ((select auth.uid()) = user_id);
+drop policy if exists "Komponen: user hanya menambah miliknya" on public.user_components;
+create policy "Komponen: user hanya menambah miliknya"
+  on public.user_components for insert to authenticated
+  with check ((select auth.uid()) = user_id);
+drop policy if exists "Komponen: user hanya mengubah miliknya" on public.user_components;
+create policy "Komponen: user hanya mengubah miliknya"
+  on public.user_components for update to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+drop policy if exists "Komponen: user hanya menghapus miliknya" on public.user_components;
+create policy "Komponen: user hanya menghapus miliknya"
+  on public.user_components for delete to authenticated
+  using ((select auth.uid()) = user_id);
+revoke all on table public.user_components from anon;
+grant select, insert, update, delete on table public.user_components to authenticated;
+
+-- Bucket privat untuk klip video. Setiap user hanya bisa mengakses folder <user_id>/
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('media', 'media', false, 314572800, array['video/mp4', 'video/quicktime', 'video/webm', 'video/x-matroska', 'video/3gpp'])
+on conflict (id) do update set public = false, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "Media: user membaca folder sendiri" on storage.objects;
+create policy "Media: user membaca folder sendiri"
+  on storage.objects for select to authenticated
+  using (bucket_id = 'media' and (storage.foldername(name))[1] = (select auth.uid())::text);
+drop policy if exists "Media: user mengunggah ke folder sendiri" on storage.objects;
+create policy "Media: user mengunggah ke folder sendiri"
+  on storage.objects for insert to authenticated
+  with check (bucket_id = 'media' and (storage.foldername(name))[1] = (select auth.uid())::text);
+drop policy if exists "Media: user mengganti file sendiri" on storage.objects;
+create policy "Media: user mengganti file sendiri"
+  on storage.objects for update to authenticated
+  using (bucket_id = 'media' and (storage.foldername(name))[1] = (select auth.uid())::text)
+  with check (bucket_id = 'media' and (storage.foldername(name))[1] = (select auth.uid())::text);
+drop policy if exists "Media: user menghapus file sendiri" on storage.objects;
+create policy "Media: user menghapus file sendiri"
+  on storage.objects for delete to authenticated
+  using (bucket_id = 'media' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+commit;

@@ -11,6 +11,7 @@
 
 import type { NarrationDoc, ProjectDoc } from './types';
 import { renderMusic } from './music';
+import { mediaBlob, videoAudioClips } from './media';
 
 export const DEFAULT_NARRATION: NarrationDoc = {
   enabled: false,
@@ -36,7 +37,29 @@ export function hasNarrationAudio(doc: ProjectDoc): boolean {
 
 /** Video punya audio apa pun (musik atau narasi) untuk track MP4. */
 export function hasAnyAudio(doc: ProjectDoc): boolean {
-  return doc.music.id !== 'none' || hasNarrationAudio(doc);
+  return doc.music.id !== 'none' || hasNarrationAudio(doc) || videoAudioClips(doc).length > 0;
+}
+
+const clipDecode = new Map<string, Promise<AudioBuffer | null>>();
+/** Ambil suara dari file video (null bila tanpa audio / format tidak didukung). */
+function decodeClipAudio(info: Parameters<typeof mediaBlob>[0], sampleRate: number): Promise<AudioBuffer | null> {
+  const key = `${info.id}:${info.size}:${sampleRate}`;
+  let p = clipDecode.get(key);
+  if (!p) {
+    p = (async () => {
+      const OAC = offlineCtor();
+      const blob = await mediaBlob(info);
+      if (!OAC || !blob) return null;
+      try {
+        const ctx = new OAC(2, 1, sampleRate);
+        return await ctx.decodeAudioData(await blob.arrayBuffer());
+      } catch {
+        return null;
+      }
+    })();
+    clipDecode.set(key, p);
+  }
+  return p;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -256,7 +279,8 @@ export function renderSoundtrack(
   const narration = narrationOf(doc);
   const musicOn = doc.music.id !== 'none';
   const narrOn = narration.enabled && !!narration.data;
-  if (!OAC || (!musicOn && !narrOn)) return Promise.resolve(null);
+  const clips = videoAudioClips(doc);
+  if (!OAC || (!musicOn && !narrOn && !clips.length)) return Promise.resolve(null);
 
   const key = [
     doc.music.id,
@@ -267,6 +291,7 @@ export function renderSoundtrack(
     narration.volume,
     narration.duckMusic ? 1 : 0,
     narration.start,
+    clips.map((c) => `${c.info.id}@${c.at.toFixed(2)}:${c.offset.toFixed(2)}:${c.dur.toFixed(2)}:${c.rate}:${c.vol}`).join(','),
     duration.toFixed(2),
     sampleRate,
   ].join('|');
@@ -276,11 +301,12 @@ export function renderSoundtrack(
 
   p = (async () => {
     try {
-      const [music, narr] = await Promise.all([
+      const [music, narr, clipBufs] = await Promise.all([
         musicOn ? renderMusic(doc.music.id, duration, sampleRate, doc.audio?.data) : Promise.resolve(null),
         narrOn ? decodeAudioUri(narration.data as string, sampleRate) : Promise.resolve(null),
+        Promise.all(clips.map((c) => decodeClipAudio(c.info, sampleRate))),
       ]);
-      if (!music && !narr) return null;
+      if (!music && !narr && !clipBufs.some(Boolean)) return null;
 
       const ctx = new OAC(2, Math.ceil(sampleRate * (duration + 0.05)), sampleRate);
       const musicVol = doc.music.volume ?? 0.7;
@@ -304,6 +330,19 @@ export function renderSoundtrack(
           gain.gain.linearRampToValueAtTime(musicVol, span.end);
         }
       }
+
+      // suara asli klip video (gaya CapCut): ikut potongan, kecepatan, dan volume klip
+      clips.forEach((c, i) => {
+        const buf = clipBufs[i];
+        if (!buf || c.offset >= buf.duration) return;
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.playbackRate.value = c.rate;
+        const gain = ctx.createGain();
+        gain.gain.value = c.vol;
+        src.connect(gain).connect(ctx.destination);
+        src.start(c.at, c.offset, Math.min(buf.duration - c.offset, c.dur * c.rate));
+      });
 
       if (narr && span) {
         const src = ctx.createBufferSource();

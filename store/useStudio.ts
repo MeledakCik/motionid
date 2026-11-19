@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { GroupLayer, Layer, ProjectDoc, Scene, SymbolDef } from '@/lib/studio/types';
 import { canvasSize, uid } from '@/lib/studio/types';
+import { booleanLayers, type BoolOp } from '@/lib/studio/boolean';
 import { AlignOp, alignLayers, cloneLayer, hasKeys, instanceOf, makeGroup, splitPosePatch, splitScene, symbolFromGroup, syncSymbol, ungroup, upsertKey } from '@/lib/studio/vector';
 
 /**
@@ -8,7 +9,7 @@ import { AlignOp, alignLayers, cloneLayer, hasKeys, instanceOf, makeGroup, split
  * undo/redo murah walau dokumen berisi foto.
  */
 
-export type Tool = 'efek' | 'template' | 'teks' | 'elemen' | 'ikon' | 'foto' | 'latar' | 'transisi' | 'animasi' | 'musik' | 'layer' | 'properti' | 'komponen';
+export type Tool = 'efek' | 'template' | 'teks' | 'elemen' | 'ikon' | 'foto' | 'latar' | 'transisi' | 'animasi' | 'musik' | 'layer' | 'properti' | 'komponen' | 'resep';
 
 /** Alat kanvas gaya Figma / Illustrator. */
 export type DrawTool = 'select' | 'rect' | 'ellipse' | 'line' | 'pen' | 'pencil' | 'text';
@@ -78,6 +79,10 @@ interface StudioState {
   enterGroup: (id: string) => void;
   exitGroup: () => void;
   splitAtPlayhead: () => boolean;
+  /** gabung / kurangi / irisan / eksklusi bentuk terpilih (Illustrator Pathfinder) */
+  booleanSelected: (op: BoolOp) => string | null;
+  /** jadikan layer paling bawah sebagai mask untuk layer terpilih lainnya */
+  maskSelected: () => void;
 }
 
 const HISTORY = 60;
@@ -427,6 +432,34 @@ export const useStudio = create<StudioState>((set, get) => ({
       return next;
     });
     set({ layerId: g.id, selIds: [g.id] });
+  },
+
+  booleanSelected: (op) => {
+    const { sceneIdx, selIds, doc } = get();
+    if (!doc || selIds.length < 2) return 'Pilih minimal 2 bentuk dulu.';
+    const scene = doc.scenes[sceneIdx];
+    const picked = scene.layers.filter((l) => selIds.includes(l.id));
+    if (picked.some((l) => l.kind === 'group')) return 'Lepas grup dulu sebelum menggabungkan bentuk.';
+    const res = booleanLayers(picked, op);
+    if (!res) return 'Hasilnya kosong: bentuk-bentuk ini tidak saling bertumpuk.';
+    const at = scene.layers.findIndex((l) => selIds.includes(l.id));
+    get().commit((d) =>
+      mapScene(d, sceneIdx, (s) => {
+        const rest = s.layers.filter((l) => !selIds.includes(l.id));
+        const before = s.layers.slice(0, at).filter((l) => !selIds.includes(l.id)).length;
+        rest.splice(before, 0, res);
+        return { ...s, layers: rest };
+      })
+    );
+    set({ layerId: res.id, selIds: [res.id] });
+    return null;
+  },
+
+  maskSelected: () => {
+    if (get().selIds.length < 2) return;
+    get().groupSelected();
+    const { layerId, sceneIdx } = get();
+    get().commit((d) => mapScene(d, sceneIdx, (s) => ({ ...s, layers: s.layers.map((l) => (l.id === layerId && l.kind === 'group' ? { ...l, mask: true, name: 'Grup mask' } : l)) })));
   },
 
   splitAtPlayhead: () => {

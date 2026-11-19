@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { ImportBox } from '@/components/studio/ImportPanels';
 import { useRouter } from 'next/navigation';
 import {
   ArrowRight,
@@ -627,6 +628,9 @@ export default function DashboardPage() {
                       <span className="block text-xs text-mk-dim">Gambar sendiri, buat komponen, animasi keyframe</span>
                     </span>
                   </Link>
+                  <div className="mt-2">
+                    <ImportBox compact />
+                  </div>
                 </div>
               </section>
 
