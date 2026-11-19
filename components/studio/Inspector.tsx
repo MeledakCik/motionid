@@ -11,12 +11,15 @@ import { getIcon, iconSvgMarkup } from '@/lib/studio/packs/icons';
 import { getTransition } from '@/lib/studio/packs/transitions';
 import { FONT_LIST, fontLabel, fontStack } from '@/lib/studio/fonts';
 import { ColorField, cx, Field, NumberField, Section, Segmented, Slider } from './ui';
+import { poseAt } from '@/lib/studio/vector';
+import { AlignBar, GroupProps, KeyframeSection, MultiInspector, PathProps } from './DesignPanels';
 
-const KIND_ID: Record<string, string> = { text: 'Teks', image: 'Foto', icon: 'Ikon', component: 'Komponen', shape: 'Bentuk' };
+const KIND_ID: Record<string, string> = { text: 'Teks', image: 'Foto', icon: 'Ikon', component: 'Elemen', shape: 'Bentuk', path: 'Vektor', group: 'Grup' };
+const kindLabel = (l: Layer) => (l.kind === 'group' && l.symbolId ? 'Komponen' : KIND_ID[l.kind] || l.kind);
 
 function useSwatches() {
   const p = useStudio((s) => s.doc!.theme.palette);
-  return [p.text, p.primary, p.secondary, p.bg, p.muted, '#FFFFFF', '#111111'];
+  return Array.from(new Set([p.text, p.primary, p.secondary, p.bg, p.muted, '#FFFFFF', '#111111'].map((c) => c.toUpperCase())));
 }
 
 export function LayerActions({ layer, compact }: { layer: Layer; compact?: boolean }) {
@@ -52,6 +55,8 @@ export function Inspector({ onOpenTool }: { onOpenTool: (t: Tool) => void }) {
   const doc = useStudio((s) => s.doc)!;
   const layer = useStudio(currentLayer);
   const mode = useStudio((s) => s.mode);
+  const many = useStudio((s) => s.selIds.length > 1);
+  if (many) return <MultiInspector />;
   if (!layer) return <SceneInspector onOpenTool={onOpenTool} />;
   return <LayerInspector layer={layer} pro={mode === 'pro'} onOpenTool={onOpenTool} aspect={doc.aspect} />;
 }
@@ -62,8 +67,10 @@ function LayerInspector({ layer, pro, onOpenTool, aspect }: { layer: Layer; pro:
   const endDrag = useStudio((s) => s.endDrag);
   const sceneDur = useStudio((s) => s.doc!.scenes[s.sceneIdx].duration);
   const sw = useSwatches();
-  const { w: W, h: H } = canvasSize(aspect as never);
+  void aspect;
   const animName = layer.animIn ? getAnimation(layer.animIn.id)?.name : null;
+  const playhead = useStudio((s) => s.playhead);
+  const pose = poseAt(layer, playhead);
   return (
     <div>
       {layer.placeholder && (
@@ -75,7 +82,7 @@ function LayerInspector({ layer, pro, onOpenTool, aspect }: { layer: Layer; pro:
           </button>
         </div>
       )}
-      <Section title={layer.name} right={<span className="rounded bg-mk-panel-3 px-1.5 py-0.5 text-[11px] font-bold uppercase text-mk-muted">{KIND_ID[layer.kind] || layer.kind}</span>}>
+      <Section title={layer.name} right={<span className="rounded bg-mk-panel-3 px-1.5 py-0.5 text-[11px] font-bold uppercase text-mk-muted">{kindLabel(layer)}</span>}>
         <LayerActions layer={layer} />
       </Section>
 
@@ -84,6 +91,8 @@ function LayerInspector({ layer, pro, onOpenTool, aspect }: { layer: Layer; pro:
       {layer.kind === 'icon' && <IconProps layer={layer} onOpenTool={onOpenTool} />}
       {layer.kind === 'image' && <ImageProps layer={layer} />}
       {layer.kind === 'shape' && <ShapeProps layer={layer} />}
+      {layer.kind === 'path' && <PathProps layer={layer} />}
+      {layer.kind === 'group' && <GroupProps layer={layer} />}
 
       <Section title="Animasi">
         <button type="button" onClick={() => onOpenTool('animasi')} className="flex w-full items-center justify-between rounded-xl border border-mk-line bg-mk-ink px-3 py-2.5 text-left text-xs hover:border-mk-coral/60">
@@ -98,22 +107,19 @@ function LayerInspector({ layer, pro, onOpenTool, aspect }: { layer: Layer; pro:
         </button>
       </Section>
 
+      <KeyframeSection layer={layer} />
+
       <Section title="Posisi & ukuran">
         <div className="grid grid-cols-2 gap-1.5">
-          <NumberField label="X" value={layer.x} onChange={(v) => up(layer.id, { x: v })} />
-          <NumberField label="Y" value={layer.y} onChange={(v) => up(layer.id, { y: v })} />
-          <NumberField label="L" value={layer.w} min={10} onChange={(v) => up(layer.id, { w: v })} />
-          <NumberField label="T" value={layer.h} min={10} onChange={(v) => up(layer.id, { h: v })} />
-          <NumberField label="°" value={layer.rotation} onChange={(v) => up(layer.id, { rotation: v })} />
-          <NumberField label="%" value={Math.round(layer.opacity * 100)} min={0} max={100} onChange={(v) => up(layer.id, { opacity: v / 100 })} />
+          <NumberField label="X" value={Math.round(pose.x)} onChange={(v) => up(layer.id, { x: v })} />
+          <NumberField label="Y" value={Math.round(pose.y)} onChange={(v) => up(layer.id, { y: v })} />
+          <NumberField label="L" value={Math.round(layer.w)} min={4} onChange={(v) => up(layer.id, { w: v })} />
+          <NumberField label="T" value={Math.round(layer.h)} min={4} onChange={(v) => up(layer.id, { h: v })} />
+          <NumberField label="°" value={Math.round(pose.rotation)} onChange={(v) => up(layer.id, { rotation: v })} />
+          <NumberField label="%" value={Math.round(pose.opacity * 100)} min={0} max={100} onChange={(v) => up(layer.id, { opacity: v / 100 })} />
         </div>
-        <div className="grid grid-cols-3 gap-1.5">
-          <button type="button" className="mk-btn-ghost px-2 py-1.5 text-[11px]" onClick={() => up(layer.id, { x: Math.round((W - layer.w) / 2) })}>
-            Tengah ↔
-          </button>
-          <button type="button" className="mk-btn-ghost px-2 py-1.5 text-[11px]" onClick={() => up(layer.id, { y: Math.round((H - layer.h) / 2) })}>
-            Tengah ↕
-          </button>
+        <div className="flex items-center justify-between gap-1.5">
+          <AlignBar many={false} />
           <button type="button" className="mk-btn-ghost px-2 py-1.5 text-[11px]" onClick={() => up(layer.id, { rotation: 0 })}>
             Reset putar
           </button>
@@ -401,17 +407,33 @@ function SceneInspector({ onOpenTool }: { onOpenTool: (t: Tool) => void }) {
 export function LayersPanel() {
   const doc = useStudio((s) => s.doc)!;
   const sceneIdx = useStudio((s) => s.sceneIdx);
-  const layerId = useStudio((s) => s.layerId);
+  const selIds = useStudio((s) => s.selIds);
   const st = useStudio.getState();
   const layers = [...doc.scenes[sceneIdx].layers].reverse();
   return (
     <div className="p-3">
-      {!layers.length && <p className="p-4 text-center text-xs text-mk-dim">Scene ini belum punya elemen.</p>}
+      {!layers.length && <p className="p-4 text-center text-xs text-mk-dim">Scene ini belum punya elemen. Pakai alat gambar di kiri kanvas untuk mulai.</p>}
+      {selIds.length > 1 && (
+        <div className="mb-2 flex items-center justify-between rounded-xl bg-mk-mist px-3 py-2 text-[11px] font-semibold">
+          {selIds.length} dipilih
+          <button type="button" className="mk-btn-primary px-3 py-1 text-[11px]" onClick={st.groupSelected}>
+            Gabung jadi grup
+          </button>
+        </div>
+      )}
+      <p className="mb-2 text-[11px] text-mk-dim">Ctrl/Shift+klik untuk memilih beberapa.</p>
       <div className="space-y-1">
         {layers.map((l) => (
-          <div key={l.id} onClick={() => st.selectLayer(l.id)} className={cx('flex cursor-pointer items-center gap-2 rounded-xl border px-2.5 py-2', layerId === l.id ? 'border-mk-coral/70 bg-mk-coral/10' : 'border-transparent hover:bg-mk-panel-2')}>
-            <span className="w-16 shrink-0 rounded bg-mk-panel-3 px-1 py-0.5 text-center text-[11px] font-bold text-mk-muted">{KIND_ID[l.kind] || l.kind}</span>
-            <span className={cx('min-w-0 flex-1 truncate text-xs font-semibold', l.hidden && 'opacity-40')}>{l.kind === 'text' ? l.text : l.name}</span>
+          <div
+            key={l.id}
+            onClick={(e) => (e.shiftKey || e.ctrlKey || e.metaKey ? st.setSelection(selIds.includes(l.id) ? selIds.filter((i) => i !== l.id) : [...selIds, l.id]) : st.selectLayer(l.id))}
+            onDoubleClick={() => l.kind === 'group' && st.enterGroup(l.id)}
+            className={cx('flex cursor-pointer items-center gap-2 rounded-xl border px-2.5 py-2', selIds.includes(l.id) ? 'border-mk-coral/70 bg-mk-coral/10' : 'border-transparent hover:bg-mk-panel-2')}
+          >
+            <span className="w-16 shrink-0 rounded bg-mk-panel-3 px-1 py-0.5 text-center text-[11px] font-bold text-mk-muted">{kindLabel(l)}</span>
+            <span className={cx('min-w-0 flex-1 truncate text-xs font-semibold', l.hidden && 'opacity-40')}>{l.kind === 'text' ? l.text : l.name}
+              {l.keyframes?.length ? <span className="ml-1 text-mk-coral" title="Punya keyframe">◆</span> : null}
+            </span>
             <button type="button" className="mk-btn-icon h-7 w-7" onClick={(e) => (e.stopPropagation(), st.updateLayer(l.id, { hidden: !l.hidden }))} title="Sembunyikan">
               {l.hidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
             </button>

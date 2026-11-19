@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Pause, Play, Plus, SkipBack } from 'lucide-react';
-import type { ProjectDoc, Scene } from '@/lib/studio/types';
+import { Pause, Play, Plus, Scissors, SkipBack } from 'lucide-react';
+import type { Keyframe, Layer, ProjectDoc, Scene } from '@/lib/studio/types';
 import { canvasSize, docDuration } from '@/lib/studio/types';
 import { Renderer, sceneStarts, settleTime } from '@/lib/studio/renderer';
 import { getTransition } from '@/lib/studio/packs/transitions';
@@ -40,7 +40,10 @@ export default function Timeline({ clock, onOpenTool }: { clock: PlaybackClock; 
   const sceneIdx = useStudio((s) => s.sceneIdx);
   const layerId = useStudio((s) => s.layerId);
   const mode = useStudio((s) => s.mode);
+  const selIds = useStudio((s) => s.selIds);
+  const playhead = useStudio((s) => s.playhead);
   const st = useStudio.getState();
+  const [note, setNote] = useState<string | null>(null);
   const desktop = useMediaQuery('(min-width: 1024px)');
   const pps = desktop ? 56 : 34;
   const timeRef = useRef<HTMLSpanElement>(null);
@@ -102,10 +105,28 @@ export default function Timeline({ clock, onOpenTool }: { clock: PlaybackClock; 
         <span className="ml-auto text-[11px] font-semibold text-mk-dim">
           Scene {sceneIdx + 1}/{doc.scenes.length}
         </span>
+        <button
+          type="button"
+          className="mk-btn-ghost px-2.5 py-1.5 text-[11px]"
+          title="Potong scene di posisi playhead"
+          onClick={() => {
+            clock.pause();
+            const ok = st.splitAtPlayhead();
+            setNote(ok ? null : 'Geser playhead ke tengah scene dulu (minimal 0,3 dtk dari ujung).');
+            if (!ok) window.setTimeout(() => setNote(null), 3200);
+          }}
+        >
+          <Scissors className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Potong</span>
+        </button>
         <button type="button" className="mk-btn-ghost px-2.5 py-1.5 text-[11px]" onClick={() => st.addScene(sceneIdx)}>
           <Plus className="h-3.5 w-3.5" /> Scene
         </button>
       </div>
+      {note && (
+        <p role="status" className="px-3 pb-1 text-[11px] font-semibold text-mk-amber">
+          {note}
+        </p>
+      )}
 
       {/* strip scene */}
       <div ref={stripRef} className="mk-scroll relative overflow-x-auto px-3 pb-2" onPointerDown={(e) => (e.target as HTMLElement).dataset.strip && seekFromEvent(e)}>
@@ -118,9 +139,14 @@ export default function Timeline({ clock, onOpenTool }: { clock: PlaybackClock; 
                 key={s.id}
                 className={cx('group relative mr-0 flex shrink-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded-lg border-2 px-1 py-1', i === sceneIdx ? 'border-mk-coral bg-mk-coral/10' : 'border-mk-line bg-mk-panel-2 hover:border-mk-line-2')}
                 style={{ width: w - 2, marginRight: 2 }}
-                onClick={() => {
+                onClick={(e) => {
+                  // klik di kartu scene = pindahkan playhead ke titik itu (untuk Potong)
+                  const r = e.currentTarget.getBoundingClientRect();
+                  const lt = Math.max(0, Math.min(s.duration - 0.05, (e.clientX - r.left) / pps));
                   clock.pause();
-                  st.selectScene(i);
+                  // scene yang sama: pilihan elemen tetap (supaya bisa langsung rekam keyframe)
+                  if (i !== useStudio.getState().sceneIdx) st.selectScene(i);
+                  clock.seek(starts[i] + lt);
                 }}
               >
                 <div className="h-full shrink-0">
@@ -178,17 +204,18 @@ export default function Timeline({ clock, onOpenTool }: { clock: PlaybackClock; 
       </div>
 
       {/* track layer (mode Pro) */}
-      {mode === 'pro' && scene && scene.layers.length > 0 && (
+      {scene && scene.layers.length > 0 && (mode === 'pro' || scene.layers.some((l) => l.keyframes?.length)) && (
         <div className="mk-scroll max-h-40 overflow-y-auto border-t border-mk-line px-3 py-2">
           {[...scene.layers].reverse().map((l) => {
             const s = l.start / scene.duration;
             const e = (l.end ?? scene.duration) / scene.duration;
             return (
               <div key={l.id} className="flex items-center gap-2 py-0.5">
-                <span onClick={() => st.selectLayer(l.id)} className={cx('w-24 shrink-0 cursor-pointer truncate text-[11px] font-semibold', layerId === l.id ? 'text-mk-coral' : 'text-mk-muted')}>
+                <span onClick={() => st.selectLayer(l.id)} className={cx('w-24 shrink-0 cursor-pointer truncate text-[11px] font-semibold', selIds.includes(l.id) || layerId === l.id ? 'text-mk-coral' : 'text-mk-muted')}>
                   {l.kind === 'text' ? l.text : l.name}
                 </span>
                 <div className="relative h-5 flex-1 rounded bg-mk-ink" style={{ maxWidth: trackW }}>
+                  <span className="pointer-events-none absolute top-0 z-10 h-full w-px bg-mk-cream/70" style={{ left: `${Math.min(100, (playhead / scene.duration) * 100)}%` }} />
                   <TrackBar
                     left={s}
                     right={e}
@@ -197,6 +224,7 @@ export default function Timeline({ clock, onOpenTool }: { clock: PlaybackClock; 
                     onChange={(a, b) => st.updateLayer(l.id, { start: Math.max(0, Math.round(a * scene.duration * 20) / 20), end: b >= 0.995 ? null : Math.round(b * scene.duration * 20) / 20 }, true)}
                     onEnd={st.endDrag}
                   />
+                  {l.keyframes?.map((k, i) => <KeyDot key={i} layer={l} k={k} idx={i} dur={scene.duration} />)}
                 </div>
               </div>
             );
@@ -244,5 +272,50 @@ function TrackBar({ left, right, active, onChange, onEnd, onSelect }: { left: nu
       <span className="absolute left-0 top-0 h-full w-2 cursor-ew-resize rounded-l bg-white/40" onPointerDown={begin('l')} onPointerMove={move} onPointerUp={up} />
       <span className="absolute right-0 top-0 h-full w-2 cursor-ew-resize rounded-r bg-white/40" onPointerDown={begin('r')} onPointerMove={move} onPointerUp={up} />
     </div>
+  );
+}
+
+/** Keyframe di track: klik untuk lompat, seret untuk geser waktunya. */
+function KeyDot({ layer, k, idx, dur }: { layer: Layer; k: Keyframe; idx: number; dur: number }) {
+  const drag = useRef<{ x: number; t: number; moved: boolean } | null>(null);
+  const ref = useRef<HTMLButtonElement>(null);
+  const st = useStudio.getState();
+  return (
+    <button
+      ref={ref}
+      type="button"
+      aria-label={`Keyframe ${k.t.toFixed(2)} detik`}
+      title={`Keyframe ${k.t.toFixed(2)} dtk · seret untuk geser`}
+      className="absolute top-1/2 z-20 -ml-[6px] -mt-[6px] h-3 w-3 rotate-45 touch-none rounded-[2px] border border-white bg-mk-lime shadow hover:scale-125"
+      style={{ left: `${(k.t / dur) * 100}%` }}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+        drag.current = { x: e.clientX, t: k.t, moved: false };
+        st.selectLayer(layer.id);
+      }}
+      onPointerMove={(e) => {
+        const d = drag.current;
+        const host = ref.current?.parentElement;
+        if (!d || !host) return;
+        const dx = e.clientX - d.x;
+        if (!d.moved && Math.abs(dx) < 3) return;
+        d.moved = true;
+        const t = Math.max(0, Math.min(dur, Math.round((d.t + (dx / host.clientWidth) * dur) * 20) / 20));
+        const ks = (useStudio.getState().doc?.scenes[useStudio.getState().sceneIdx].layers.find((l) => l.id === layer.id)?.keyframes || []).map((q, j) => (j === idx ? { ...q, t } : q));
+        st.updateLayer(layer.id, { keyframes: ks }, true);
+      }}
+      onPointerUp={() => {
+        const d = drag.current;
+        drag.current = null;
+        if (!d) return;
+        if (d.moved) {
+          // urutkan ulang setelah digeser
+          const L = useStudio.getState().doc?.scenes[useStudio.getState().sceneIdx].layers.find((l) => l.id === layer.id);
+          if (L?.keyframes) st.updateLayer(layer.id, { keyframes: [...L.keyframes].sort((a, b) => a.t - b.t) }, true);
+          st.endDrag();
+        } else st.seekLocal(k.t);
+      }}
+    />
   );
 }

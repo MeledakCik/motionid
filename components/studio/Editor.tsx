@@ -9,7 +9,10 @@ import {
   CloudOff,
   Copy,
   Download,
+  Component as ComponentIcon,
+  Group,
   Image as ImageIcon,
+  PenTool,
   Layers,
   LayoutTemplate,
   Loader2,
@@ -24,6 +27,7 @@ import {
   Trash2,
   Type,
   Undo2,
+  Ungroup,
   Wand2,
   X,
 } from 'lucide-react';
@@ -34,12 +38,14 @@ import { PlaybackClock } from '@/lib/studio/clock';
 import { saveProject } from '@/lib/studio/persist';
 import { changeAspect } from '@/lib/studio/builder';
 import { loadTraining } from '@/lib/studio/training';
-import { Renderer, settleTime } from '@/lib/studio/renderer';
+import { Renderer, sceneStarts, settleTime } from '@/lib/studio/renderer';
 import { cx, Dropdown, Logo, RatioIcon, Segmented, useMediaQuery } from './ui';
 import Stage from './Stage';
 import Timeline from './Timeline';
 import { BackgroundPanel, ElementsPanel, IconsPanel, MediaPanel, MusicPanel, TemplatePanel, TextPanel } from './AssetPanels';
 import { AnimationPanel, EffectsPanel, TransitionPanel } from './MotionPanels';
+import { ComponentsPanel } from './DesignPanels';
+import { BLANK_TEMPLATE } from '@/lib/studio/vector';
 import { Inspector, LayersPanel } from './Inspector';
 import ExportDialog from './ExportDialog';
 
@@ -48,6 +54,7 @@ const TOOLS: Array<{ id: Tool; label: string; icon: React.ComponentType<{ classN
   { id: 'teks', label: 'Teks', icon: Type },
   { id: 'foto', label: 'Foto', icon: ImageIcon },
   { id: 'elemen', label: 'Elemen', icon: Shapes },
+  { id: 'komponen', label: 'Komponen', icon: ComponentIcon },
   { id: 'ikon', label: 'Ikon', icon: Smile },
   { id: 'latar', label: 'Latar', icon: Palette },
   { id: 'efek', label: 'Efek', icon: CloudRain },
@@ -62,7 +69,8 @@ const TOOL_TITLE: Record<Tool, string> = {
   template: 'Template (360)',
   teks: 'Teks',
   foto: 'Foto & Media',
-  elemen: 'Komponen',
+  elemen: 'Elemen siap pakai',
+  komponen: 'Komponen saya',
   ikon: 'Ikon',
   latar: 'Latar & Warna',
   musik: 'Musik',
@@ -103,6 +111,7 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
   const auth = useUser();
   const guest = !auth.loading && !auth.user;
   const placeholders = useStudio((s) => placeholderList(s.doc));
+  const multiSel = useStudio((s) => s.selIds.length > 1);
   const [phCursor, setPhCursor] = useState(0);
   const loadedRef = useRef(false);
 
@@ -118,6 +127,18 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
       // abaikan
     }
     loadTraining().then((n) => n && setPacks(n));
+    // waktu lokal scene untuk keyframe & potong scene
+    const startOf = () => {
+      const s = useStudio.getState();
+      return s.doc ? sceneStarts(s.doc)[s.sceneIdx] ?? 0 : 0;
+    };
+    useStudio.setState({
+      localTime: () => Math.max(0, clock.time - startOf()),
+      seekLocal: (t: number) => {
+        clock.pause();
+        clock.seek(startOf() + Math.max(0, t));
+      },
+    });
     return () => clock.dispose();
   }, [initialDoc, clock]);
 
@@ -128,7 +149,7 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
 
   // panel default desktop
   useEffect(() => {
-    if (desktop && !useStudio.getState().tool) useStudio.setState({ tool: 'template' });
+    if (desktop && !useStudio.getState().tool) useStudio.setState({ tool: useStudio.getState().doc?.templateId === BLANK_TEMPLATE ? 'komponen' : 'template' });
   }, [desktop]);
 
   // autosave
@@ -200,6 +221,8 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
         return <MediaPanel />;
       case 'elemen':
         return <ElementsPanel />;
+      case 'komponen':
+        return <ComponentsPanel />;
       case 'ikon':
         return <IconsPanel onPick={iconPick} />;
       case 'latar':
@@ -316,7 +339,7 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
         {/* ------------------------- stage ------------------------- */}
         <main className="relative min-w-0 flex-1 bg-mk-dots">
           <Stage clock={clock} onRequestEdit={() => openTool(desktop ? null : 'properti')} />
-          <div className="pointer-events-none absolute inset-x-2 top-2 z-10 flex flex-col items-center gap-1.5">
+          <div className="pointer-events-none absolute inset-x-2 top-[3.6rem] z-10 flex flex-col items-center gap-1.5 lg:top-2">
             {guest && (
               <a href={loginHref()} className="mk-glass mk-pop mk-float pointer-events-auto rounded-full px-3 py-1.5 text-[11px] font-semibold text-mk-muted">
                 Mode tamu · tersimpan di perangkat ini · <span className="font-bold text-mk-coral">Masuk</span>
@@ -361,7 +384,7 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
         {desktop && (
           <aside className="mk-scroll w-[300px] shrink-0 overflow-y-auto border-l border-mk-line bg-mk-panel">
             <div className="mk-glass mk-bar sticky top-0 z-10 border-b border-mk-line px-4 py-2.5">
-              <h3 className="text-sm font-extrabold">{layer ? 'Edit elemen' : 'Pengaturan scene'}</h3>
+              <h3 className="text-sm font-extrabold">{multiSel ? 'Beberapa elemen' : layer ? 'Edit elemen' : 'Pengaturan scene'}</h3>
             </div>
             <Inspector onOpenTool={openTool} />
           </aside>
@@ -393,9 +416,13 @@ export default function Editor({ initialDoc, admin }: { initialDoc: ProjectDoc; 
               {layer.kind === 'text' && <ToolBtn label="Ketik" icon={Type} onClick={() => (openTool('properti'), setTimeout(() => document.getElementById('mk-text-editor')?.focus(), 250))} />}
               <ToolBtn label="Animasi" icon={Wand2} onClick={() => openTool('animasi')} />
               {layer.kind === 'icon' && <ToolBtn label="Ganti" icon={Smile} onClick={() => openTool('ikon')} />}
+              {layer.kind === 'path' && <ToolBtn label="Titik" icon={PenTool} onClick={() => st.setPathEdit(useStudio.getState().pathEdit ? null : layer.id)} />}
+              {layer.kind === 'group' && <ToolBtn label="Isi" icon={Group} onClick={() => st.enterGroup(layer.id)} />}
+              {layer.kind === 'group' && <ToolBtn label="Lepas" icon={Ungroup} onClick={() => st.ungroupLayer(layer.id)} />}
+              {multiSel && <ToolBtn label="Grup" icon={Group} onClick={() => st.groupSelected()} />}
               <ToolBtn label="Duplikat" icon={Copy} onClick={() => st.duplicateLayer(layer.id)} />
               <ToolBtn label="Depan" icon={Layers} onClick={() => st.moveLayer(layer.id, 'top')} />
-              <ToolBtn label="Hapus" icon={Trash2} onClick={() => st.removeLayer(layer.id)} />
+              <ToolBtn label="Hapus" icon={Trash2} onClick={() => st.removeSelected()} />
               <ToolBtn label="Selesai" icon={Check} onClick={() => st.selectLayer(null)} />
             </div>
           ) : (

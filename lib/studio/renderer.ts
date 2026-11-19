@@ -1,4 +1,4 @@
-import type { Fill, ImageLayer, Layer, ProjectDoc, Scene, ShapeLayer, TextLayer } from './types';
+import type { Fill, ImageLayer, Layer, PathLayer, ProjectDoc, Scene, ShapeLayer, TextLayer } from './types';
 import { canvasSize, docDuration } from './types';
 import { combinePose, evalIn, evalLoop, getAnimation, IDENTITY, Pose, TextAnimSpec } from './packs/animations';
 import { drawTransition, getTransition } from './packs/transitions';
@@ -9,6 +9,7 @@ import { canvasFamily } from './fonts';
 import { clamp, ease, hash01 } from './easing';
 import { rgba } from './color';
 import { setSpacing, wrapLines } from './text';
+import { pathLength, posed, tracePath } from './vector';
 
 /**
  * Renderer kanvas tunggal untuk preview editor DAN export video, supaya hasil export
@@ -69,6 +70,8 @@ export class Renderer {
   opts: RenderOptions;
   /** layer yang disembunyikan sementara (mis. saat teks diedit langsung di kanvas) */
   skipLayerId: string | null = null;
+  /** mode edit isi grup: layer di luar set ini dibuat pudar */
+  focusIds: Set<string> | null = null;
   onAssetLoaded?: () => void;
   private bufA: HTMLCanvasElement | null = null;
   private bufB: HTMLCanvasElement | null = null;
@@ -214,7 +217,7 @@ export class Renderer {
     for (const f of fx) if (f.spec.layer === 'under') drawEffect(ctx, f.spec, ec, f.amount);
     for (const layer of scene.layers) {
       if (layer.hidden || layer.id === this.skipLayerId) continue;
-      this.drawLayer(ctx, layer, local);
+      this.drawLayer(ctx, layer, local, this.focusIds && !this.focusIds.has(layer.id) ? 0.22 : 1);
     }
     for (const f of fx) if (f.spec.layer === 'over') drawEffect(ctx, f.spec, ec, f.amount);
     ctx.restore();
@@ -448,11 +451,12 @@ export class Renderer {
     return { visible: true, pose, clip, text, local };
   }
 
-  drawLayer(ctx: CanvasRenderingContext2D, layer: Layer, t: number) {
-    const st = this.layerState(layer, t);
+  drawLayer(ctx: CanvasRenderingContext2D, layer0: Layer, t: number, fade = 1) {
+    const st = this.layerState(layer0, t);
+    const { layer, scale: kScale } = posed(layer0, t);
     if (!st.visible) return;
     const { pose } = st;
-    const alpha = layer.opacity * clamp(pose.alpha);
+    const alpha = layer.opacity * clamp(pose.alpha) * fade;
     if (alpha <= 0.002) return;
     const cx = layer.x + layer.w / 2 + pose.x;
     const cy = layer.y + layer.h / 2 + pose.y;
@@ -462,8 +466,8 @@ export class Renderer {
     const rot = ((layer.rotation + pose.rot) * Math.PI) / 180;
     if (rot) ctx.rotate(rot);
     if (pose.skew) ctx.transform(1, 0, Math.tan((pose.skew * Math.PI) / 180), 1, 0, 0);
-    const sx = pose.scale * pose.sx;
-    const sy = pose.scale * pose.sy;
+    const sx = pose.scale * pose.sx * kScale;
+    const sy = pose.scale * pose.sy * kScale;
     if (sx !== 1 || sy !== 1) ctx.scale(Math.abs(sx) < 0.001 ? 0.001 : sx, Math.abs(sy) < 0.001 ? 0.001 : sy);
     ctx.translate(-layer.w / 2, -layer.h / 2);
     if (pose.blur > 0.5 && this.opts.allowBlur) ctx.filter = `blur(${pose.blur}px)`;
@@ -510,8 +514,56 @@ export class Renderer {
       case 'shape':
         this.drawShape(ctx, layer, st.local);
         break;
+      case 'path':
+        this.drawPath(ctx, layer, st.local);
+        break;
+      case 'group': {
+        ctx.shadowColor = 'transparent';
+        ctx.scale(layer.w / Math.max(1, layer.cw), layer.h / Math.max(1, layer.ch));
+        // anak mewarisi transparansi grup (termasuk keyframe & animasi grup)
+        for (const child of layer.children) if (!child.hidden) this.drawLayer(ctx, child, t, alpha);
+        break;
+      }
     }
     ctx.restore();
+  }
+
+  /** Vektor bebas (pena / pensil / garis) + efek gambar garis. */
+  private drawPath(ctx: CanvasRenderingContext2D, L: PathLayer, local: number) {
+    if (L.points.length < 2) return;
+    const draw = L.drawOn && L.drawOn > 0 ? clamp(local / L.drawOn) : 1;
+    ctx.beginPath();
+    tracePath(ctx, L.points, L.closed, L.w, L.h);
+    if (L.fill && L.closed) {
+      const fa = draw >= 1 ? 1 : clamp((draw - 0.55) / 0.45);
+      if (fa > 0) {
+        const ga = ctx.globalAlpha;
+        ctx.globalAlpha = ga * fa;
+        if (L.gradient) {
+          const a = (L.gradient.angle * Math.PI) / 180;
+          const r = Math.hypot(L.w, L.h) / 2;
+          const g = ctx.createLinearGradient(L.w / 2 - Math.cos(a) * r, L.h / 2 - Math.sin(a) * r, L.w / 2 + Math.cos(a) * r, L.h / 2 + Math.sin(a) * r);
+          g.addColorStop(0, L.fill);
+          g.addColorStop(1, L.gradient.to);
+          ctx.fillStyle = g;
+        } else ctx.fillStyle = L.fill;
+        ctx.fill();
+        ctx.globalAlpha = ga;
+      }
+    }
+    ctx.shadowColor = 'transparent';
+    if (L.stroke && L.stroke.width > 0 && draw > 0) {
+      ctx.lineWidth = L.stroke.width;
+      ctx.strokeStyle = L.stroke.color;
+      ctx.lineCap = L.stroke.cap || 'round';
+      ctx.lineJoin = 'round';
+      if (draw < 1) {
+        const len = pathLength(L.points, L.closed, L.w, L.h);
+        ctx.setLineDash([len * draw, len + 10]);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
   }
 
   private applyClip(ctx: CanvasRenderingContext2D, kind: string, p: number, w: number, h: number) {
@@ -863,18 +915,23 @@ export function settleTime(scene: Scene): number {
   return Math.min(Math.max(0.05, scene.duration - 0.05), t + 0.15);
 }
 
-export function layerAt(scene: Scene, x: number, y: number): Layer | null {
+export function layerAt(scene: Scene, x: number, y: number, t?: number): Layer | null {
   for (let i = scene.layers.length - 1; i >= 0; i--) {
-    const l = scene.layers[i];
-    if (l.hidden || l.locked) continue;
-    const cx = l.x + l.w / 2;
+    const l0 = scene.layers[i];
+    if (l0.hidden || l0.locked) continue;
+    if (t !== undefined && (t < l0.start || (l0.end !== null && t >= l0.end))) continue;
+    const { layer: pl, scale: k } = t === undefined ? { layer: l0, scale: 1 } : posed(l0, t);
+    // garis tipis tetap mudah diketuk
+    const pad = l0.kind === 'path' ? (l0.stroke?.width || 0) / 2 + 10 : 0;
+    const l = { ...pl, w: pl.w * k + pad * 2, h: pl.h * k + pad * 2 };
+    const cx = pl.x + pl.w / 2;
     const cy = l.y + l.h / 2;
     const a = (-l.rotation * Math.PI) / 180;
     const dx = x - cx;
     const dy = y - cy;
     const lx = dx * Math.cos(a) - dy * Math.sin(a);
     const ly = dx * Math.sin(a) + dy * Math.cos(a);
-    if (Math.abs(lx) <= l.w / 2 && Math.abs(ly) <= l.h / 2) return l;
+    if (Math.abs(lx) <= l.w / 2 && Math.abs(ly) <= l.h / 2) return l0;
   }
   return null;
 }

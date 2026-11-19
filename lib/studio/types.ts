@@ -73,7 +73,21 @@ export interface AnimRef {
   delay?: number;
 }
 
-export type LayerKind = 'text' | 'image' | 'icon' | 'component' | 'shape';
+export type LayerKind = 'text' | 'image' | 'icon' | 'component' | 'shape' | 'path' | 'group';
+
+/**
+ * Keyframe gaya After Effects / Alight Motion. Waktu dalam detik sejak awal scene.
+ * Setiap keyframe menyimpan pose lengkap; easing berlaku dari keyframe ini ke keyframe berikutnya.
+ */
+export interface Keyframe {
+  t: number;
+  x: number;
+  y: number;
+  rotation: number;
+  opacity: number;
+  scale: number;
+  ease: string;
+}
 
 export interface LayerBase {
   id: string;
@@ -98,6 +112,8 @@ export interface LayerBase {
   shadow?: { color: string; blur: number; x: number; y: number } | null;
   /** teks/isi contoh yang belum diganti user */
   placeholder?: boolean;
+  /** animasi keyframe (posisi, putar, transparansi, skala) */
+  keyframes?: Keyframe[];
 }
 
 export interface TextLayer extends LayerBase {
@@ -152,7 +168,53 @@ export interface ShapeLayer extends LayerBase {
   radius: number;
 }
 
-export type Layer = TextLayer | ImageLayer | IconLayer | ComponentLayer | ShapeLayer;
+/** Titik jangkar vektor. Koordinat 0..1 relatif terhadap kotak layer; handle relatif terhadap titik. */
+export interface PathPoint {
+  x: number;
+  y: number;
+  /** handle masuk (offset dari titik) */
+  ix?: number;
+  iy?: number;
+  /** handle keluar (offset dari titik) */
+  ox?: number;
+  oy?: number;
+}
+
+/** Vektor bebas gaya Illustrator: dibuat dengan pena, pensil, atau garis. */
+export interface PathLayer extends LayerBase {
+  kind: 'path';
+  points: PathPoint[];
+  closed: boolean;
+  /** null = tanpa isi */
+  fill: string | null;
+  /** gradien isi: warna akhir + sudut */
+  gradient?: { to: string; angle: number } | null;
+  stroke: { color: string; width: number; cap?: 'round' | 'butt' | 'square' } | null;
+  /** efek "gambar garis" (trim path): garis tergambar selama N detik sejak layer muncul */
+  drawOn?: number;
+}
+
+/** Grup / instance komponen buatan sendiri (gaya Figma). Anak memakai koordinat lokal grup. */
+export interface GroupLayer extends LayerBase {
+  kind: 'group';
+  children: Layer[];
+  /** ukuran isi asli; anak diskalakan w/cw dan h/ch */
+  cw: number;
+  ch: number;
+  /** id komponen utama (ProjectDoc.symbols) bila ini instance komponen */
+  symbolId?: string;
+}
+
+export type Layer = TextLayer | ImageLayer | IconLayer | ComponentLayer | ShapeLayer | PathLayer | GroupLayer;
+
+/** Komponen buatan user: disimpan di proyek, bisa dipakai ulang berkali-kali. */
+export interface SymbolDef {
+  id: string;
+  name: string;
+  w: number;
+  h: number;
+  children: Layer[];
+}
 
 export type SceneRole =
   | 'hook'
@@ -272,6 +334,8 @@ export interface ProjectDoc {
   plan: ContentPlan;
   showProgress: boolean;
   watermark?: string;
+  /** komponen buatan user (gaya Figma) */
+  symbols?: Record<string, SymbolDef>;
 }
 
 export const BASE_W = 1080;

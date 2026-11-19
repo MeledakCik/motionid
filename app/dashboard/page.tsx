@@ -26,8 +26,7 @@ import {
   Send,
   Sparkles,
   Trash2,
-  Wand2,
-} from 'lucide-react';
+  Wand2, PenTool } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { GlassTabBar } from '@/components/glass/GlassTabBar';
 import { analyzePrompt, INTENT_LABELS } from '@/lib/studio/prompt';
@@ -616,6 +615,18 @@ export default function DashboardPage() {
                       </button>
                     ))}
                   </div>
+                  <Link
+                    href="/editor?kosong=1"
+                    className="mt-3 flex items-center gap-3 rounded-2xl border-[1.5px] border-dashed border-mk-coral/40 px-3 py-2.5 transition hover:border-mk-coral hover:bg-mk-mist"
+                  >
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-mk-deep text-mk-lime">
+                      <PenTool className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold">Kanvas kosong</span>
+                      <span className="block text-xs text-mk-dim">Gambar sendiri, buat komponen, animasi keyframe</span>
+                    </span>
+                  </Link>
                 </div>
               </section>
 

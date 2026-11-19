@@ -1,3 +1,4 @@
+import { BLANK_TEMPLATE, isCustomLayer, refitLayers } from './vector';
 import type {
   Aspect,
   ComponentLayer,
@@ -583,7 +584,13 @@ export function applyTemplate(doc: ProjectDoc, templateId: string, seed = 1): Pr
   const photoIds = Object.keys(doc.assets);
   // sinkronkan teks yang sudah diedit user ke plan
   const plan: ContentPlan = { ...doc.plan, items: doc.plan.items.map((it, i) => syncItemFromScene(it, doc.scenes[i])) };
-  return { ...doc, plan, templateId: tp.id, theme: themeOf(theme), scenes: buildScenes(plan, tp.id, doc.aspect, photoIds, seed) };
+  const scenes = buildScenes(plan, tp.id, doc.aspect, photoIds, seed);
+  // vektor & grup buatan user ikut dipertahankan di scene yang sama
+  doc.scenes.forEach((old, i) => {
+    const keep = old.layers.filter(isCustomLayer);
+    if (keep.length && scenes[i]) scenes[i] = { ...scenes[i], layers: [...scenes[i].layers, ...keep] };
+  });
+  return { ...doc, plan, templateId: tp.id, theme: themeOf(theme), scenes };
 }
 
 function syncItemFromScene(item: PlanItem, scene?: Scene): PlanItem {
@@ -596,7 +603,11 @@ function syncItemFromScene(item: PlanItem, scene?: Scene): PlanItem {
 
 /** Ganti rasio: bangun ulang posisi dari plan dengan template yang sama. */
 export function changeAspect(doc: ProjectDoc, aspect: Aspect): ProjectDoc {
-  return applyTemplate({ ...doc, aspect }, doc.templateId);
+  if (doc.templateId === BLANK_TEMPLATE) return { ...doc, aspect, scenes: doc.scenes.map((s) => ({ ...s, layers: refitLayers(s.layers, doc.aspect, aspect) })) };
+  const prev = doc.aspect;
+  const next = applyTemplate({ ...doc, aspect }, doc.templateId);
+  // layer buatan user dipindah proporsional ke rasio baru
+  return { ...next, scenes: next.scenes.map((s) => ({ ...s, layers: s.layers.map((l) => (isCustomLayer(l) ? refitLayers([l], prev, aspect)[0] : l)) })) };
 }
 
 export function musicFor(plan: ContentPlan): string {

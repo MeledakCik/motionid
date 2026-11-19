@@ -1,13 +1,17 @@
 'use client';
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { Layer, TextLayer } from '@/lib/studio/types';
+import { Circle, MousePointer2, PenTool, Pencil, Slash, Square, Type } from 'lucide-react';
+import type { Layer, PathLayer, TextLayer } from '@/lib/studio/types';
 import { canvasSize, docDuration } from '@/lib/studio/types';
 import { layerAt, locate, Renderer, sceneStarts, settleTime } from '@/lib/studio/renderer';
 import { PlaybackClock } from '@/lib/studio/clock';
 import { getDeviceProfile } from '@/lib/studio/device';
 import { ensureFonts, fontStack } from '@/lib/studio/fonts';
-import { useStudio } from '@/store/useStudio';
+import { makeShape, makeText } from '@/lib/studio/builder';
+import { AbsPoint, bounds, pathFromAbs, pathToAbs, posed, setPathAbs, simplify, smoothPoints } from '@/lib/studio/vector';
+import { DrawTool, useStudio } from '@/store/useStudio';
+import { cx } from './ui';
 
 type Handle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'rot';
 interface DragState {
@@ -17,16 +21,47 @@ interface DragState {
   startX: number;
   startY: number;
   orig: Pick<Layer, 'x' | 'y' | 'w' | 'h' | 'rotation'>;
+  /** layer lain yang ikut digeser (seleksi ganda) */
+  others: Array<{ id: string; x: number; y: number }>;
   keepRatio: boolean;
   moved: boolean;
 }
 
+/** Draf saat menggambar dengan alat bentuk / garis / pensil / kotak seleksi. */
+type Draft =
+  | { kind: 'rect' | 'ellipse' | 'marquee'; x0: number; y0: number; x1: number; y1: number; shift: boolean; alt: boolean }
+  | { kind: 'line'; x0: number; y0: number; x1: number; y1: number; shift: boolean; alt: boolean }
+  | { kind: 'pencil'; pts: Array<{ x: number; y: number }> };
+
 const SNAP = 14;
+
+export const DRAW_TOOLS: Array<{ id: DrawTool; label: string; key: string; icon: React.ComponentType<{ className?: string }> }> = [
+  { id: 'select', label: 'Pilih', key: 'V', icon: MousePointer2 },
+  { id: 'rect', label: 'Persegi', key: 'R', icon: Square },
+  { id: 'ellipse', label: 'Elips', key: 'O', icon: Circle },
+  { id: 'line', label: 'Garis', key: 'L', icon: Slash },
+  { id: 'pen', label: 'Pena', key: 'P', icon: PenTool },
+  { id: 'pencil', label: 'Pensil', key: 'N', icon: Pencil },
+  { id: 'text', label: 'Teks', key: 'T', icon: Type },
+];
+
+const TOOL_HINT: Partial<Record<DrawTool, string>> = {
+  rect: 'Seret untuk menggambar persegi. Tahan Shift agar sama sisi.',
+  ellipse: 'Seret untuk menggambar elips. Tahan Shift agar bulat sempurna.',
+  line: 'Seret untuk menarik garis. Tahan Shift untuk sudut 45°.',
+  pen: 'Klik untuk titik, seret untuk lengkungan. Klik titik pertama untuk menutup. Enter selesai, Esc batal.',
+  pencil: 'Gambar bebas dengan jari atau mouse. Garis dirapikan otomatis.',
+  text: 'Klik di kanvas untuk menaruh teks.',
+};
 
 export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; onRequestEdit?: () => void }) {
   const doc = useStudio((s) => s.doc);
   const sceneIdx = useStudio((s) => s.sceneIdx);
   const layerId = useStudio((s) => s.layerId);
+  const selIds = useStudio((s) => s.selIds);
+  const drawTool = useStudio((s) => s.drawTool);
+  const pathEdit = useStudio((s) => s.pathEdit);
+  const isolation = useStudio((s) => s.isolation);
   const selectLayer = useStudio((s) => s.selectLayer);
   const selectScene = useStudio((s) => s.selectScene);
   const updateLayer = useStudio((s) => s.updateLayer);
@@ -37,9 +72,16 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
   const rendererRef = useRef<Renderer | null>(null);
   const [box, setBox] = useState({ w: 270, h: 480 });
   const [playing, setPlaying] = useState(false);
+  const [lt, setLt] = useState(0);
   const [guides, setGuides] = useState<{ x: number | null; y: number | null }>({ x: null, y: null });
   const [editingText, setEditingText] = useState<string | null>(null);
   const dragRef = useRef<DragState | null>(null);
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const draftRef = useRef<Draft | null>(null);
+  const [pen, setPen] = useState<AbsPoint[]>([]);
+  const penDown = useRef(false);
+  const [hover, setHover] = useState<{ x: number; y: number } | null>(null);
+  const ptDrag = useRef<{ i: number; part: 'a' | 'i' | 'o'; alt: boolean } | null>(null);
   const [view, setView] = useState({ z: 1, x: 0, y: 0 });
   const pinch = useRef<{ d: number; z: number; cx: number; cy: number; x: number; y: number } | null>(null);
   const coarse = useMemo(() => typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches, []);
@@ -47,6 +89,11 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
 
   const base = doc ? canvasSize(doc.aspect) : { w: 1080, h: 1920 };
   const scale = box.w / base.w;
+
+  const setDraftBoth = (d: Draft | null) => {
+    draftRef.current = d;
+    setDraft(d);
+  };
 
   // ukuran tampilan mengikuti container
   useLayoutEffect(() => {
@@ -105,10 +152,18 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
     draw();
   }, [doc, clock, draw]);
 
+  // mode edit isi grup: elemen lain dipudarkan
+  useEffect(() => {
+    if (!rendererRef.current) return;
+    rendererRef.current.focusIds = isolation ? new Set(isolation.childIds) : null;
+    draw();
+  }, [isolation, draw]);
+
   useEffect(() => {
     if (!doc) return;
     const fonts = new Set([doc.theme.headingFont, doc.theme.bodyFont]);
-    doc.scenes.forEach((s) => s.layers.forEach((l) => l.kind === 'text' && fonts.add(l.font)));
+    const walk = (l: Layer) => (l.kind === 'text' ? fonts.add(l.font) : l.kind === 'group' ? l.children.forEach(walk) : null);
+    doc.scenes.forEach((s) => s.layers.forEach(walk));
     ensureFonts([...fonts]).then(draw);
   }, [doc, draw]);
 
@@ -123,13 +178,19 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
       lastFrame = now;
       draw();
       setPlaying((p) => (p !== isPlaying ? isPlaying : p));
-      const d = useStudio.getState().doc;
+      const s = useStudio.getState();
+      const d = s.doc;
       if (d && isPlaying) {
         const { idx } = locate(d, t);
         if (idx !== lastIdx) {
           lastIdx = idx;
-          if (idx !== useStudio.getState().sceneIdx) useStudio.setState({ sceneIdx: idx, layerId: null });
+          if (idx !== s.sceneIdx) useStudio.setState({ sceneIdx: idx, layerId: null, selIds: [] });
         }
+      }
+      if (d && !isPlaying) {
+        const l = Math.max(0, t - (sceneStarts(d)[s.sceneIdx] ?? 0));
+        setLt(l);
+        if (Math.abs(s.playhead - l) > 0.004) useStudio.setState({ playhead: l });
       }
     });
   }, [clock, draw, profile.previewFps]);
@@ -146,10 +207,16 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
     const sc = d.scenes[sceneIdx];
     const { idx } = locate(d, clock.time);
     if (idx !== sceneIdx || clock.time < st + 0.01) clock.seek(st + (sc ? settleTime(sc) : 0.5));
+    const l = Math.max(0, clock.time - st);
+    setLt(l);
+    useStudio.setState({ playhead: l });
   }, [sceneIdx, clock]);
 
   const scene = doc?.scenes[sceneIdx];
+  const pickable = useMemo(() => (scene ? (isolation ? { ...scene, layers: scene.layers.filter((l) => isolation.childIds.includes(l.id)) } : scene) : null), [scene, isolation]);
   const selected = scene?.layers.find((l) => l.id === layerId) || null;
+  const selPosed = selected ? posed(selected, lt) : null;
+  const multi = selIds.length > 1;
 
   const toBase = (e: { clientX: number; clientY: number }) => {
     const r = canvasRef.current!.getBoundingClientRect();
@@ -166,45 +233,138 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
     if (idx !== sceneIdx && sc) clock.seek(st + settleTime(sc));
   };
 
+  const palette = doc?.theme.palette;
+  /** Layer baru dari alat gambar tampil sepanjang scene (atur waktunya nanti di timeline). */
+  const atNow = <T extends Layer>(l: T): T => ({ ...l, start: 0, end: null });
+
+  /* -------------------------- pena (Illustrator) -------------------------- */
+  const finishPen = useCallback(
+    (close: boolean) => {
+      const pts = pen;
+      setPen([]);
+      penDown.current = false;
+      if (pts.length < 2 || !palette) return;
+      const L = pathFromAbs(pts, close, {
+        fill: close ? palette.text : null,
+        stroke: { color: close ? palette.text : palette.primary, width: close ? 0 : 10, cap: 'round' },
+        name: close ? 'Bentuk pena' : 'Kurva pena',
+      });
+      if (close && L.stroke) L.stroke = null;
+      useStudio.getState().addLayer(atNow(L));
+      useStudio.getState().setDrawTool('select');
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pen, palette]
+  );
+
+  /* -------------------------- pointer -------------------------- */
   const onPointerDown = (e: React.PointerEvent) => {
-    if (!scene || e.button > 0) return;
+    if (!scene || !pickable || e.button > 0) return;
     ensureEditable();
     const p = toBase(e);
-    const hit = layerAt(scene, p.x, p.y);
-    if (!hit) {
-      selectLayer(null);
+    const st = useStudio.getState();
+    const tool = st.drawTool;
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+
+    if (tool === 'pen') {
+      const first = pen[0];
+      if (first && pen.length >= 2 && Math.hypot(p.x - first.x, p.y - first.y) < 14 / scale) {
+        finishPen(true);
+        return;
+      }
+      penDown.current = true;
+      setPen((old) => [...old, { x: p.x, y: p.y }]);
       return;
     }
-    selectLayer(hit.id);
-    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-    dragRef.current = { kind: 'move', id: hit.id, startX: p.x, startY: p.y, orig: { x: hit.x, y: hit.y, w: hit.w, h: hit.h, rotation: hit.rotation }, keepRatio: false, moved: false };
+    if (tool === 'rect' || tool === 'ellipse' || tool === 'line') {
+      setDraftBoth({ kind: tool, x0: p.x, y0: p.y, x1: p.x, y1: p.y, shift: e.shiftKey, alt: e.altKey });
+      return;
+    }
+    if (tool === 'pencil') {
+      setDraftBoth({ kind: 'pencil', pts: [p] });
+      return;
+    }
+    if (tool === 'text' && palette && doc) {
+      const w = Math.round(base.w * 0.6);
+      const L = atNow(makeText({ theme: doc.theme }, 'Ketik teksmu', Math.round(p.x - w / 2), Math.round(p.y - 60), w, 120, { size: 72, name: 'Teks' }));
+      st.addLayer(L);
+      st.setDrawTool('select');
+      setEditingText(L.id);
+      if (rendererRef.current) rendererRef.current.skipLayerId = L.id;
+      return;
+    }
+
+    // alat pilih
+    const hit = layerAt(pickable, p.x, p.y, lt);
+    if (!hit) {
+      if (!e.shiftKey) selectLayer(null);
+      if (!coarse) setDraftBoth({ kind: 'marquee', x0: p.x, y0: p.y, x1: p.x, y1: p.y, shift: e.shiftKey, alt: false });
+      return;
+    }
+    if (e.shiftKey) {
+      const ids = st.selIds.includes(hit.id) ? st.selIds.filter((i) => i !== hit.id) : [...st.selIds, hit.id];
+      st.setSelection(ids);
+      return;
+    }
+    const keepMulti = st.selIds.length > 1 && st.selIds.includes(hit.id);
+    if (!keepMulti) selectLayer(hit.id);
+    else useStudio.setState({ layerId: hit.id });
+    const hp = posed(hit, lt).layer;
+    const others = keepMulti
+      ? scene.layers.filter((l) => l.id !== hit.id && st.selIds.includes(l.id) && !l.locked).map((l) => ({ id: l.id, ...(({ x, y }) => ({ x, y }))(posed(l, lt).layer) }))
+      : [];
+    dragRef.current = { kind: 'move', id: hit.id, startX: p.x, startY: p.y, orig: { x: hp.x, y: hp.y, w: hit.w, h: hit.h, rotation: hp.rotation }, others, keepRatio: false, moved: false };
   };
 
   const startHandle = (e: React.PointerEvent, h: Handle) => {
-    if (!selected) return;
+    if (!selected || !selPosed) return;
     e.stopPropagation();
     ensureEditable();
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     const p = toBase(e);
-    const ratioKinds = selected.kind === 'icon' || selected.kind === 'image' || selected.kind === 'component';
+    const ratioKinds = selected.kind === 'icon' || selected.kind === 'image' || selected.kind === 'component' || selected.kind === 'group';
+    const sp = selPosed.layer;
     dragRef.current = {
       kind: h === 'rot' ? 'rotate' : 'resize',
       handle: h,
       id: selected.id,
       startX: p.x,
       startY: p.y,
-      orig: { x: selected.x, y: selected.y, w: selected.w, h: selected.h, rotation: selected.rotation },
+      orig: { x: sp.x, y: sp.y, w: sp.w, h: sp.h, rotation: sp.rotation },
+      others: [],
       keepRatio: ratioKinds && h.length === 2,
       moved: false,
     };
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
+    const tool = useStudio.getState().drawTool;
+    if (tool === 'pen') {
+      const p = toBase(e);
+      setHover(p);
+      if (penDown.current && pen.length) {
+        // seret = tarik handle lengkung (simetris)
+        const last = pen[pen.length - 1];
+        const ox = p.x - last.x;
+        const oy = p.y - last.y;
+        if (Math.hypot(ox, oy) > 3 / scale) setPen((old) => [...old.slice(0, -1), { x: last.x, y: last.y, ox, oy, ix: -ox, iy: -oy }]);
+      }
+      return;
+    }
+    const dr = draftRef.current;
+    if (dr) {
+      const p = toBase(e);
+      if (dr.kind === 'pencil') {
+        const last = dr.pts[dr.pts.length - 1];
+        if (Math.hypot(p.x - last.x, p.y - last.y) > 2 / scale) setDraftBoth({ ...dr, pts: [...dr.pts, p] });
+      } else setDraftBoth({ ...dr, x1: p.x, y1: p.y, shift: e.shiftKey, alt: e.altKey });
+      return;
+    }
     const d = dragRef.current;
     if (!d) return;
     const p = toBase(e);
-    let dx = p.x - d.startX;
-    let dy = p.y - d.startY;
+    const dx = p.x - d.startX;
+    const dy = p.y - d.startY;
     if (!d.moved && Math.hypot(dx, dy) < 4 / scale) return;
     d.moved = true;
     const o = d.orig;
@@ -217,7 +377,7 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
       let gy: number | null = null;
       const tx = [base.w / 2, base.w * 0.08, base.w * 0.92];
       const ty = [base.h / 2, base.h * 0.1, base.h * 0.9];
-      if (!e.altKey) {
+      if (!e.altKey && !d.others.length) {
         if (Math.abs(cxv - tx[0]) < SNAP / scale) (nx = tx[0] - o.w / 2), (gx = tx[0]);
         else if (Math.abs(nx - tx[1]) < SNAP / scale) (nx = tx[1]), (gx = tx[1]);
         else if (Math.abs(nx + o.w - tx[2]) < SNAP / scale) (nx = tx[2] - o.w), (gx = tx[2]);
@@ -227,6 +387,9 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
       }
       setGuides({ x: gx, y: gy });
       updateLayer(d.id, { x: Math.round(nx), y: Math.round(ny) }, true);
+      const rdx = nx - o.x;
+      const rdy = ny - o.y;
+      for (const ot of d.others) updateLayer(ot.id, { x: Math.round(ot.x + rdx), y: Math.round(ot.y + rdy) }, true);
     } else if (d.kind === 'rotate') {
       const cxv = o.x + o.w / 2;
       const cyv = o.y + o.h / 2;
@@ -252,9 +415,8 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
         if (Math.abs(w / o.w) > Math.abs(hh / o.h)) hh = w / r;
         else w = hh * r;
       }
-      w = Math.max(24, w);
-      hh = Math.max(24, hh);
-      // geser pusat sesuai offset lokal
+      w = Math.max(8, w);
+      hh = Math.max(8, hh);
       const ca = Math.cos(-a);
       const sa = Math.sin(-a);
       const shiftLX = h.includes('w') ? o.w - w : 0;
@@ -272,6 +434,55 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
   };
 
   const onPointerUp = () => {
+    penDown.current = false;
+    const dr = draftRef.current;
+    if (dr && palette && scene) {
+      setDraftBoth(null);
+      const st = useStudio.getState();
+      if (dr.kind === 'marquee') {
+        const x0 = Math.min(dr.x0, dr.x1);
+        const y0 = Math.min(dr.y0, dr.y1);
+        const x1 = Math.max(dr.x0, dr.x1);
+        const y1 = Math.max(dr.y0, dr.y1);
+        if (x1 - x0 < 6 / scale && y1 - y0 < 6 / scale) return;
+        const hits = (pickable?.layers || []).filter((l) => {
+          if (l.hidden || l.locked || lt < l.start || (l.end !== null && lt >= l.end)) return false;
+          const b = bounds(posed(l, lt).layer);
+          return b.x < x1 && b.x + b.w > x0 && b.y < y1 && b.y + b.h > y0;
+        });
+        st.setSelection(dr.shift ? Array.from(new Set([...st.selIds, ...hits.map((h) => h.id)])) : hits.map((h) => h.id));
+        return;
+      }
+      if (dr.kind === 'pencil') {
+        if (dr.pts.length < 3) return;
+        const simple = simplify(dr.pts, Math.max(1.5, 2 / scale));
+        const first = simple[0];
+        const last = simple[simple.length - 1];
+        const closed = simple.length > 3 && Math.hypot(first.x - last.x, first.y - last.y) < 24 / scale;
+        const pts = closed ? simple.slice(0, -1) : simple;
+        const L = pathFromAbs(smoothPoints(pts, closed), closed, { fill: null, stroke: { color: palette.primary, width: 10, cap: 'round' }, name: 'Goresan pensil' });
+        st.addLayer(atNow(L));
+        return;
+      }
+      const rect = draftRect(dr);
+      const tiny = rect.w < 6 / scale && rect.h < 6 / scale;
+      if (dr.kind === 'line') {
+        let x1 = dr.x1;
+        let y1 = dr.y1;
+        if (tiny) (x1 = dr.x0 + 300), (y1 = dr.y0);
+        else if (dr.shift) [x1, y1] = snap45(dr.x0, dr.y0, dr.x1, dr.y1);
+        st.addLayer(atNow(pathFromAbs([{ x: dr.x0, y: dr.y0 }, { x: x1, y: y1 }], false, { fill: null, stroke: { color: palette.text, width: 8, cap: 'round' }, name: 'Garis' })));
+      } else {
+        const r = tiny ? { x: dr.x0 - 150, y: dr.y0 - 150, w: 300, h: 300 } : rect;
+        const L = makeShape(dr.kind === 'rect' ? 'rect' : 'circle', Math.round(r.x), Math.round(r.y), Math.max(8, Math.round(r.w)), Math.max(8, Math.round(r.h)), dr.kind === 'rect' ? palette.primary : palette.secondary, {
+          name: dr.kind === 'rect' ? 'Persegi' : 'Elips',
+          radius: dr.kind === 'rect' ? 24 : 0,
+        });
+        st.addLayer(atNow(L));
+      }
+      st.setDrawTool('select');
+      return;
+    }
     const d = dragRef.current;
     dragRef.current = null;
     setGuides({ x: null, y: null });
@@ -279,16 +490,27 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
   };
 
   const onDoubleClick = (e: React.MouseEvent) => {
-    if (!scene) return;
+    if (!pickable) return;
+    if (useStudio.getState().drawTool === 'pen') {
+      // klik ganda menambah titik ganda; hapus titik duplikat terakhir lalu selesai
+      setPen((old) => old.slice(0, -1));
+      setTimeout(() => finishPenRef.current(false), 0);
+      return;
+    }
     const p = toBase(e);
-    const hit = layerAt(scene, p.x, p.y);
+    const hit = layerAt(pickable, p.x, p.y, lt);
+    const st = useStudio.getState();
     if (hit?.kind === 'text') {
       selectLayer(hit.id);
       setEditingText(hit.id);
       if (rendererRef.current) rendererRef.current.skipLayerId = hit.id;
       draw();
-    } else if (hit) onRequestEdit?.();
+    } else if (hit?.kind === 'group') st.enterGroup(hit.id);
+    else if (hit?.kind === 'path') st.setPathEdit(hit.id);
+    else if (hit) onRequestEdit?.();
   };
+  const finishPenRef = useRef(finishPen);
+  finishPenRef.current = finishPen;
 
   const finishTextEdit = (value?: string) => {
     if (editingText && value !== undefined) {
@@ -300,21 +522,118 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
     requestAnimationFrame(draw);
   };
 
+  /* -------------------------- edit titik vektor -------------------------- */
+  const editPath = pathEdit && selected?.kind === 'path' && selected.id === pathEdit ? (selPosed!.layer as PathLayer) : null;
+  const editAbs = editPath ? pathToAbs(editPath) : null;
+
+  const startPt = (e: React.PointerEvent, i: number, part: 'a' | 'i' | 'o') => {
+    e.stopPropagation();
+    ensureEditable();
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    if (part === 'a' && e.altKey && editPath && editAbs) {
+      // Alt+klik titik: ubah sudut tajam ↔ lengkung
+      const abs = editAbs.map((p) => ({ ...p }));
+      const q = abs[i];
+      if (q.ix !== undefined || q.ox !== undefined) (q.ix = q.iy = q.ox = q.oy = undefined);
+      else {
+        const prev = abs[(i - 1 + abs.length) % abs.length];
+        const next = abs[(i + 1) % abs.length];
+        const tx = (next.x - prev.x) / 6;
+        const ty = (next.y - prev.y) / 6;
+        Object.assign(q, { ix: -tx, iy: -ty, ox: tx, oy: ty });
+      }
+      updateLayer(editPath.id, pick(setPathAbs(editPath, abs)));
+      return;
+    }
+    ptDrag.current = { i, part, alt: e.altKey };
+  };
+  const movePt = (e: React.PointerEvent) => {
+    const d = ptDrag.current;
+    if (!d || !editPath || !editAbs) return;
+    const p = toBase(e);
+    const abs = editAbs.map((q) => ({ ...q }));
+    const q = abs[d.i];
+    if (d.part === 'a') (q.x = p.x), (q.y = p.y);
+    else {
+      const hx = p.x - q.x;
+      const hy = p.y - q.y;
+      if (d.part === 'o') {
+        (q.ox = hx), (q.oy = hy);
+        if (!e.altKey && !d.alt) (q.ix = -hx), (q.iy = -hy);
+      } else {
+        (q.ix = hx), (q.iy = hy);
+        if (!e.altKey && !d.alt) (q.ox = -hx), (q.oy = -hy);
+      }
+    }
+    updateLayer(editPath.id, pick(setPathAbs(editPath, abs)), true);
+  };
+  const upPt = () => {
+    if (ptDrag.current) endDrag();
+    ptDrag.current = null;
+  };
+  /** Klik ganda pada garis: sisipkan titik baru di segmen terdekat. */
+  const insertPt = (e: React.MouseEvent) => {
+    if (!editPath || !editAbs) return;
+    e.stopPropagation();
+    const p = toBase(e);
+    const n = editAbs.length;
+    const segs = editPath.closed ? n : n - 1;
+    let best = 0;
+    let bestD = Infinity;
+    for (let i = 0; i < segs; i++) {
+      const a = editAbs[i];
+      const b = editAbs[(i + 1) % n];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / Math.max(1e-6, dx * dx + dy * dy)));
+      const d = Math.hypot(a.x + dx * t - p.x, a.y + dy * t - p.y);
+      if (d < bestD) (bestD = d), (best = i);
+    }
+    const abs = [...editAbs];
+    abs.splice(best + 1, 0, { x: p.x, y: p.y });
+    updateLayer(editPath.id, pick(setPathAbs(editPath, abs)));
+  };
+  const deletePt = (i: number) => {
+    if (!editPath || !editAbs || editAbs.length <= 2) return;
+    updateLayer(editPath.id, pick(setPathAbs(editPath, editAbs.filter((_, k) => k !== i))));
+  };
+
   // pintasan keyboard
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target as HTMLElement)?.isContentEditable) return;
       const st = useStudio.getState();
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+      const mod = e.ctrlKey || e.metaKey;
+      const k = e.key.toLowerCase();
+      if (mod && k === 'z') {
         e.preventDefault();
         if (e.shiftKey) st.redo();
         else st.undo();
         return;
       }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+      if (mod && k === 'y') {
         e.preventDefault();
         st.redo();
+        return;
+      }
+      if (st.drawTool === 'pen' && pen.length) {
+        if (e.key === 'Enter') return e.preventDefault(), finishPenRef.current(false);
+        if (e.key === 'Escape') return setPen([]);
+        if (e.key === 'Backspace') return e.preventDefault(), setPen((o) => o.slice(0, -1));
+      }
+      if (mod && k === 'g') {
+        e.preventDefault();
+        const L = st.doc?.scenes[st.sceneIdx]?.layers.find((l) => l.id === st.layerId);
+        if (e.shiftKey && L?.kind === 'group') st.ungroupLayer(L.id);
+        else if (!e.shiftKey) st.groupSelected();
+        return;
+      }
+      if (mod && k === 'a') {
+        e.preventDefault();
+        const sc = st.doc?.scenes[st.sceneIdx];
+        const iso = st.isolation;
+        if (sc) st.setSelection(sc.layers.filter((l) => !l.locked && !l.hidden && (!iso || iso.childIds.includes(l.id))).map((l) => l.id));
         return;
       }
       if (e.key === ' ') {
@@ -322,31 +641,66 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
         clock.toggle();
         return;
       }
+      if (!mod && !e.altKey) {
+        const t = DRAW_TOOLS.find((d) => d.key.toLowerCase() === k);
+        if (t) {
+          st.setDrawTool(t.id);
+          return;
+        }
+      }
+      if (e.key === 'Escape') {
+        if (st.pathEdit) return st.setPathEdit(null);
+        if (st.drawTool !== 'select') return st.setDrawTool('select');
+        if (st.layerId || st.selIds.length) return st.selectLayer(null);
+        if (st.isolation) return st.exitGroup();
+        return;
+      }
       if (!st.layerId) return;
+      const L = st.doc?.scenes[st.sceneIdx]?.layers.find((l) => l.id === st.layerId);
+      if (e.key === 'Enter' && L) {
+        e.preventDefault();
+        if (L.kind === 'group') st.enterGroup(L.id);
+        else if (L.kind === 'path') st.setPathEdit(st.pathEdit ? null : L.id);
+        return;
+      }
       if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
-        st.removeLayer(st.layerId);
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+        st.removeSelected();
+      } else if (mod && k === 'd') {
         e.preventDefault();
         st.duplicateLayer(st.layerId);
       } else if (e.key.startsWith('Arrow')) {
         e.preventDefault();
-        const L = st.doc?.scenes[st.sceneIdx]?.layers.find((l) => l.id === st.layerId);
-        if (!L) return;
-        const k = e.shiftKey ? 20 : 4;
-        const dx = e.key === 'ArrowLeft' ? -k : e.key === 'ArrowRight' ? k : 0;
-        const dy = e.key === 'ArrowUp' ? -k : e.key === 'ArrowDown' ? k : 0;
-        st.updateLayer(L.id, { x: L.x + dx, y: L.y + dy });
-      } else if (e.key === 'Escape') st.selectLayer(null);
+        const step = e.shiftKey ? 20 : 4;
+        const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
+        const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
+        const t = st.localTime();
+        const ls = st.doc?.scenes[st.sceneIdx]?.layers.filter((l) => st.selIds.includes(l.id) && !l.locked) || [];
+        ls.forEach((l, i) => {
+          const pl = posed(l, t).layer;
+          st.updateLayer(l.id, { x: pl.x + dx, y: pl.y + dy }, i > 0);
+        });
+        if (ls.length > 1) st.endDrag();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [clock]);
+  }, [clock, pen.length]);
+
+  // ganti alat → batalkan pena yang belum selesai
+  useEffect(() => {
+    if (drawTool !== 'pen' && pen.length) setPen([]);
+    if (drawTool !== 'pen') setHover(null);
+  }, [drawTool, pen.length]);
 
   // swipe kiri/kanan di area kosong untuk ganti scene (HP)
   const swipe = useRef<{ x: number; y: number; t: number } | null>(null);
 
   const editingLayer = editingText ? (scene?.layers.find((l) => l.id === editingText) as TextLayer | undefined) : undefined;
+  const showBox = selected && selPosed && !playing && !editingText && !multi;
+  const sp = selPosed?.layer;
+  const k = selPosed?.scale ?? 1;
+  const multiLayers = multi && scene ? scene.layers.filter((l) => selIds.includes(l.id)) : [];
 
   return (
     <div
@@ -356,6 +710,7 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
         if (e.touches.length === 2) {
           // cubit untuk zoom: batalkan seret layer yang mungkin dimulai jari pertama
           dragRef.current = null;
+          setDraftBoth(null);
           swipe.current = null;
           const [a, b] = [e.touches[0], e.touches[1]];
           pinch.current = { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), z: view.z, cx: (a.clientX + b.clientX) / 2, cy: (a.clientY + b.clientY) / 2, x: view.x, y: view.y };
@@ -369,9 +724,9 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
         const [a, b] = [e.touches[0], e.touches[1]];
         const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
         const z = Math.max(1, Math.min(3, (p.z * d) / Math.max(1, p.d)));
-        const cx = (a.clientX + b.clientX) / 2;
-        const cy = (a.clientY + b.clientY) / 2;
-        setView(z === 1 ? { z: 1, x: 0, y: 0 } : { z, x: p.x + (cx - p.cx), y: p.y + (cy - p.cy) });
+        const cx2 = (a.clientX + b.clientX) / 2;
+        const cy2 = (a.clientY + b.clientY) / 2;
+        setView(z === 1 ? { z: 1, x: 0, y: 0 } : { z, x: p.x + (cx2 - p.cx), y: p.y + (cy2 - p.cy) });
       }}
       onTouchEnd={(e) => {
         if (pinch.current) {
@@ -380,12 +735,53 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
         }
         const s = swipe.current;
         swipe.current = null;
-        if (!s || dragRef.current || useStudio.getState().layerId || view.z > 1) return;
+        const st = useStudio.getState();
+        if (!s || dragRef.current || st.layerId || st.drawTool !== 'select' || view.z > 1) return;
         const dx = e.changedTouches[0].clientX - s.x;
         const dy = e.changedTouches[0].clientY - s.y;
         if (Math.abs(dx) > 70 && Math.abs(dy) < 50 && Date.now() - s.t < 500) selectScene(sceneIdx + (dx < 0 ? 1 : -1));
       }}
     >
+      <DrawToolbar />
+
+      {/* status: mode edit grup / alat aktif */}
+      <div className="pointer-events-none absolute inset-x-2 bottom-3 z-20 flex flex-col items-center gap-1.5">
+        {isolation && (
+          <div className="mk-glass-deep mk-pop pointer-events-auto flex items-center gap-2 rounded-full py-1.5 pl-4 pr-1.5 text-xs font-semibold text-white">
+            <span className="max-w-[46vw] truncate">
+              Mengedit isi {isolation.group.symbolId ? 'komponen' : 'grup'}: <b>{isolation.group.name}</b>
+              {isolation.group.symbolId ? ' · semua salinan ikut berubah' : ''}
+            </span>
+            <button type="button" className="mk-btn-lime px-3 py-1 text-xs" onClick={() => useStudio.getState().exitGroup()}>
+              Selesai
+            </button>
+          </div>
+        )}
+        {editPath && (
+          <div className="mk-glass-deep mk-pop pointer-events-auto flex items-center gap-2 rounded-full py-1.5 pl-4 pr-1.5 text-xs font-semibold text-white">
+            <span className="hidden sm:inline">Seret titik atau handle. Klik ganda garis: tambah titik. Klik ganda titik: hapus. Alt+klik: tajam/lengkung.</span>
+            <span className="sm:hidden">Seret titik untuk mengubah bentuk</span>
+            <button type="button" className="mk-btn-lime px-3 py-1 text-xs" onClick={() => useStudio.getState().setPathEdit(null)}>
+              Selesai
+            </button>
+          </div>
+        )}
+        {drawTool !== 'select' && TOOL_HINT[drawTool] && (
+          <div className="mk-glass mk-pop pointer-events-auto flex items-center gap-2 rounded-full py-1.5 pl-4 pr-1.5 text-[11px] font-semibold text-mk-cream">
+            <span className="max-w-[60vw]">{TOOL_HINT[drawTool]}</span>
+            {drawTool === 'pen' && pen.length >= 2 ? (
+              <button type="button" className="mk-btn-primary px-3 py-1 text-[11px]" onClick={() => finishPen(false)}>
+                Selesai
+              </button>
+            ) : (
+              <button type="button" className="mk-btn-ghost px-3 py-1 text-[11px]" onClick={() => useStudio.getState().setDrawTool('select')}>
+                Batal
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
       {view.z > 1 && (
         <button type="button" onClick={() => setView({ z: 1, x: 0, y: 0 })} className="mk-glass mk-pop mk-float absolute bottom-3 right-3 z-20 rounded-full px-3 py-1.5 text-xs font-bold text-mk-cream">
           {Math.round(view.z * 100)}% · Reset zoom
@@ -396,17 +792,52 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
           ref={canvasRef}
           width={px.w}
           height={px.h}
-          className="block h-full w-full touch-none select-none rounded-[14px] bg-black"
+          className={cx('block h-full w-full touch-none select-none rounded-[14px] bg-black', drawTool !== 'select' && 'cursor-crosshair')}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
+          onPointerLeave={() => setHover(null)}
           onDoubleClick={onDoubleClick}
         />
 
         {/* garis bantu snap */}
         {guides.x !== null && <div className="pointer-events-none absolute top-0 h-full w-px bg-mk-coral" style={{ left: guides.x * scale }} />}
         {guides.y !== null && <div className="pointer-events-none absolute left-0 h-px w-full bg-mk-coral" style={{ top: guides.y * scale }} />}
+
+        {/* draf gambar + pena */}
+        {(draft || pen.length > 0) && (
+          <svg className="pointer-events-none absolute inset-0 h-full w-full overflow-visible" viewBox={`0 0 ${base.w} ${base.h}`}>
+            {draft && draft.kind !== 'pencil' && draft.kind !== 'line' && (() => {
+              const r = draftRect(draft);
+              const sw = 1.5 / scale;
+              if (draft.kind === 'marquee') return <rect x={r.x} y={r.y} width={r.w} height={r.h} fill="rgba(123,80,255,0.08)" stroke="#7B50FF" strokeWidth={sw} strokeDasharray={`${4 / scale} ${3 / scale}`} />;
+              if (draft.kind === 'ellipse') return <ellipse cx={r.x + r.w / 2} cy={r.y + r.h / 2} rx={r.w / 2} ry={r.h / 2} fill={palette?.secondary} fillOpacity={0.6} stroke="#7B50FF" strokeWidth={sw} />;
+              return <rect x={r.x} y={r.y} width={r.w} height={r.h} rx={24} fill={palette?.primary} fillOpacity={0.6} stroke="#7B50FF" strokeWidth={sw} />;
+            })()}
+            {draft?.kind === 'line' && (() => {
+              const [x1, y1] = draft.shift ? snap45(draft.x0, draft.y0, draft.x1, draft.y1) : [draft.x1, draft.y1];
+              return <line x1={draft.x0} y1={draft.y0} x2={x1} y2={y1} stroke={palette?.text} strokeWidth={8} strokeLinecap="round" />;
+            })()}
+            {draft?.kind === 'pencil' && <polyline points={draft.pts.map((p) => `${p.x},${p.y}`).join(' ')} fill="none" stroke={palette?.primary} strokeWidth={10} strokeLinecap="round" strokeLinejoin="round" />}
+            {pen.length > 0 && (
+              <>
+                <path d={svgPath(pen, false) + (hover && !penDown.current ? ` L ${hover.x} ${hover.y}` : '')} fill="none" stroke="#7B50FF" strokeWidth={2 / scale} />
+                {pen.map((p, i) => (
+                  <g key={i}>
+                    {p.ox !== undefined && (
+                      <>
+                        <line x1={p.x + (p.ix || 0)} y1={p.y + (p.iy || 0)} x2={p.x + p.ox} y2={p.y + (p.oy || 0)} stroke="#7B50FF" strokeWidth={1 / scale} />
+                        <circle cx={p.x + p.ox} cy={p.y + (p.oy || 0)} r={3 / scale} fill="#7B50FF" />
+                      </>
+                    )}
+                    <rect x={p.x - 4 / scale} y={p.y - 4 / scale} width={8 / scale} height={8 / scale} fill={i === 0 && pen.length >= 2 ? '#C6F432' : '#fff'} stroke="#7B50FF" strokeWidth={1.5 / scale} />
+                  </g>
+                ))}
+              </>
+            )}
+          </svg>
+        )}
 
         {/* penanda teks contoh yang harus diganti */}
         {!playing &&
@@ -423,20 +854,32 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
               </div>
             ))}
 
+        {/* seleksi ganda */}
+        {multi && !playing && (
+          <>
+            {multiLayers.map((l) => {
+              const b = bounds(posed(l, lt).layer);
+              return <div key={`m-${l.id}`} className="pointer-events-none absolute border-[1.5px] border-dashed border-mk-coral" style={{ left: b.x * scale, top: b.y * scale, width: b.w * scale, height: b.h * scale }} />;
+            })}
+            <span className="pointer-events-none absolute left-2 top-2 rounded bg-mk-coral px-1.5 py-0.5 text-[11px] font-bold text-white">{selIds.length} dipilih</span>
+          </>
+        )}
+
         {/* kotak seleksi gaya Figma */}
-        {selected && !playing && !editingText && (
+        {showBox && sp && (
           <div
             className="pointer-events-none absolute"
             style={{
-              left: selected.x * scale,
-              top: selected.y * scale,
-              width: selected.w * scale,
-              height: selected.h * scale,
-              transform: `rotate(${selected.rotation}deg)`,
+              left: (sp.x + (sp.w - sp.w * k) / 2) * scale,
+              top: (sp.y + (sp.h - sp.h * k) / 2) * scale,
+              width: sp.w * k * scale,
+              height: sp.h * k * scale,
+              transform: `rotate(${sp.rotation}deg)`,
             }}
           >
-            <div className="absolute inset-0 rounded-[2px] border-[1.5px] border-mk-coral" />
+            <div className={cx('absolute inset-0 rounded-[2px] border-[1.5px]', editPath ? 'border-dashed border-mk-coral/50' : 'border-mk-coral')} />
             {!selected.locked &&
+              !editPath &&
               (['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] as Handle[]).map((h) => {
                 const pos: Record<string, React.CSSProperties> = {
                   nw: { left: 0, top: 0, cursor: 'nwse-resize' },
@@ -448,7 +891,7 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
                   sw: { left: 0, top: '100%', cursor: 'nesw-resize' },
                   w: { left: 0, top: '50%', cursor: 'ew-resize' },
                 };
-                const small = selected.w * scale < 60 || selected.h * scale < 40;
+                const small = sp.w * k * scale < 60 || sp.h * k * scale < 40;
                 if (small && h.length === 1) return null;
                 return (
                   <span
@@ -463,7 +906,7 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
                   </span>
                 );
               })}
-            {!selected.locked && (
+            {!selected.locked && !editPath && (
               <span
                 onPointerDown={(e) => startHandle(e, 'rot')}
                 onPointerMove={onPointerMove}
@@ -475,9 +918,52 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
               </span>
             )}
             <span className="absolute -top-6 left-0 whitespace-nowrap rounded bg-mk-coral px-1.5 py-0.5 text-[11px] font-bold text-white">
-              {Math.round(selected.w)} × {Math.round(selected.h)}
+              {selected.keyframes?.length ? '◆ ' : ''}
+              {Math.round(sp.w * k)} × {Math.round(sp.h * k)}
             </span>
           </div>
+        )}
+
+        {/* edit titik vektor (gaya Illustrator) */}
+        {editPath && editAbs && !playing && (
+          <svg className="absolute inset-0 h-full w-full overflow-visible" viewBox={`0 0 ${base.w} ${base.h}`} style={{ pointerEvents: 'none' }}>
+            <path d={svgPath(editAbs, editPath.closed)} fill="none" stroke="#7B50FF" strokeWidth={1.5 / scale} />
+            <path d={svgPath(editAbs, editPath.closed)} fill="none" stroke="transparent" strokeWidth={14 / scale} style={{ pointerEvents: 'stroke', cursor: 'copy' }} onDoubleClick={insertPt} />
+            {editAbs.map((p, i) => {
+              const r = (coarse ? 9 : 4.5) / scale;
+              const hr = (coarse ? 8 : 3.5) / scale;
+              return (
+                <g key={i}>
+                  {p.ix !== undefined && (
+                    <>
+                      <line x1={p.x} y1={p.y} x2={p.x + p.ix} y2={p.y + (p.iy || 0)} stroke="#7B50FF" strokeWidth={1 / scale} />
+                      <circle cx={p.x + p.ix} cy={p.y + (p.iy || 0)} r={hr} fill="#7B50FF" style={{ pointerEvents: 'auto', cursor: 'move', touchAction: 'none' }} onPointerDown={(e) => startPt(e, i, 'i')} onPointerMove={movePt} onPointerUp={upPt} />
+                    </>
+                  )}
+                  {p.ox !== undefined && (
+                    <>
+                      <line x1={p.x} y1={p.y} x2={p.x + p.ox} y2={p.y + (p.oy || 0)} stroke="#7B50FF" strokeWidth={1 / scale} />
+                      <circle cx={p.x + p.ox} cy={p.y + (p.oy || 0)} r={hr} fill="#7B50FF" style={{ pointerEvents: 'auto', cursor: 'move', touchAction: 'none' }} onPointerDown={(e) => startPt(e, i, 'o')} onPointerMove={movePt} onPointerUp={upPt} />
+                    </>
+                  )}
+                  <rect
+                    x={p.x - r}
+                    y={p.y - r}
+                    width={r * 2}
+                    height={r * 2}
+                    fill="#fff"
+                    stroke="#7B50FF"
+                    strokeWidth={1.5 / scale}
+                    style={{ pointerEvents: 'auto', cursor: 'move', touchAction: 'none' }}
+                    onPointerDown={(e) => startPt(e, i, 'a')}
+                    onPointerMove={movePt}
+                    onPointerUp={upPt}
+                    onDoubleClick={(e) => (e.stopPropagation(), deletePt(i))}
+                  />
+                </g>
+              );
+            })}
+          </svg>
         )}
 
         {/* edit teks langsung di kanvas */}
@@ -485,6 +971,7 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
           <textarea
             autoFocus
             defaultValue={editingLayer.text}
+            onFocus={(e) => e.target.select()}
             onBlur={(e) => finishTextEdit(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Escape') finishTextEdit(undefined);
@@ -510,4 +997,67 @@ export default function Stage({ clock, onRequestEdit }: { clock: PlaybackClock; 
       </div>
     </div>
   );
+}
+
+/** Bilah alat kanvas (gaya Figma / Illustrator). */
+function DrawToolbar() {
+  const tool = useStudio((s) => s.drawTool);
+  const setTool = useStudio((s) => s.setDrawTool);
+  return (
+    <div
+      role="toolbar"
+      aria-label="Alat gambar"
+      className="mk-glass mk-pop absolute left-2 top-2 z-20 flex gap-0.5 rounded-2xl p-1 lg:left-3 lg:top-1/2 lg:-translate-y-1/2 lg:flex-col"
+    >
+      {DRAW_TOOLS.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          title={`${t.label} (${t.key})`}
+          aria-label={t.label}
+          aria-pressed={tool === t.id}
+          onClick={() => setTool(t.id)}
+          className={cx('flex h-9 w-9 items-center justify-center rounded-xl transition', tool === t.id ? 'bg-mk-coral text-white' : 'text-mk-muted hover:bg-mk-mist hover:text-mk-cream')}
+        >
+          <t.icon className="h-[18px] w-[18px]" />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function draftRect(d: { x0: number; y0: number; x1: number; y1: number; shift: boolean; alt: boolean }) {
+  let w = d.x1 - d.x0;
+  let h = d.y1 - d.y0;
+  if (d.shift) {
+    const m = Math.max(Math.abs(w), Math.abs(h));
+    w = Math.sign(w || 1) * m;
+    h = Math.sign(h || 1) * m;
+  }
+  if (d.alt) return { x: d.x0 - Math.abs(w), y: d.y0 - Math.abs(h), w: Math.abs(w) * 2, h: Math.abs(h) * 2 };
+  return { x: Math.min(d.x0, d.x0 + w), y: Math.min(d.y0, d.y0 + h), w: Math.abs(w), h: Math.abs(h) };
+}
+
+function snap45(x0: number, y0: number, x1: number, y1: number): [number, number] {
+  const a = Math.round(Math.atan2(y1 - y0, x1 - x0) / (Math.PI / 4)) * (Math.PI / 4);
+  const r = Math.hypot(x1 - x0, y1 - y0);
+  return [x0 + Math.cos(a) * r, y0 + Math.sin(a) * r];
+}
+
+function svgPath(pts: AbsPoint[], closed: boolean): string {
+  if (!pts.length) return '';
+  let d = `M ${pts[0].x} ${pts[0].y}`;
+  const n = pts.length;
+  const segs = closed ? n : n - 1;
+  for (let i = 0; i < segs; i++) {
+    const a = pts[i];
+    const b = pts[(i + 1) % n];
+    if (a.ox !== undefined || b.ix !== undefined) d += ` C ${a.x + (a.ox || 0)} ${a.y + (a.oy || 0)} ${b.x + (b.ix || 0)} ${b.y + (b.iy || 0)} ${b.x} ${b.y}`;
+    else d += ` L ${b.x} ${b.y}`;
+  }
+  return closed ? d + ' Z' : d;
+}
+
+function pick(l: PathLayer): Partial<PathLayer> {
+  return { x: l.x, y: l.y, w: l.w, h: l.h, points: l.points };
 }

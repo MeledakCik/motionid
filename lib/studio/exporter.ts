@@ -1,5 +1,5 @@
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer';
-import type { ProjectDoc } from './types';
+import type { FontId, Layer, ProjectDoc } from './types';
 import { canvasSize, docDuration } from './types';
 import { Renderer } from './renderer';
 import { renderSoundtrack, hasAnyAudio } from './narration';
@@ -91,7 +91,8 @@ export async function exportVideo(doc: ProjectDoc, opts: ExportOptions): Promise
   report(0, 'Menyiapkan font & gambar…');
   const renderer = new Renderer({ allowBlur: true, particleScale: 1 });
   renderer.setDoc(doc);
-  await ensureFonts([doc.theme.headingFont, doc.theme.bodyFont, ...doc.scenes.flatMap((s) => s.layers.flatMap((l) => (l.kind === 'text' ? [l.font] : [])))]);
+  const fontsOf = (l: Layer): string[] => (l.kind === 'text' ? [l.font] : l.kind === 'group' ? l.children.flatMap(fontsOf) : []);
+  await ensureFonts([doc.theme.headingFont, doc.theme.bodyFont, ...doc.scenes.flatMap((s) => s.layers.flatMap(fontsOf))] as FontId[]);
   await renderer.preload();
 
   const canvas = document.createElement('canvas');
