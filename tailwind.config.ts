@@ -32,6 +32,11 @@ const config: Config = {
           sky: '#2563EB',
           lime: '#C6F432',
           deep: '#1E1150',
+          mist: '#EDE8FF',
+          'coral-600': '#6A45E0',
+          'coral-700': '#5A39C0',
+          'lime-600': '#AAD329',
+          'lime-800': '#566E0E',
         },
       },
       backgroundImage: {
@@ -42,7 +47,8 @@ const config: Config = {
         'mk-card': 'inset 0 1px 0 rgba(255,255,255,0.9), 0 0 0 1px rgba(18,11,46,0.05), 0 18px 40px -26px rgba(48,24,140,0.4)',
       },
       fontFamily: {
-        sans: ['var(--font-jakarta)', 'var(--font-poppins)', 'system-ui', 'sans-serif'],
+        // Inter Tight = huruf brand DepUp; cadangan sesuai panduan: Inter, Helvetica, Arial
+        sans: ['var(--font-inter-tight)', 'Inter', 'Helvetica', 'Arial', 'system-ui', 'sans-serif'],
         poppins: ['var(--font-poppins)', 'sans-serif'],
         montserrat: ['var(--font-montserrat)', 'sans-serif'],
         bebas: ['var(--font-bebas)', 'sans-serif'],

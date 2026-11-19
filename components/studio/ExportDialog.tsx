@@ -206,7 +206,7 @@ export default function ExportDialog({
               <Loader2 className="h-4 w-4 animate-spin text-mk-coral" /> {Math.round(progress * 100)}%
             </div>
             <div className="h-2.5 overflow-hidden rounded-full bg-mk-ink">
-              <div className="h-full rounded-full bg-mk-grad transition-[width]" style={{ width: `${Math.max(3, progress * 100)}%` }} />
+              <div className="h-full rounded-full bg-mk-coral transition-[width]" style={{ width: `${Math.max(3, progress * 100)}%` }} />
             </div>
             <p className="text-[11px] text-mk-dim">{label}</p>
             <button type="button" className="mk-btn-ghost w-full text-xs" onClick={() => abortRef.current?.abort()}>

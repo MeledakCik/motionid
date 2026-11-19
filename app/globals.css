@@ -23,16 +23,15 @@
 =========================================================================== */
 :root {
   color-scheme: light;
-  --mk-bg: #eee9ff;
+  --mk-bg: #f4f1ff;
   --mk-cream: #120b2e;
 
   /* gradien halus: alfa tiap cahaya turun mengikuti kurva lembut (1 − smoothstep),
      jadi tidak ada "cincin" di tepi dan tidak ada titik terang di tengah */
-  --mk-mesh: radial-gradient(circle 75vmax at 0% 0%, rgba(123, 80, 255, 0.34) 0%, rgba(123, 80, 255, 0.321) 14%, rgba(123, 80, 255, 0.273) 29%, rgba(123, 80, 255, 0.206) 43%, rgba(123, 80, 255, 0.134) 57%, rgba(123, 80, 255, 0.067) 71%, rgba(123, 80, 255, 0.019) 86%, rgba(123, 80, 255, 0) 100%),
-    radial-gradient(circle 62vmax at 100% 10%, rgba(79, 123, 255, 0.26) 0%, rgba(79, 123, 255, 0.246) 14%, rgba(79, 123, 255, 0.208) 29%, rgba(79, 123, 255, 0.158) 43%, rgba(79, 123, 255, 0.102) 57%, rgba(79, 123, 255, 0.052) 71%, rgba(79, 123, 255, 0.014) 86%, rgba(79, 123, 255, 0) 100%),
-    radial-gradient(circle 66vmax at 88% 100%, rgba(192, 132, 252, 0.22) 0%, rgba(192, 132, 252, 0.208) 14%, rgba(192, 132, 252, 0.176) 29%, rgba(192, 132, 252, 0.133) 43%, rgba(192, 132, 252, 0.087) 57%, rgba(192, 132, 252, 0.044) 71%, rgba(192, 132, 252, 0.012) 86%, rgba(192, 132, 252, 0) 100%),
-    radial-gradient(circle 56vmax at 6% 92%, rgba(125, 211, 252, 0.2) 0%, rgba(125, 211, 252, 0.189) 14%, rgba(125, 211, 252, 0.16) 29%, rgba(125, 211, 252, 0.121) 43%, rgba(125, 211, 252, 0.079) 57%, rgba(125, 211, 252, 0.04) 71%, rgba(125, 211, 252, 0.011) 86%, rgba(125, 211, 252, 0) 100%),
-    linear-gradient(165deg, #f6f3ff 0%, #eee8ff 46%, #e7e2ff 100%);
+  /* latar DepUp: Mist (#EDE8FF) yang sangat lembut + dua cahaya ungu tipis. Dua lapis saja → murah dilukis */
+  --mk-mesh: radial-gradient(circle 70vmax at 0% 0%, rgba(123, 80, 255, 0.16), rgba(123, 80, 255, 0.08) 40%, rgba(123, 80, 255, 0) 70%),
+    radial-gradient(circle 60vmax at 100% 100%, rgba(198, 244, 50, 0.14), rgba(198, 244, 50, 0.05) 45%, rgba(198, 244, 50, 0) 70%),
+    linear-gradient(180deg, #f6f3ff 0%, #f1edff 100%);
   --mk-mesh-deep: radial-gradient(circle 520px at 0% 0%, rgba(123, 80, 255, 0.75) 0%, rgba(123, 80, 255, 0.708) 14%, rgba(123, 80, 255, 0.601) 29%, rgba(123, 80, 255, 0.455) 43%, rgba(123, 80, 255, 0.295) 57%, rgba(123, 80, 255, 0.149) 71%, rgba(123, 80, 255, 0.042) 86%, rgba(123, 80, 255, 0) 100%),
     radial-gradient(circle 520px at 100% 100%, rgba(59, 91, 255, 0.55) 0%, rgba(59, 91, 255, 0.52) 14%, rgba(59, 91, 255, 0.441) 29%, rgba(59, 91, 255, 0.334) 43%, rgba(59, 91, 255, 0.216) 57%, rgba(59, 91, 255, 0.109) 71%, rgba(59, 91, 255, 0.03) 86%, rgba(59, 91, 255, 0) 100%),
     radial-gradient(circle 360px at 82% 18%, rgba(217, 70, 239, 0.28) 0%, rgba(217, 70, 239, 0.264) 14%, rgba(217, 70, 239, 0.224) 29%, rgba(217, 70, 239, 0.17) 43%, rgba(217, 70, 239, 0.11) 57%, rgba(217, 70, 239, 0.056) 71%, rgba(217, 70, 239, 0.016) 86%, rgba(217, 70, 239, 0) 100%),
@@ -86,6 +85,19 @@ body::before {
 ::selection {
   background: rgba(123, 80, 255, 0.24);
 }
+/* fokus keyboard selalu terlihat (WCAG 2.4.7) */
+:focus-visible {
+  outline: 2px solid #7b50ff;
+  outline-offset: 2px;
+}
+h1,
+h2,
+h3 {
+  letter-spacing: -0.02em;
+}
+body {
+  font-feature-settings: 'ss01', 'cv11';
+}
 
 @layer components {
   .mk-page {
@@ -93,53 +105,66 @@ body::before {
   }
   /* kartu kaca: putih tembus pandang di atas gradien (tanpa blur → ringan untuk grid panjang) */
   .mk-card {
-    @apply rounded-2xl;
-    border: 1px solid rgba(255, 255, 255, 0.78);
-    background-color: rgba(255, 255, 255, 0.66);
-    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 46%);
-    box-shadow: var(--mk-rim), 0 1px 2px rgba(30, 17, 80, 0.04), 0 18px 40px -26px rgba(48, 24, 140, 0.4);
+    @apply rounded-[20px] bg-white;
+    border: 1px solid rgba(18, 11, 46, 0.07);
+    box-shadow: 0 1px 2px rgba(30, 17, 80, 0.04);
+  }
+  /* kartu bento berwarna (gaya panduan DepUp hal. 11): tanpa garis, warna penuh */
+  .mk-tile {
+    @apply rounded-[20px] p-5;
+  }
+  .mk-tile-violet {
+    @apply mk-tile bg-mk-coral text-white;
+  }
+  .mk-tile-lime {
+    @apply mk-tile bg-mk-lime text-mk-deep;
+  }
+  .mk-tile-night {
+    @apply mk-tile bg-mk-deep text-white;
+  }
+  .mk-tile-mist {
+    @apply mk-tile bg-mk-mist text-mk-cream;
+  }
+  .mk-title {
+    @apply font-bold tracking-[-0.02em] text-mk-cream;
   }
   .mk-card-2 {
     @apply rounded-xl border border-mk-line bg-mk-panel-2;
   }
+  /* tombol pil ala panduan DepUp: ungu padat, lime padat, garis ungu */
   .mk-btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex min-h-[40px] items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50;
   }
   .mk-btn-primary {
-    @apply mk-btn text-white hover:brightness-110;
-    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0) 52%), linear-gradient(100deg, #6a3cf6 0%, #7b50ff 55%, #9775ff 100%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32), 0 12px 26px -12px rgba(123, 80, 255, 0.7);
+    @apply mk-btn bg-mk-coral text-white hover:bg-mk-coral-600 active:bg-mk-coral-700;
   }
   .mk-btn-lime {
-    @apply mk-btn bg-mk-lime text-mk-cream hover:brightness-105;
-    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0) 55%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 10px 28px -12px rgba(150, 190, 20, 0.8);
+    @apply mk-btn bg-mk-lime text-mk-deep hover:bg-mk-lime-600;
   }
   .mk-btn-ghost {
-    @apply mk-btn border border-white/80 bg-white/70 text-mk-cream hover:bg-white;
-    box-shadow: var(--mk-edge);
+    @apply mk-btn border border-mk-line-2 bg-white text-mk-cream hover:border-mk-coral hover:text-mk-coral;
+  }
+  .mk-btn-outline {
+    @apply mk-btn border-[1.5px] border-mk-coral bg-white text-mk-coral hover:bg-mk-mist;
   }
   .mk-btn-icon {
-    @apply inline-flex h-9 w-9 items-center justify-center rounded-lg text-mk-muted transition hover:bg-white/80 hover:text-mk-cream active:scale-[0.94] disabled:opacity-35;
+    @apply inline-flex h-10 w-10 items-center justify-center rounded-full text-mk-muted transition hover:bg-mk-mist hover:text-mk-cream active:scale-[0.94] disabled:opacity-35;
   }
   .mk-input {
-    @apply w-full rounded-xl border border-mk-line bg-white px-3 py-2.5 text-sm text-mk-cream placeholder:text-mk-dim focus:border-mk-coral focus:outline-none focus:ring-2 focus:ring-mk-coral/20;
+    @apply w-full rounded-xl border-[1.5px] border-mk-line bg-white px-3.5 py-2.5 text-sm text-mk-cream placeholder:text-mk-dim focus:border-mk-coral focus:outline-none focus:ring-4 focus:ring-mk-coral/15;
   }
   .mk-label {
     @apply mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-mk-muted;
   }
   .mk-chip {
-    @apply inline-flex items-center gap-1.5 rounded-full border border-white/80 bg-white/70 px-3 py-1.5 text-xs font-semibold text-mk-muted transition hover:bg-white hover:text-mk-cream active:scale-[0.96];
-    box-shadow: var(--mk-edge);
+    @apply inline-flex items-center gap-1.5 rounded-full border border-mk-line bg-white px-3 py-1.5 text-xs font-semibold text-mk-muted transition hover:border-mk-coral/40 hover:text-mk-cream active:scale-[0.96];
   }
   .mk-chip-on {
     @apply border-mk-coral bg-mk-coral text-white hover:bg-mk-coral hover:text-white;
   }
+  /* sorotan judul: ungu DepUp padat (panduan: "Naik level, tanpa ribet.") */
   .mk-grad-text {
-    background: linear-gradient(100deg, #4b23d6 0%, #7b50ff 55%, #9c7bff 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+    color: #7b50ff;
   }
 
   /* ---------- Kaca ---------- */

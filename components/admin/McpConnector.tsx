@@ -243,7 +243,7 @@ export default function McpConnector() {
         <section className="mk-card relative overflow-hidden p-5 sm:p-7">
           <div className="mk-dots pointer-events-none absolute inset-0 opacity-40" />
           <div className="relative flex flex-wrap items-start gap-5">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-mk-grad text-white shadow-mk-glow">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-mk-coral text-white">
               <Plug className="h-7 w-7" />
             </div>
             <div className="min-w-0 flex-1">

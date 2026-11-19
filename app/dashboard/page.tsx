@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowRight,
   Brain,
+  CheckCircle2,
+  Circle,
   Clock,
   Film,
   FlaskConical,
@@ -13,6 +15,7 @@ import {
   Home,
   LayoutGrid,
   LayoutTemplate,
+  Lightbulb,
   List,
   LogOut,
   MoreHorizontal,
@@ -20,6 +23,7 @@ import {
   Plug,
   Plus,
   Search,
+  Send,
   Sparkles,
   Trash2,
   Wand2,
@@ -185,26 +189,27 @@ export default function DashboardPage() {
 
   /* ---------- Bagian: daftar proyek ---------- */
   const projectSection = (
-    <section className="space-y-4">
+    <section className="mk-card space-y-4 p-4 sm:p-6">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="mr-auto text-lg font-extrabold">{tab === 'home' ? 'Proyek terbaru' : 'Semua proyek'}</h2>
-        <div className="flex items-center gap-1 rounded-xl border border-white/80 bg-white/70 p-1 shadow-mk-card">
+        <h2 className="mr-auto text-lg font-semibold">{tab === 'home' ? 'Proyek terbaru' : 'Semua proyek'}</h2>
+        <div className="flex items-center gap-1 rounded-full bg-mk-mist p-1" role="group" aria-label="Saring jenis">
           {FILTERS.map((f) => (
             <button
               key={f.id}
               type="button"
               onClick={() => setFilter(f.id)}
-              className={cx('rounded-lg px-3 py-1.5 text-xs font-bold transition', filter === f.id ? 'bg-mk-coral text-white' : 'text-mk-dim hover:text-mk-cream')}
+              aria-pressed={filter === f.id}
+              className={cx('rounded-full px-3 py-1.5 text-xs font-semibold transition', filter === f.id ? 'bg-mk-deep text-white' : 'text-mk-muted hover:text-mk-cream')}
             >
               {f.label}
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-1 rounded-xl border border-white/80 bg-white/70 p-1 shadow-mk-card">
-          <button type="button" onClick={() => changeView('grid')} className={cx('rounded-lg p-1.5 transition', view === 'grid' ? 'bg-mk-coral text-white' : 'text-mk-dim hover:text-mk-cream')} aria-label="Tampilan grid">
+        <div className="flex items-center gap-1 rounded-full bg-mk-mist p-1">
+          <button type="button" onClick={() => changeView('grid')} className={cx('rounded-full p-1.5 transition', view === 'grid' ? 'bg-white text-mk-coral' : 'text-mk-dim hover:text-mk-cream')} aria-label="Tampilan grid">
             <LayoutGrid className="h-4 w-4" />
           </button>
-          <button type="button" onClick={() => changeView('list')} className={cx('rounded-lg p-1.5 transition', view === 'list' ? 'bg-mk-coral text-white' : 'text-mk-dim hover:text-mk-cream')} aria-label="Tampilan daftar">
+          <button type="button" onClick={() => changeView('list')} className={cx('rounded-full p-1.5 transition', view === 'list' ? 'bg-white text-mk-coral' : 'text-mk-dim hover:text-mk-cream')} aria-label="Tampilan daftar">
             <List className="h-4 w-4" />
           </button>
         </div>
@@ -218,7 +223,7 @@ export default function DashboardPage() {
       {loading ? (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="aspect-[9/14] animate-mk-pulse rounded-xl bg-white/60" />
+            <div key={i} className="aspect-[9/14] animate-mk-pulse rounded-2xl bg-mk-mist" />
           ))}
         </div>
       ) : !list.length ? (
@@ -243,9 +248,9 @@ export default function DashboardPage() {
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           <Link
             href="/create"
-            className="group flex aspect-[9/14] flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-mk-line-2 bg-mk-panel/40 text-mk-muted transition hover:border-mk-coral hover:bg-mk-coral/5 hover:text-mk-coral"
+            className="group flex aspect-[9/14] flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-mk-line-2 bg-mk-mist/40 text-mk-muted transition hover:border-mk-coral hover:bg-mk-coral/5 hover:text-mk-coral"
           >
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-mk-panel-3 transition group-hover:bg-mk-grad group-hover:text-white">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-mk-panel-3 transition group-hover:bg-mk-coral group-hover:text-white">
               <Plus className="h-6 w-6" />
             </span>
             <span className="text-sm font-bold">Video baru</span>
@@ -253,7 +258,7 @@ export default function DashboardPage() {
           {recent.map((p) => (
             <div key={p.id} className="group relative min-w-0">
               <Link href={`/editor/${p.id}`} className="block">
-                <div className="relative aspect-[9/14] overflow-hidden rounded-xl border border-mk-line bg-mk-ink shadow-mk-card transition group-hover:border-mk-coral/70 group-hover:ring-2 group-hover:ring-mk-coral/30">
+                <div className="relative aspect-[9/14] overflow-hidden rounded-2xl bg-mk-mist transition group-hover:border-mk-coral/70 group-hover:ring-2 group-hover:ring-mk-coral/30">
                   <ProjectThumb p={p} />
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30 opacity-0 transition group-hover:opacity-100" />
                   <span className="absolute left-2 top-2 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-bold text-white">
@@ -264,7 +269,7 @@ export default function DashboardPage() {
                       <Film className="h-3 w-3" /> {p.style_json.scenes}
                     </span>
                   ) : null}
-                  <span className="absolute bottom-2 left-2 flex translate-y-2 items-center gap-1 rounded-lg bg-mk-grad px-2.5 py-1 text-[11px] font-extrabold text-white opacity-0 transition group-hover:translate-y-0 group-hover:opacity-100">
+                  <span className="absolute bottom-2 left-2 flex translate-y-2 items-center gap-1 rounded-lg bg-mk-coral px-2.5 py-1 text-[11px] font-extrabold text-white opacity-0 transition group-hover:translate-y-0 group-hover:opacity-100">
                     <Pencil className="h-3 w-3" /> Edit
                   </span>
                 </div>
@@ -323,15 +328,15 @@ export default function DashboardPage() {
           ))}
         </div>
       ) : (
-        <div className="mk-card overflow-hidden !rounded-xl">
-          <div className="hidden grid-cols-[1fr_140px_140px_44px] gap-3 border-b border-mk-line bg-white/50 px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-mk-dim sm:grid">
+        <div className="-mx-4 overflow-hidden sm:-mx-6">
+          <div className="hidden grid-cols-[1fr_140px_140px_44px] gap-3 border-b border-mk-line px-4 py-2 sm:px-6 text-[11px] font-bold uppercase tracking-wider text-mk-dim sm:grid">
             <span>Nama</span>
             <span>Jenis</span>
             <span>Diubah</span>
             <span />
           </div>
           {recent.map((p) => (
-            <div key={p.id} className="group grid grid-cols-[1fr_44px] items-center gap-3 border-b border-mk-line px-4 py-2.5 last:border-0 hover:bg-white/70 sm:grid-cols-[1fr_140px_140px_44px]">
+            <div key={p.id} className="group grid grid-cols-[1fr_44px] items-center gap-3 border-b border-mk-line px-4 py-2.5 last:border-0 hover:bg-mk-mist/50 sm:px-6 sm:grid-cols-[1fr_140px_140px_44px]">
               <Link href={`/editor/${p.id}`} className="flex min-w-0 items-center gap-3">
                 <div className="relative h-14 w-9 shrink-0 overflow-hidden rounded-md border border-mk-line bg-mk-ink">
                   <ProjectThumb p={p} />
@@ -362,7 +367,7 @@ export default function DashboardPage() {
   const templateSection = (full: boolean) => (
     <section className="space-y-4">
       <div className="flex items-center gap-2">
-        <h2 className="mr-auto text-lg font-extrabold">{full ? 'Template' : 'Template populer'}</h2>
+        <h2 className="mr-auto text-lg font-semibold">{full ? 'Template' : 'Template populer'}</h2>
         {!full && (
           <button type="button" onClick={() => setTab('templates')} className="flex items-center gap-1 text-xs font-bold text-mk-coral hover:underline">
             Lihat semua <ArrowRight className="h-3.5 w-3.5" />
@@ -374,64 +379,122 @@ export default function DashboardPage() {
     </section>
   );
 
-  return (
-    <div className="flex min-h-screen text-mk-cream">
-      {/* ---------- Sidebar (desktop) ---------- */}
-      <aside className="mk-glass sticky top-0 hidden h-screen w-[232px] shrink-0 flex-col border-r border-white/70 px-3 py-4 lg:flex">
-        <Link href="/" className="px-2">
-          <Logo />
-        </Link>
-        <Link href="/create" className="mk-btn-primary mt-5 w-full justify-center py-2.5 text-sm">
-          <Plus className="h-4 w-4" /> Buat video
-        </Link>
-        <nav className="mt-5 space-y-0.5">
-          {NAV.map((n) => (
+  /* ---------- Data kartu bento (semua dari data asli, tanpa angka karangan) ---------- */
+  const published = projects.filter((p) => p.status === 'published').length;
+  const intents = new Set(projects.map((p) => p.style_json?.intent || p.category)).size;
+  const steps = [
+    { label: 'Buat video pertama', done: projects.length >= 1, act: () => router.push('/create') },
+    { label: 'Coba 2 jenis video', done: intents >= 2, act: () => go('5 tips hemat buat anak kos') },
+    { label: 'Kumpulkan 3 video', done: projects.length >= 3, act: () => router.push('/create') },
+    { label: 'Terbitkan 1 video', done: published >= 1, act: () => projects[0] && router.push(`/editor/${projects[0].id}`) },
+  ];
+  const doneCount = steps.filter((x) => x.done).length;
+  const showSteps = !loading && doneCount < steps.length;
+
+  const checklist = (dark: boolean) => (
+    <div className={cx('rounded-[20px] p-4', dark ? 'bg-white/[0.06] ring-1 ring-white/10' : 'mk-card')}>
+      <div className="flex items-center justify-between">
+        <span className={cx('text-sm font-semibold', dark ? 'text-white' : 'text-mk-cream')}>Mulai di sini</span>
+        <span className={cx('text-xs font-medium', dark ? 'text-white/60' : 'text-mk-dim')}>
+          {doneCount} dari {steps.length}
+        </span>
+      </div>
+      <div className={cx('mt-2.5 h-1.5 overflow-hidden rounded-full', dark ? 'bg-white/10' : 'bg-mk-mist')}>
+        <div className="h-full rounded-full bg-mk-lime transition-[width] duration-500" style={{ width: `${(doneCount / steps.length) * 100}%` }} />
+      </div>
+      <ul className="mt-3 space-y-0.5">
+        {steps.map((st) => (
+          <li key={st.label}>
             <button
-              key={n.id}
               type="button"
-              onClick={() => setTab(n.id)}
+              disabled={st.done}
+              onClick={st.act}
               className={cx(
-                'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition',
-                tab === n.id ? 'bg-mk-coral text-white shadow-mk-glow' : 'text-mk-muted hover:bg-white/80 hover:text-mk-cream'
+                'flex w-full items-center gap-2.5 rounded-lg px-1.5 py-1.5 text-left text-[13px] transition disabled:cursor-default',
+                dark ? 'text-white/80 hover:bg-white/[0.06] disabled:hover:bg-transparent' : 'text-mk-muted hover:bg-mk-mist disabled:hover:bg-transparent'
               )}
             >
-              <n.icon className="h-[18px] w-[18px]" />
-              {n.label}
-              {n.id === 'projects' && projects.length > 0 && <span className={cx('ml-auto rounded-md px-1.5 text-[10px] font-bold', tab === n.id ? 'bg-white/20 text-white' : 'bg-mk-panel-3 text-mk-dim')}>{projects.length}</span>}
+              {st.done ? (
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-mk-lime" />
+              ) : (
+                <Circle className={cx('h-4 w-4 shrink-0', dark ? 'text-white/35' : 'text-mk-line-2')} />
+              )}
+              <span className={cx(st.done && 'line-through opacity-60')}>{st.label}</span>
             </button>
-          ))}
-          {isAdmin && (
-            <div className="mt-2 space-y-0.5 rounded-xl border border-white/60 bg-white/40 p-1.5">
-              <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-mk-dim">Admin</div>
-              <Link href="/admin" className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-[13px] font-semibold text-mk-muted transition hover:bg-white/80 hover:text-mk-cream">
-                <Brain className="h-[17px] w-[17px]" /> Training Studio
-              </Link>
-              <Link href="/admin/research" className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-[13px] font-semibold text-mk-muted transition hover:bg-white/80 hover:text-mk-cream">
-                <FlaskConical className="h-[17px] w-[17px]" /> Motion Lab
-              </Link>
-              <Link href="/admin/mcp" className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-[13px] font-semibold text-mk-muted transition hover:bg-white/80 hover:text-mk-cream">
-                <Plug className="h-[17px] w-[17px]" /> MCP Connector
-              </Link>
-            </div>
-          )}
-        </nav>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 
-        <div className="mt-6 px-3 text-[11px] font-bold uppercase tracking-wider text-mk-dim">Ide cepat</div>
-        <div className="mt-2 space-y-0.5">
-          {QUICK.map((qq) => (
-            <button key={qq} type="button" onClick={() => go(qq)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] text-mk-muted transition hover:bg-white/80 hover:text-mk-cream">
-              <Sparkles className="h-3.5 w-3.5 shrink-0 text-mk-coral" /> <span className="truncate">{qq}</span>
-            </button>
-          ))}
+  const navBtn = (active: boolean) =>
+    cx(
+      'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition',
+      active ? 'bg-white/10 text-white' : 'text-white/65 hover:bg-white/[0.06] hover:text-white'
+    );
+
+  return (
+    <div className="min-h-screen text-mk-cream lg:flex lg:gap-4 lg:p-4">
+      {/* ---------- Sidebar (desktop): panel Midnight DepUp ---------- */}
+      <aside className="sticky top-4 hidden h-[calc(100vh-2rem)] w-[248px] shrink-0 flex-col rounded-[28px] bg-mk-deep p-3 text-white lg:flex">
+        <Link href="/" className="flex items-center gap-2 px-2 pb-1 pt-1.5 text-white">
+          <Logo className="[&_.text-mk-coral]:text-mk-lime" />
+        </Link>
+        <Link href="/create" className="mk-btn-lime mt-4 w-full">
+          <Plus className="h-4 w-4" /> Buat video
+        </Link>
+
+        <div className="mk-noscroll mt-4 min-h-0 flex-1 overflow-y-auto">
+          <nav className="space-y-0.5" aria-label="Navigasi utama">
+            {NAV.map((n) => (
+              <button key={n.id} type="button" onClick={() => setTab(n.id)} className={navBtn(tab === n.id)} aria-current={tab === n.id ? 'page' : undefined}>
+                <n.icon className={cx('h-[18px] w-[18px]', tab === n.id && 'text-mk-lime')} />
+                {n.label}
+                {n.id === 'projects' && projects.length > 0 && <span className="ml-auto rounded-full bg-white/10 px-2 text-[11px] font-semibold text-white/80">{projects.length}</span>}
+              </button>
+            ))}
+          </nav>
+
+          {isAdmin && (
+            <>
+              <div className="mt-5 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-white/40">Admin</div>
+              <div className="mt-1.5 space-y-0.5">
+                <Link href="/admin" className={navBtn(false)}>
+                  <Brain className="h-[18px] w-[18px]" /> Training Studio
+                </Link>
+                <Link href="/admin/research" className={navBtn(false)}>
+                  <FlaskConical className="h-[18px] w-[18px]" /> Motion Lab
+                </Link>
+                <Link href="/admin/mcp" className={navBtn(false)}>
+                  <Plug className="h-[18px] w-[18px]" /> MCP Connector
+                </Link>
+              </div>
+            </>
+          )}
+
+          {projects.length > 0 && (
+            <>
+              <div className="mt-5 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-white/40">Terakhir dibuka</div>
+              <div className="mt-1.5 space-y-0.5">
+                {projects.slice(0, 5).map((p) => (
+                  <Link key={p.id} href={`/editor/${p.id}`} className="block truncate rounded-xl px-3 py-2 text-[13px] text-white/70 transition hover:bg-white/[0.06] hover:text-white" title={p.title}>
+                    {p.title}
+                  </Link>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
-        <div className="mt-auto flex items-center gap-2.5 rounded-xl border border-white/80 bg-white/70 p-2 shadow-mk-card">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-mk-grad text-sm font-extrabold text-white">{initial}</span>
+        {showSteps && <div className="mt-3">{checklist(true)}</div>}
+
+        <div className="mt-3 flex items-center gap-2.5 rounded-2xl bg-white/[0.06] p-2">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-mk-lime text-sm font-bold text-mk-deep">{initial}</span>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-xs font-bold">{name || 'Akun saya'}</div>
-            <div className="truncate text-[10px] text-mk-dim">{email}</div>
+            <div className="truncate text-[13px] font-semibold">{name || 'Akun saya'}</div>
+            <div className="truncate text-[11px] text-white/50">{email}</div>
           </div>
-          <button type="button" onClick={logout} className="mk-btn-icon h-8 w-8" title="Keluar" aria-label="Keluar">
+          <button type="button" onClick={logout} className="flex h-9 w-9 items-center justify-center rounded-full text-white/60 transition hover:bg-white/10 hover:text-white" title="Keluar" aria-label="Keluar">
             <LogOut className="h-4 w-4" />
           </button>
         </div>
@@ -439,85 +502,124 @@ export default function DashboardPage() {
 
       {/* ---------- Area utama ---------- */}
       <div className="min-w-0 flex-1">
-        {/* Topbar */}
-        <header className="mk-glass mk-bar sticky top-0 z-30 border-b border-white/60">
-          <div className="flex h-14 items-center gap-3 px-4 lg:px-8">
-            <Link href="/" className="lg:hidden">
+        {/* Topbar: sapaan + cari + aksi (pola Coinview / Calescence) */}
+        <header className="mk-glass mk-bar sticky top-0 z-30 border-b border-mk-line lg:static lg:border-0 lg:!bg-transparent lg:!bg-none lg:!shadow-none">
+          <div className="flex h-16 items-center gap-3 px-4 lg:h-auto lg:px-2 lg:pb-5 lg:pt-2">
+            <Link href="/" className="lg:hidden" aria-label="Beranda MotionKu">
               <Logo />
             </Link>
-            <div className="relative ml-auto w-full max-w-md lg:ml-0">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-mk-dim" />
+            <div className="hidden min-w-0 lg:block">
+              <h1 className="truncate text-[28px] font-bold leading-tight">{tab === 'home' ? (name ? `Halo, ${name}` : 'Beranda') : tab === 'projects' ? 'Proyek' : 'Template'}</h1>
+              <p className="text-sm text-mk-dim">{tab === 'home' ? 'Tulis satu kalimat, videonya langsung tersusun.' : tab === 'projects' ? `${projects.length} video tersimpan` : 'Klik salah satu, langsung bisa diedit.'}</p>
+            </div>
+            <div className="relative ml-auto w-full max-w-[320px]">
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-mk-dim" />
               <input
                 value={q}
                 onChange={(e) => {
                   setQ(e.target.value);
-                  if (e.target.value && tab === 'templates') setTab('projects');
+                  if (e.target.value && tab !== 'projects') setTab('projects');
                 }}
-                placeholder="Cari proyek…"
-                className="w-full rounded-xl border border-mk-line bg-white/80 py-2 pl-9 pr-3 text-sm placeholder:text-mk-dim focus:border-mk-coral focus:outline-none focus:ring-2 focus:ring-mk-coral/20"
+                placeholder="Cari proyek"
+                aria-label="Cari proyek"
+                className="h-10 w-full rounded-full border border-mk-line bg-white pl-10 pr-4 text-sm placeholder:text-mk-dim focus:border-mk-coral focus:outline-none focus:ring-4 focus:ring-mk-coral/15"
               />
             </div>
-            <div className="ml-auto hidden items-center gap-2 lg:flex">
-              <Link href="/create" className="mk-btn-primary px-4 py-2 text-sm">
-                <Plus className="h-4 w-4" /> Video baru
-              </Link>
-            </div>
-            <button type="button" onClick={logout} className="mk-btn-icon lg:hidden" aria-label="Keluar">
+            <Link href="/create" className="mk-btn-primary hidden shrink-0 lg:inline-flex">
+              <Plus className="h-4 w-4" /> Video baru
+            </Link>
+            <button type="button" onClick={logout} className="mk-btn-icon shrink-0 lg:hidden" aria-label="Keluar">
               <LogOut className="h-4 w-4" />
             </button>
           </div>
         </header>
 
-        <main className="mx-auto max-w-[1400px] space-y-10 px-4 pb-32 pt-6 lg:px-8 lg:pb-16">
-          {error && <div className="rounded-xl bg-red-500/10 px-4 py-3 text-xs text-red-600">{error}</div>}
+        <main className="mx-auto max-w-[1400px] space-y-8 px-4 pb-32 pt-5 lg:px-2 lg:pb-10 lg:pt-0">
+          {error && <div className="rounded-2xl bg-red-500/10 px-4 py-3 text-sm text-red-700">{error}</div>}
 
           {tab === 'home' && (
             <>
-              {/* Hero ala Canva: sapaan + kolom ide + pintasan format */}
-              <section className="mk-mesh-deep relative overflow-hidden rounded-3xl px-5 py-8 text-center text-white shadow-[0_24px_60px_-28px_rgba(30,17,80,0.65)] sm:px-10 sm:py-12">
-                <svg className="pointer-events-none absolute right-6 top-6 hidden h-12 w-44 sm:block" viewBox="0 0 208 56" fill="none" aria-hidden>
-                  <path d="M3 40c12 0 14-34 28-34s14 44 28 44 14-38 28-38 14 32 28 32 14-26 28-26 14 18 28 18 14-30 35-34" stroke="#C6F432" strokeWidth="4" strokeLinecap="round" />
-                </svg>
-                <div className="relative">
-                  <h1 className="text-2xl font-extrabold tracking-tight sm:text-4xl">
-                    {name ? `Halo ${name}, ` : ''}mau bikin <span className="text-mk-lime">video apa</span> hari ini?
-                  </h1>
-                  <form onSubmit={submitPrompt} className="mk-glass-deep mx-auto mt-6 flex max-w-2xl items-center gap-2 rounded-2xl border border-white/15 p-1.5 pl-4 focus-within:border-mk-lime/70 focus-within:ring-4 focus-within:ring-mk-lime/20">
-                    <Wand2 className="h-5 w-5 shrink-0 text-mk-lime" />
-                    <input
-                      value={prompt}
-                      onChange={(e) => setPrompt(e.target.value)}
-                      placeholder="Tulis idemu… mis. Promo kopi susu gula aren 18rb"
-                      className="min-w-0 flex-1 bg-transparent py-2.5 text-sm text-white placeholder:text-white/50 focus:outline-none sm:text-base"
-                    />
-                    <button type="submit" className="mk-btn-lime shrink-0 rounded-xl px-4 py-2.5 text-sm">
-                      <Sparkles className="h-4 w-4" /> <span className="hidden sm:inline">Buat</span>
-                    </button>
-                  </form>
+              <h1 className="text-2xl font-bold lg:hidden">{name ? `Halo, ${name}` : 'Halo'}</h1>
+              {/* ---------- Bento ---------- */}
+              <section className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-12">
+                {/* Kolom ide (ungu DepUp) */}
+                <div className="mk-tile-violet relative flex flex-col overflow-hidden p-6 sm:p-8 lg:col-span-7 lg:row-span-2">
+                  <svg className="pointer-events-none absolute -right-6 -top-6 h-40 w-40 text-white/[0.07]" viewBox="0 0 100 100" aria-hidden>
+                    <path fill="currentColor" d="M50 4 96 50H70v46H30V50H4z" />
+                  </svg>
+                  <div className="relative">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-mk-lime">Buat video</span>
+                    <h2 className="mt-2 max-w-md text-[28px] font-bold leading-[1.1] sm:text-[36px]">
+                      Mau bikin video apa <span className="text-mk-lime">hari ini?</span>
+                    </h2>
+                    <form onSubmit={submitPrompt} className="mt-6 flex items-center gap-2 rounded-full bg-white p-1.5 pl-5 focus-within:ring-4 focus-within:ring-mk-lime/50">
+                      <Wand2 className="h-5 w-5 shrink-0 text-mk-coral" aria-hidden />
+                      <input
+                        value={prompt}
+                        onChange={(e) => setPrompt(e.target.value)}
+                        placeholder="Promo kopi susu gula aren 18rb"
+                        aria-label="Ide video"
+                        className="min-w-0 flex-1 bg-transparent py-2 text-[15px] text-mk-cream placeholder:text-mk-dim focus:outline-none"
+                      />
+                      <button type="submit" className="mk-btn-lime shrink-0 px-4 sm:px-5">
+                        <Sparkles className="h-4 w-4" /> <span className="hidden sm:inline">Buat</span>
+                      </button>
+                    </form>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {QUICK.map((qq) => (
+                        <button key={qq} type="button" onClick={() => go(qq)} className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/25 active:scale-[0.96]">
+                          {qq}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="relative mt-6 flex items-start gap-2 border-t border-white/15 pt-4 text-[13px] leading-relaxed text-white/75 lg:mt-auto">
+                    <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-mk-lime" aria-hidden />
+                    <span>
+                      Sebut harga, lokasi, jadwal, dan nomor WA di kalimatmu. Semuanya langsung terbaca dan jadi scene, tidak perlu diisi ulang.
+                    </span>
+                  </p>
+                </div>
 
-                  {/* Pintasan format */}
-                  <div className="mk-noscroll mx-auto mt-8 flex max-w-3xl gap-4 overflow-x-auto pb-1 sm:justify-center sm:gap-6">
+                {/* Angka (dari proyek asli) */}
+                <div className="grid grid-cols-2 gap-4 lg:col-span-5">
+                  <div className="mk-tile-lime flex flex-col justify-between">
+                    <FolderOpen className="h-5 w-5" aria-hidden />
+                    <div className="mt-6">
+                      <div className="text-[40px] font-bold leading-none tracking-[-0.03em]">{loading ? '–' : projects.length}</div>
+                      <div className="mt-1 text-sm font-medium">Video tersimpan</div>
+                    </div>
+                  </div>
+                  <div className="mk-tile-night flex flex-col justify-between">
+                    <Send className="h-5 w-5 text-mk-lime" aria-hidden />
+                    <div className="mt-6">
+                      <div className="text-[40px] font-bold leading-none tracking-[-0.03em]">{loading ? '–' : published}</div>
+                      <div className="mt-1 text-sm font-medium text-white/70">Sudah terbit</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Format cepat */}
+                <div className="mk-card p-5 lg:col-span-5">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-base font-semibold">Mulai dari format</h2>
+                    <span className="text-xs text-mk-dim">Ukuran kanvas populer</span>
+                  </div>
+                  <div className="mt-3 grid grid-cols-4 gap-1 sm:grid-cols-7 lg:grid-cols-4">
                     {FORMATS.map((f) => (
-                      <button key={f.label} type="button" onClick={() => go(f.prompt)} className="group flex w-16 shrink-0 flex-col items-center gap-2">
-                        <span className={cx('flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br shadow-lg ring-1 ring-white/20 transition group-hover:-translate-y-1 group-hover:ring-mk-lime/70', f.color)}>
-                          <span className="rounded-[3px] border-2 border-white/90" style={{ width: f.w * 0.75, height: f.h * 0.75 }} />
+                      <button key={f.label} type="button" onClick={() => go(f.prompt)} className="group flex min-w-0 flex-col items-center gap-1.5 rounded-2xl py-2 transition hover:bg-mk-mist active:scale-[0.96]">
+                        <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-mk-mist text-mk-coral transition group-hover:bg-mk-coral group-hover:text-white">
+                          <span className="rounded-[3px] border-2 border-current" style={{ width: f.w * 0.7, height: f.h * 0.7 }} />
                         </span>
-                        <span className="text-xs font-semibold text-white/90">{f.label}</span>
-                        <span className="-mt-1.5 text-[10px] text-white/55">{f.sub}</span>
+                        <span className="text-xs font-semibold">{f.label}</span>
+                        <span className="-mt-1 text-[10px] text-mk-dim">{f.sub}</span>
                       </button>
                     ))}
                   </div>
                 </div>
               </section>
 
-              {/* Ide cepat (mobile; desktop ada di sidebar) */}
-              <div className="mk-noscroll -mt-4 flex gap-2 overflow-x-auto lg:hidden">
-                {QUICK.map((qq) => (
-                  <button key={qq} type="button" onClick={() => go(qq)} className="mk-chip shrink-0">
-                    <Sparkles className="h-3 w-3 text-mk-coral" /> {qq}
-                  </button>
-                ))}
-              </div>
+              {showSteps && <div className="lg:hidden">{checklist(false)}</div>}
 
               {projectSection}
               {templateSection(false)}
@@ -529,7 +631,7 @@ export default function DashboardPage() {
         </main>
       </div>
 
-      {/* ---------- Navigasi bawah (HP): kapsul kaca melayang ala Depup Office ---------- */}
+      {/* ---------- Navigasi bawah (HP): kapsul kaca melayang ---------- */}
       <GlassTabBar
         className="lg:hidden"
         active={tab}

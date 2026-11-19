@@ -209,7 +209,7 @@ export function useMediaQuery(q: string): boolean {
 export function Logo({ className }: { className?: string }) {
   return (
     <span className={cx('inline-flex items-center gap-2 font-extrabold tracking-tight', className)}>
-      <span className="relative flex h-8 w-8 items-center justify-center rounded-[10px] bg-mk-grad text-white shadow-mk-glow">
+      <span className="relative flex h-8 w-8 items-center justify-center rounded-[10px] bg-mk-coral text-white">
         <svg viewBox="0 0 24 24" className="h-4.5 w-4.5" width="18" height="18" fill="currentColor" aria-hidden>
           <path d="M7 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L8.5 4.64A1 1 0 0 0 7 5.5Z" />
         </svg>

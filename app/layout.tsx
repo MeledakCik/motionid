@@ -7,6 +7,7 @@ import {
   Space_Grotesk,
   Anton,
   Plus_Jakarta_Sans,
+  Inter_Tight,
 } from 'next/font/google';
 import './globals.css';
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from '@/lib/site';
@@ -45,6 +46,14 @@ const anton = Anton({
   subsets: ['latin'],
   weight: ['400'],
   variable: '--font-anton',
+});
+
+/** Huruf brand DepUp (panduan v1.0): Inter Tight untuk semua teks antarmuka. */
+const interTight = Inter_Tight({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700', '800'],
+  variable: '--font-inter-tight',
+  display: 'swap',
 });
 
 const jakarta = Plus_Jakarta_Sans({
@@ -118,7 +127,7 @@ export default function RootLayout({
     <html
       lang="id"
       suppressHydrationWarning
-      className={`${poppins.variable} ${montserrat.variable} ${bebasNeue.variable} ${playfair.variable} ${spaceGrotesk.variable} ${anton.variable} ${jakarta.variable}`}
+      className={`${poppins.variable} ${montserrat.variable} ${bebasNeue.variable} ${playfair.variable} ${spaceGrotesk.variable} ${anton.variable} ${jakarta.variable} ${interTight.variable}`}
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: FX_TIER_SCRIPT }} />

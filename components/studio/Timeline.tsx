@@ -92,7 +92,7 @@ export default function Timeline({ clock, onOpenTool }: { clock: PlaybackClock; 
         <button type="button" className="mk-btn-icon" onClick={() => (clock.pause(), clock.seek(0))} title="Ke awal">
           <SkipBack className="h-4 w-4" />
         </button>
-        <button type="button" onClick={() => clock.toggle()} className="flex h-9 w-9 items-center justify-center rounded-full bg-mk-grad text-white shadow-mk-glow" title="Putar / jeda (Spasi)">
+        <button type="button" onClick={() => clock.toggle()} className="flex h-9 w-9 items-center justify-center rounded-full bg-mk-coral text-white" title="Putar / jeda (Spasi)">
           {playing ? <Pause className="h-4 w-4" /> : <Play className="ml-0.5 h-4 w-4" />}
         </button>
         <span className="font-mono text-xs tabular-nums text-mk-cream">
